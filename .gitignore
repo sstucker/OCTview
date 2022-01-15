@@ -1,0 +1,5 @@
+*.log
+**/target
+__pycache__/
+workspace.xml
+tasks.xml

@@ -1,0 +1,805 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>tabOCTA</class>
+ <widget class="QWidget" name="tabOCTA">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>489</width>
+    <height>677</height>
+   </rect>
+  </property>
+  <layout class="QGridLayout" name="gridLayout_2">
+   <item row="1" column="0">
+    <layout class="QGridLayout" name="gridOCTA">
+     <property name="sizeConstraint">
+      <enum>QLayout::SetFixedSize</enum>
+     </property>
+     <item row="0" column="0" colspan="2">
+      <widget class="QGroupBox" name="groupFile">
+       <property name="title">
+        <string>File</string>
+       </property>
+       <layout class="QGridLayout" name="gridFile">
+        <item row="0" column="0">
+         <layout class="QFormLayout" name="formExp">
+          <item row="0" column="0">
+           <layout class="QGridLayout" name="gridExp">
+            <item row="0" column="0">
+             <widget class="QLineEdit" name="lineExp">
+              <property name="toolTip">
+               <string>The directory where the recordings will be saved</string>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QToolButton" name="buttonBrowse">
+              <property name="toolTip">
+               <string>The directory where the recordings will be saved</string>
+              </property>
+              <property name="text">
+               <string>...</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="labelExp">
+            <property name="toolTip">
+             <string>The directory where the recordings will be saved</string>
+            </property>
+            <property name="text">
+             <string>Experiment directory</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLineEdit" name="lineFileName">
+            <property name="toolTip">
+             <string>The name of this particular recording within the experiment</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLabel" name="labelFileName">
+            <property name="toolTip">
+             <string>The name of this particular recording within the experiment</string>
+            </property>
+            <property name="text">
+             <string>Trial name</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QComboBox" name="comboFileType">
+            <property name="toolTip">
+             <string>The file type of saved recordings</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>.npy</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>.mat</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLabel" name="labelFileType">
+            <property name="toolTip">
+             <string>The file type of saved recordings</string>
+            </property>
+            <property name="text">
+             <string>File type</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QLabel" name="labelMaxFileSize">
+            <property name="toolTip">
+             <string>The size of the files that recordings will be broken into</string>
+            </property>
+            <property name="text">
+             <string>Maximum file size</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QComboBox" name="comboBox">
+            <item>
+             <property name="text">
+              <string>250 MB</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>500 MB</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>1 GB</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>2 GB</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>4 GB</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="0" column="2" rowspan="4" colspan="2">
+      <widget class="QWidget" name="widgetBScan" native="true">
+       <layout class="QGridLayout" name="layoutVisB">
+        <item row="5" column="0">
+         <widget class="QRadioButton" name="radioEnface">
+          <property name="toolTip">
+           <string>Slice through B-scans or through enface C-scans</string>
+          </property>
+          <property name="text">
+           <string>Enface</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="1">
+         <widget class="QSlider" name="sliderSlice">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="toolTip">
+           <string>Scan automatically through the volume, or select a slice with the slider</string>
+          </property>
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="invertedAppearance">
+           <bool>false</bool>
+          </property>
+          <property name="tickPosition">
+           <enum>QSlider::TicksBelow</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="0">
+         <widget class="QCheckBox" name="checkScanThrough">
+          <property name="toolTip">
+           <string>Scan automatically through the volume, or select a slice with the slider</string>
+          </property>
+          <property name="text">
+           <string>Scan through volume</string>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0" rowspan="4" colspan="2">
+         <widget class="QWidget" name="widget2D" native="true">
+          <property name="autoFillBackground">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0">
+         <widget class="QRadioButton" name="radioBScan">
+          <property name="toolTip">
+           <string>Slice through B-scans or through enface C-scans</string>
+          </property>
+          <property name="text">
+           <string>B-scan</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="1" column="0" colspan="2">
+      <widget class="QGroupBox" name="groupConfig">
+       <property name="title">
+        <string>Configuration</string>
+       </property>
+       <layout class="QGridLayout" name="gridConfig">
+        <item row="0" column="0">
+         <layout class="QFormLayout" name="formLeft">
+          <item row="0" column="0">
+           <widget class="QComboBox" name="comboObjective">
+            <property name="toolTip">
+             <string>The objective being used. Affects config file selection</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>Mitutoyo 10X</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Mitutoyo 5X</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Mitutoyo 20X</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Mitutoyo 2X</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QLabel" name="labelObjective">
+            <property name="toolTip">
+             <string>The objective being used. Affects config file selection</string>
+            </property>
+            <property name="text">
+             <string>Objective</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QComboBox" name="comboRate">
+            <property name="toolTip">
+             <string>The A-line rate of the camera</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>76 kHz</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>146 kHz</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QLabel" name="labelRate">
+            <property name="toolTip">
+             <string>The A-line rate of the camera</string>
+            </property>
+            <property name="text">
+             <string>A-line rate</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QComboBox" name="comboApodization">
+            <property name="toolTip">
+             <string>The type of window used to apodize the A-line spectra prior to FFT</string>
+            </property>
+            <item>
+             <property name="text">
+              <string>Hanning</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Blackman</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>Hamming</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>None</string>
+             </property>
+            </item>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QLabel" name="labelApodization">
+            <property name="toolTip">
+             <string>The type of window used to apodize the A-line spectra prior to FFT</string>
+            </property>
+            <property name="text">
+             <string>Apodization window</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="0" column="1">
+         <layout class="QGridLayout" name="gridRight">
+          <item row="0" column="0">
+           <layout class="QGridLayout" name="gridProc">
+            <item row="1" column="0">
+             <widget class="QCheckBox" name="checkInterpolation">
+              <property name="toolTip">
+               <string>If true, linear-in-wavenumber values are interpolated (1st order) from linear-in-wavelength spectra</string>
+              </property>
+              <property name="text">
+               <string>Lambda-k interpolation</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="0">
+             <widget class="QCheckBox" name="checkFFT">
+              <property name="toolTip">
+               <string>If true, data is complex-valued signal</string>
+              </property>
+              <property name="text">
+               <string>Fourier transform</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="2" column="0">
+             <widget class="QCheckBox" name="checkBox">
+              <property name="toolTip">
+               <string>The precision of the FFT and interpolation. Affects processing speed!</string>
+              </property>
+              <property name="text">
+               <string>32 bit (default 64)</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="4" column="2" rowspan="2" colspan="2">
+      <widget class="QWidget" name="widgetSpectrum" native="true">
+       <layout class="QGridLayout" name="layoutSpectrumGroup">
+        <item row="1" column="0">
+         <widget class="QCheckBox" name="checkRemoveDC">
+          <property name="toolTip">
+           <string>Subtract DC value from vizualized spectrum. The DC signal is simply the average dark image on the spectrometer</string>
+          </property>
+          <property name="text">
+           <string>Remove DC offset</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="0">
+         <widget class="QWidget" name="widgetSpec" native="true">
+          <property name="autoFillBackground">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="5" column="0" colspan="2">
+      <widget class="QGroupBox" name="groupControl">
+       <property name="title">
+        <string>Control</string>
+       </property>
+       <layout class="QGridLayout" name="controlGrid">
+        <item row="0" column="1">
+         <widget class="QPushButton" name="pushScan">
+          <property name="toolTip">
+           <string>Scan indefinitely without recording</string>
+          </property>
+          <property name="text">
+           <string>Scan</string>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>8</width>
+            <height>12</height>
+           </size>
+          </property>
+          <property name="checkable">
+           <bool>false</bool>
+          </property>
+          <property name="flat">
+           <bool>false</bool>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="2">
+         <widget class="QPushButton" name="pushAcquire">
+          <property name="toolTip">
+           <string>Scan as defined by </string>
+          </property>
+          <property name="text">
+           <string>Acquire</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="3">
+         <widget class="QPushButton" name="pushStop">
+          <property name="enabled">
+           <bool>false</bool>
+          </property>
+          <property name="text">
+           <string>Stop</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item row="2" column="0" rowspan="3" colspan="2">
+      <widget class="QWidget" name="widgetScan" native="true">
+       <layout class="QGridLayout" name="gridLayout_15">
+        <item row="1" column="1">
+         <widget class="QGroupBox" name="groupRepeats">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="title">
+           <string>Repeat/Averaging</string>
+          </property>
+          <property name="flat">
+           <bool>false</bool>
+          </property>
+          <property name="checkable">
+           <bool>true</bool>
+          </property>
+          <property name="checked">
+           <bool>false</bool>
+          </property>
+          <layout class="QGridLayout" name="gridLayout_7">
+           <item row="1" column="0">
+            <widget class="QSpinBox" name="spinBRepeat">
+             <property name="toolTip">
+              <string>The number of times to repeat a B-scan</string>
+             </property>
+             <property name="buttonSymbols">
+              <enum>QAbstractSpinBox::PlusMinus</enum>
+             </property>
+             <property name="minimum">
+              <number>1</number>
+             </property>
+             <property name="maximum">
+              <number>1000</number>
+             </property>
+            </widget>
+           </item>
+           <item row="2" column="0">
+            <widget class="QCheckBox" name="checkAveraging">
+             <property name="toolTip">
+              <string>If true, repeated A-scans and B-scans will be averaged before saving</string>
+             </property>
+             <property name="text">
+              <string>Averaging</string>
+             </property>
+             <property name="tristate">
+              <bool>false</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QLabel" name="labelARepeat">
+             <property name="toolTip">
+              <string>The number of A-scans to be acquired from the same point during a dwell</string>
+             </property>
+             <property name="text">
+              <string>A-scan repeat</string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QLabel" name="labelBRepeat">
+             <property name="maximumSize">
+              <size>
+               <width>16777215</width>
+               <height>16777215</height>
+              </size>
+             </property>
+             <property name="toolTip">
+              <string>The number of times to repeat a B-scan</string>
+             </property>
+             <property name="text">
+              <string>B-scan repeat</string>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <widget class="QSpinBox" name="spinARepeat">
+             <property name="toolTip">
+              <string>The number of A-scans to be acquired during a dwell</string>
+             </property>
+             <property name="buttonSymbols">
+              <enum>QAbstractSpinBox::PlusMinus</enum>
+             </property>
+             <property name="minimum">
+              <number>1</number>
+             </property>
+             <property name="maximum">
+              <number>1000</number>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QGroupBox" name="groupScan">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>0</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>16777215</height>
+           </size>
+          </property>
+          <property name="title">
+           <string>Scan geometry and parameters</string>
+          </property>
+          <layout class="QGridLayout" name="gridLayout_6">
+           <item row="5" column="0">
+            <widget class="Line" name="line_2">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item row="0" column="0">
+            <layout class="QFormLayout" name="formScanParameters">
+             <item row="0" column="0">
+              <widget class="QSpinBox" name="spinScanNumber">
+               <property name="toolTip">
+                <string>The number of scans to acquire. Note that these are saved independently, see Repeat/Averaging section</string>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>100000</number>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLabel" name="labelScanNumber">
+               <property name="toolTip">
+                <string>The number of scans to acquire. Note that these are saved independently, see Repeat/Averaging section</string>
+               </property>
+               <property name="text">
+                <string>Scan number</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="2" column="0">
+            <layout class="QFormLayout" name="formX">
+             <item row="0" column="0">
+              <widget class="QDoubleSpinBox" name="spinROIWidth">
+               <property name="toolTip">
+                <string>The length of the B-scan in physical units</string>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="suffix">
+                <string> mm</string>
+               </property>
+               <property name="decimals">
+                <number>4</number>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLabel" name="labelROIWidth">
+               <property name="toolTip">
+                <string>The length of the B-scan in physical units</string>
+               </property>
+               <property name="text">
+                <string>X-axis ROI width</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QSpinBox" name="spinACount">
+               <property name="toolTip">
+                <string>The number of A-scans in a B-scan</string>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="suffix">
+                <string> px</string>
+               </property>
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>1200</number>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLabel" name="labelACount">
+               <property name="toolTip">
+                <string>The number of A-scans in a B-scan</string>
+               </property>
+               <property name="text">
+                <string>A-scan count</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QDoubleSpinBox" name="spinFastAxisSpacing">
+               <property name="toolTip">
+                <string>The spacing between adjacent A-scans along the fast axis</string>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="suffix">
+                <string> um</string>
+               </property>
+               <property name="decimals">
+                <number>2</number>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLabel" name="labelFastAxisSpacing">
+               <property name="toolTip">
+                <string>The spacing between adjacent A-scans along the fast axis</string>
+               </property>
+               <property name="text">
+                <string>Fast axis spacing</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="6" column="0">
+            <widget class="QCheckBox" name="checkEqualAspect">
+             <property name="toolTip">
+              <string>Forces X and Y scan spacing to be equal</string>
+             </property>
+             <property name="text">
+              <string>Equal aspect scan</string>
+             </property>
+             <property name="checked">
+              <bool>true</bool>
+             </property>
+            </widget>
+           </item>
+           <item row="4" column="0">
+            <layout class="QFormLayout" name="formY">
+             <item row="0" column="1">
+              <widget class="QLabel" name="labelROIHeight">
+               <property name="toolTip">
+                <string>The width of the C-scan in physical units</string>
+               </property>
+               <property name="text">
+                <string>Y-axis ROI height</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLabel" name="labelBcount">
+               <property name="toolTip">
+                <string>The number of B-scans to acquire</string>
+               </property>
+               <property name="text">
+                <string>B-scan count</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="0">
+              <widget class="QDoubleSpinBox" name="spinSlowAxisSpacing">
+               <property name="toolTip">
+                <string>The distance between adjacent B-scans in physical units</string>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="suffix">
+                <string> um</string>
+               </property>
+              </widget>
+             </item>
+             <item row="2" column="1">
+              <widget class="QLabel" name="labelSlowAxisSpacing">
+               <property name="toolTip">
+                <string>The distance between adjacent B-scans in physical units</string>
+               </property>
+               <property name="text">
+                <string>Slow axis spacing</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QSpinBox" name="spinBcount">
+               <property name="toolTip">
+                <string>The number of B-scans to acquire</string>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="suffix">
+                <string> px</string>
+               </property>
+               <property name="minimum">
+                <number>1</number>
+               </property>
+               <property name="maximum">
+                <number>1200</number>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="0">
+              <widget class="QDoubleSpinBox" name="spinROIHeight">
+               <property name="toolTip">
+                <string>The width of the C-scan in physical units</string>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::PlusMinus</enum>
+               </property>
+               <property name="suffix">
+                <string> mm</string>
+               </property>
+               <property name="decimals">
+                <number>4</number>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item row="3" column="0">
+            <widget class="Line" name="line">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="Line" name="line_3">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

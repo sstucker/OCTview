@@ -1,0 +1,28 @@
+from fbs_runtime.application_context.PyQt5 import ApplicationContext
+from PyQt5.QtWidgets import QMainWindow
+
+from widgets import CentralWidget
+
+import sys
+
+class AppContext(ApplicationContext):
+
+    def __init__(self):
+        super().__init__()
+        self._version = self.build_settings['version']
+        self._name = self.build_settings['app_name']
+
+    def run(self):
+        window = QMainWindow()
+        window.setCentralWidget(CentralWidget())
+
+        window.setWindowTitle(self._name + ' v' + self._version)
+        window.resize(250, 150)
+        window.show()
+        return self.app.exec_()
+
+
+if __name__ == '__main__':
+    appctxt = AppContext()
+    exit_code = appctxt.run()
+    sys.exit(exit_code)
