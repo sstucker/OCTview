@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>groupControl</class>
- <widget class="QGroupBox" name="groupControl">
+ <class>ControlGroupBox</class>
+ <widget class="QGroupBox" name="ControlGroupBox">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>257</width>
+    <width>350</width>
     <height>56</height>
    </rect>
   </property>

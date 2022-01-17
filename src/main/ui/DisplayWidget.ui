@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>widgetBScan</class>
- <widget class="QWidget" name="widgetBScan">
+ <class>DisplayWidget</class>
+ <widget class="QWidget" name="DisplayWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -46,34 +46,6 @@
      </property>
      <property name="text">
       <string>  0/0  </string>
-     </property>
-    </widget>
-   </item>
-   <item row="6" column="1" colspan="2">
-    <widget class="QSlider" name="sliderSlice">
-     <property name="enabled">
-      <bool>true</bool>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>100</width>
-       <height>0</height>
-      </size>
-     </property>
-     <property name="toolTip">
-      <string>Scan automatically through the volume, or select a slice with the slider</string>
-     </property>
-     <property name="minimum">
-      <number>1</number>
-     </property>
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="invertedAppearance">
-      <bool>false</bool>
-     </property>
-     <property name="tickPosition">
-      <enum>QSlider::TicksBelow</enum>
      </property>
     </widget>
    </item>
@@ -130,6 +102,34 @@
     <widget class="QWidget" name="widget3D" native="true">
      <property name="autoFillBackground">
       <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="6" column="1" colspan="3">
+    <widget class="QSlider" name="sliderSlice">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>100</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="toolTip">
+      <string>Scan automatically through the volume, or select a slice with the slider</string>
+     </property>
+     <property name="minimum">
+      <number>1</number>
+     </property>
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="invertedAppearance">
+      <bool>false</bool>
+     </property>
+     <property name="tickPosition">
+      <enum>QSlider::TicksBelow</enum>
      </property>
     </widget>
    </item>

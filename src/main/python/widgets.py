@@ -1,8 +1,9 @@
-from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox
+from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QMainWindow
 
 import pyqtgraph as pyqtg
 import os
 from PyQt5 import uic
+from PyQt5.QtCore import pyqtSignal, QObject
 
 
 class UiWidget:
@@ -33,13 +34,69 @@ class UiWidget:
         self.__dict__[old_widget.objectName()] = new_widget  # Goodbye, old widget!
 
 
-class CentralWidget(QWidget, UiWidget):
+class DisplayWidget(QWidget, UiWidget):
 
     def __init__(self):
         super(QWidget, self).__init__()
         super(UiWidget, self).__init__()
 
-        self.replaceWidget(self.widgetSpec, pyqtg.ImageView())
-        print(self.widgetSpec)
+
+class ControlGroupBox(QGroupBox, UiWidget):
+
+    scan = pyqtSignal()
+    acquire = pyqtSignal()
+    snap = pyqtSignal()
+    stop = pyqtSignal()
+
+    def __init__(self):
+        super(QGroupBox, self).__init__()
+        super(UiWidget, self).__init__()
+
+        self.pushScan.pressed.connect(self.scan.emit)
+        self.pushStop.pressed.connect(self.stop.emit)
+        self.pushAcquire.pressed.connect(self.acquire.emit)
+        self.pushSnap.pressed.connect(self.stop.emit)
+
+
+class RasterScanGroupBox(QGroupBox, UiWidget):
+
+    def __init__(self):
+        super(QGroupBox, self).__init__()
+        super(UiWidget, self).__init__()
+
+
+class FileGroupBox(QGroupBox, UiWidget):
+
+    def __init__(self):
+        super(QGroupBox, self).__init__()
+        super(UiWidget, self).__init__()
+
+
+
+class ProcessingGroupBox(QGroupBox, UiWidget):
+
+    def __init__(self):
+        super(QGroupBox, self).__init__()
+        super(UiWidget, self).__init__()
+
+
+class DisplayWidget(QWidget, UiWidget):
+
+    def __init__(self):
+        super(QWidget, self).__init__()
+        super(UiWidget, self).__init__()
+
+
+class MainWindow(QMainWindow, UiWidget):
+
+    def __init__(self):
+        super(QMainWindow, self).__init__()
+        super(UiWidget, self).__init__()
+
+        self.replaceWidget(self.ScanGroupBox, RasterScanGroupBox())
+        self.replaceWidget(self.DisplayWidget, DisplayWidget())
+        self.replaceWidget(self.FileGroupBox, FileGroupBox())
+        self.replaceWidget(self.ProcessingGroupBox, ProcessingGroupBox())
+        self.replaceWidget(self.ControlGroupBox, ControlGroupBox())
 
         self.show()

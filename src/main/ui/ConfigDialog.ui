@@ -15,71 +15,6 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QGroupBox" name="groupBox_2">
-     <property name="title">
-      <string>Global settings</string>
-     </property>
-     <layout class="QFormLayout" name="formLayout_2">
-      <item row="0" column="1">
-       <layout class="QFormLayout" name="formLayout_3">
-        <item row="1" column="1">
-         <widget class="QSpinBox" name="spinBox">
-          <property name="toolTip">
-           <string>The number of buffers allocated per the size of the total acquisition</string>
-          </property>
-          <property name="minimum">
-           <number>1</number>
-          </property>
-          <property name="maximum">
-           <number>256</number>
-          </property>
-          <property name="value">
-           <number>4</number>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_8">
-          <property name="toolTip">
-           <string>The number of buffers allocated per the size of the total acquisition</string>
-          </property>
-          <property name="text">
-           <string>Buffer size</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_9">
-          <property name="toolTip">
-           <string>The size of a single A-line</string>
-          </property>
-          <property name="text">
-           <string>A-line size</string>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="1">
-         <widget class="QSpinBox" name="spinBox_2">
-          <property name="enabled">
-           <bool>false</bool>
-          </property>
-          <property name="toolTip">
-           <string>The size of a single A-line</string>
-          </property>
-          <property name="maximum">
-           <number>2048</number>
-          </property>
-          <property name="value">
-           <number>2048</number>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item>
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
       <string>Hardware interface</string>
@@ -97,7 +32,7 @@
           </property>
          </widget>
         </item>
-        <item row="3" column="0">
+        <item row="5" column="0">
          <widget class="QLabel" name="label_2">
           <property name="toolTip">
            <string>The name of the ao channel used for the x galvo</string>
@@ -107,7 +42,7 @@
           </property>
          </widget>
         </item>
-        <item row="4" column="0">
+        <item row="6" column="0">
          <widget class="QLabel" name="label_3">
           <property name="toolTip">
            <string>The name of the ao channel used for the y galvo</string>
@@ -147,7 +82,7 @@
           </property>
          </widget>
         </item>
-        <item row="3" column="1">
+        <item row="5" column="1">
          <widget class="QLineEdit" name="lineXCh">
           <property name="toolTip">
            <string>The name of the ao channel used for the x galvo</string>
@@ -157,7 +92,7 @@
           </property>
          </widget>
         </item>
-        <item row="4" column="1">
+        <item row="6" column="1">
          <widget class="QLineEdit" name="lineYCh">
           <property name="toolTip">
            <string>The name of the ao channel used for the y galvo</string>
@@ -167,7 +102,7 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="1">
+        <item row="7" column="1">
          <widget class="QLineEdit" name="lineLineTrigCh">
           <property name="toolTip">
            <string>The name of the ao channel used to trigger each A-line</string>
@@ -177,7 +112,7 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="0">
+        <item row="7" column="0">
          <widget class="QLabel" name="label_5">
           <property name="toolTip">
            <string>The name of the ao channel used to trigger each A-line</string>
@@ -194,7 +129,7 @@
           </property>
          </widget>
         </item>
-        <item row="6" column="1">
+        <item row="8" column="1">
          <widget class="QLineEdit" name="lineFrameTrigCh">
           <property name="toolTip">
            <string>The name of the ao channel used to trigger each IMAQ buffer</string>
@@ -204,7 +139,7 @@
           </property>
          </widget>
         </item>
-        <item row="6" column="0">
+        <item row="8" column="0">
          <widget class="QLabel" name="label_6">
           <property name="toolTip">
            <string>The name of the ao channel used to trigger each IMAQ buffer</string>
@@ -214,7 +149,7 @@
           </property>
          </widget>
         </item>
-        <item row="8" column="1">
+        <item row="10" column="1">
          <widget class="QDoubleSpinBox" name="spinTrigLevel">
           <property name="toolTip">
            <string>The amplitude of the pulse used for triggering</string>
@@ -233,7 +168,7 @@
           </property>
          </widget>
         </item>
-        <item row="8" column="0">
+        <item row="10" column="0">
          <widget class="QLabel" name="label_1">
           <property name="toolTip">
            <string>The amplitude of the pulse used for triggering</string>
@@ -243,10 +178,43 @@
           </property>
          </widget>
         </item>
-        <item row="7" column="0" colspan="2">
+        <item row="9" column="0" colspan="2">
          <widget class="Line" name="line_2">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="label_8">
+          <property name="toolTip">
+           <string>The number of buffers allocated per the size of the total acquisition</string>
+          </property>
+          <property name="text">
+           <string>Buffer size</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="0" colspan="2">
+         <widget class="Line" name="line_3">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="spinBox">
+          <property name="toolTip">
+           <string>The number of buffers allocated per the size of the total acquisition</string>
+          </property>
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>256</number>
+          </property>
+          <property name="value">
+           <number>4</number>
           </property>
          </widget>
         </item>

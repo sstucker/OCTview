@@ -1,7 +1,7 @@
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from PyQt5.QtWidgets import QMainWindow
 
-from widgets import CentralWidget
+from widgets import MainWindow
 
 import sys
 
@@ -13,9 +13,7 @@ class AppContext(ApplicationContext):
         self._name = self.build_settings['app_name']
 
     def run(self):
-        window = QMainWindow()
-        window.setCentralWidget(CentralWidget())
-
+        window = MainWindow()
         window.setWindowTitle(self._name + ' v' + self._version)
         window.resize(250, 150)
         window.show()

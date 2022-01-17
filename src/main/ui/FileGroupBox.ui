@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>groupFile</class>
- <widget class="QGroupBox" name="groupFile">
+ <class>FileGroupBox</class>
+ <widget class="QGroupBox" name="FileGroupBox">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -158,7 +158,7 @@
        </item>
        <item>
         <property name="text">
-         <string>.mat</string>
+         <string>.hdf</string>
         </property>
        </item>
       </widget>
