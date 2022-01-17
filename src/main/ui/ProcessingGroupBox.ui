@@ -19,147 +19,75 @@
   <property name="checkable">
    <bool>true</bool>
   </property>
-  <layout class="QGridLayout" name="gridConfig">
-   <item row="0" column="1">
-    <layout class="QGridLayout" name="gridRight">
-     <item row="0" column="0">
-      <layout class="QGridLayout" name="gridProc">
-       <item row="0" column="4">
-        <widget class="QSpinBox" name="spinLambdaMax">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="toolTip">
-          <string>The spectrometer range</string>
-         </property>
-         <property name="suffix">
-          <string> nm</string>
-         </property>
-         <property name="minimum">
-          <number>600</number>
-         </property>
-         <property name="maximum">
-          <number>3000</number>
-         </property>
-         <property name="value">
-          <number>1385</number>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="0">
-        <widget class="QCheckBox" name="checkInterpolation">
-         <property name="toolTip">
-          <string>If true, linear-in-wavenumber values are interpolated (1st order) from linear-in-wavelength spectra</string>
-         </property>
-         <property name="text">
-          <string>Lambda-k interpolation</string>
-         </property>
-         <property name="checked">
-          <bool>false</bool>
-         </property>
-         <property name="tristate">
-          <bool>false</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="0">
-        <widget class="QCheckBox" name="checkApodization">
-         <property name="toolTip">
-          <string>If checked, spectra will be DC-subtracted and then multiplied by a window function</string>
-         </property>
-         <property name="text">
-          <string>Apodization</string>
-         </property>
-         <property name="checked">
-          <bool>true</bool>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="3">
-        <widget class="QLabel" name="labelTo">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="text">
-          <string>to</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="1">
-        <widget class="QLabel" name="labelLambda">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="toolTip">
-          <string>The spectrometer range</string>
-         </property>
-         <property name="text">
-          <string>Spectrometer bandwidth</string>
-         </property>
-        </widget>
-       </item>
-       <item row="0" column="2">
-        <widget class="QSpinBox" name="spinLambdaMin">
-         <property name="enabled">
-          <bool>false</bool>
-         </property>
-         <property name="toolTip">
-          <string>The spectrometer range</string>
-         </property>
-         <property name="suffix">
-          <string> nm</string>
-         </property>
-         <property name="minimum">
-          <number>300</number>
-         </property>
-         <property name="maximum">
-          <number>2400</number>
-         </property>
-         <property name="value">
-          <number>1235</number>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="2" colspan="3">
-        <widget class="QComboBox" name="comboApodization">
-         <property name="toolTip">
-          <string>The type of window used to apodize the A-line spectra prior to FFT</string>
-         </property>
-         <item>
-          <property name="text">
-           <string>Hanning</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Blackman</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>Hamming</string>
-          </property>
-         </item>
-         <item>
-          <property name="text">
-           <string>None</string>
-          </property>
-         </item>
-        </widget>
-       </item>
-       <item row="1" column="1">
-        <widget class="QLabel" name="labelWindowType">
-         <property name="toolTip">
-          <string>The type of window used to apodize the A-line spectra prior to FFT</string>
-         </property>
-         <property name="text">
-          <string>Window type</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
+  <layout class="QGridLayout" name="gridLayout">
+   <item row="0" column="0" colspan="2">
+    <widget class="QCheckBox" name="checkInterpolation">
+     <property name="toolTip">
+      <string>If true, linear-in-wavenumber values are interpolated (1st order) from linear-in-wavelength spectra</string>
+     </property>
+     <property name="text">
+      <string>Lambda-k interpolation</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <property name="tristate">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0" colspan="2">
+    <widget class="QCheckBox" name="checkMeanSpectrumSubtraction">
+     <property name="text">
+      <string>Mean spectrum subtraction</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="0">
+    <widget class="QCheckBox" name="checkApodization">
+     <property name="toolTip">
+      <string>If checked, spectra will be DC-subtracted and then multiplied by a window function</string>
+     </property>
+     <property name="text">
+      <string>Apodization</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1">
+    <widget class="QLabel" name="labelWindowType">
+     <property name="toolTip">
+      <string>The type of window used to apodize the A-line spectra prior to FFT</string>
+     </property>
+     <property name="text">
+      <string>Window type</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="2">
+    <widget class="QComboBox" name="comboApodization">
+     <property name="toolTip">
+      <string>The type of window used to apodize the A-line spectra prior to FFT</string>
+     </property>
+     <item>
+      <property name="text">
+       <string>Hanning</string>
+      </property>
      </item>
-    </layout>
+     <item>
+      <property name="text">
+       <string>Blackman</string>
+      </property>
+     </item>
+    </widget>
    </item>
   </layout>
  </widget>

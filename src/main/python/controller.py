@@ -1,12 +1,13 @@
+import ctypes as c
 
 
-"""
-In principle, it is possible to attach a new imaging system backend to the OCTview GUI by reimplementing NIOCTController.
-"""
 class NIOCTController:
+    """
+    In principle, it is possible to attach a new imaging system backend to the OCTview GUI by reimplementing NIOCTController.
+    """
 
     def __init__(self, camera_name, ao_ch_x_name, ao_ch_y_name, ao_ch_lt_name, ao_ch_ft_name, library):
-        """Interface to imaging system hardware using NI-IMAQ and NI-DAQ libraries via a wrapped .dll.
+        """Interface to imaging system hardware using NI-IMAQ and NI-DAQ libraries via a ctypes-wrapped .dll.
         
         Args:
             camera_name (str): Name of cam file corresponding to line camera
@@ -17,8 +18,8 @@ class NIOCTController:
             library (str): Path to the NIOCTController .dll
         """
         self._handle = self._lib.NIOCT_open(camera_name.encode('utf-8'), ao_ch_x_name.encode('utf-8'),
-                                      ao_ch_y_name.encode('utf-8'), ao_ch_lt_name.encode('utf-8'),
-                                      ao_ch_ft_name.encode('utf-8'))
+                                            ao_ch_y_name.encode('utf-8'), ao_ch_lt_name.encode('utf-8'),
+                                            ao_ch_ft_name.encode('utf-8'))
         self._lib = c.LoadLibrary(library)
 
     def __del__(self):

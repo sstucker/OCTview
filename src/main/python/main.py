@@ -1,9 +1,11 @@
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtCore import QFile, QTextStream
 
 from widgets import MainWindow
-
 import sys
+import qdarkstyle
+
 
 class AppContext(ApplicationContext):
 
@@ -11,6 +13,9 @@ class AppContext(ApplicationContext):
         super().__init__()
         self._version = self.build_settings['version']
         self._name = self.build_settings['app_name']
+
+        # Dark theme
+        self.app.setStyleSheet(qdarkstyle.load_stylesheet())
 
     def run(self):
         window = MainWindow()
