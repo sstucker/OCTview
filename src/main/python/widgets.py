@@ -44,6 +44,15 @@ class DisplayWidget(QWidget, UiWidget):
         super(UiWidget, self).__init__()
 
 
+class ScanWidget(QWidget):
+
+    def __init__(self):
+        super(QWidget, self).__init__()
+
+    @property
+    def x(self):
+        return self._pattern.get_x()
+
 class RasterScanWidget(QWidget, UiWidget):
 
     def __init__(self):
