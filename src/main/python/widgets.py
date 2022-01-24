@@ -6,6 +6,8 @@ from PyQt5 import QtCore
 from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal, QObject
 
+from scanpatterns import LineScanPattern, RasterScanPattern, CircleScanPattern
+import numpy as np
 
 class UiWidget:
 
@@ -40,38 +42,122 @@ class UiWidget:
 class DisplayWidget(QWidget, UiWidget):
 
     def __init__(self):
-        super(QWidget, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
 
 class ScanWidget(QWidget):
 
     def __init__(self):
-        super(QWidget, self).__init__()
+        super().__init__()
+        self._pattern = LineScanPattern()
+
+    def generate_pattern(self):
+        raise NotImplementedError()
 
     @property
     def x(self):
         return self._pattern.get_x()
 
-class RasterScanWidget(QWidget, UiWidget):
+    @property
+    def y(self):
+        return self._pattern.get_x()
+
+    @property
+    def line_trigger(self):
+        return self._pattern.line_trigger()
+
+    @property
+    def frame_trigger(self):
+        return self._pattern.frame_trigger()
+
+
+class RasterScanWidget(ScanWidget, UiWidget):
 
     def __init__(self):
-        super(QWidget, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
+
+        self.checkSquareScan.stateChanged.connect(self._aspectChanged)
+        self.checkEqualAspect.stateChanged.connect(self._aspectChanged)
+        self.checkBidirectional.stateChanged.connect(self._checkBidirectionalChanged)
+        self.checkARepeat.stateChanged.connect(self._checkARepeatChanged)
+        self.checkBRepeat.stateChanged.connect(self._checkBRepeatChanged)
+        self.spinACount.valueChanged.connect(self._xValueChanged)
+        self.spinROIWidth.valueChanged.connect(self._xValueChanged)
+
+    def generate_pattern(self):
+        self._pattern = RasterScanPattern()
+        self._pattern.generate(
+            alines = self.spinACount.value(),
+            blines = self.spinBCount.value(),
+            max_trigger_rate = 76000,
+            fov = [self.spinROIWidth.value(), self.spinROIHeight.value()],
+            flyback_duty = 0.2,
+            exposure_fraction = 0.8,
+            fast_axis_step = self.radioXStep.isChecked(),
+            slow_axis_step = self.radioYStep.isChecked(),
+            aline_repeat = [1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
+            bline_repeat = [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
+            bidirectional = self.checkBidirectional.isChecked(),
+            rotation_rad = self.parentWidget().spinRotation.value() * np.pi / 180,
+        )
+        self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
+
+    def _aspectChanged(self):
+        if self.checkEqualAspect.isChecked():
+            self.spinROIHeight.setValue(self.spinROIWidth.value())
+            self.spinROIHeight.setEnabled(False)
+        else:
+            self.spinROIHeight.setEnabled(True)
+        if self.checkSquareScan.isChecked():
+            self.spinBCount.setValue(self.spinACount.value())
+            self.spinBCount.setEnabled(False)
+        else:
+            self.spinBCount.setEnabled(True)
+        self.generate_pattern()
+
+    def _checkBidirectionalChanged(self):
+        if self.checkBidirectional.isChecked():
+            self.checkARepeat.setChecked(False)
+            self.checkBRepeat.setChecked(False)
+            self.radioXSaw.setChecked(True)
+            self.radioYSaw.setChecked(True)
+        self.generate_pattern()
+
+    def _checkARepeatChanged(self):
+        if self.checkARepeat.isChecked():
+            self.checkBidirectional.setChecked(False)
+            self.spinARepeat.setEnabled(True)
+            self.radioXStep.setChecked(True)
+        else:
+            self.spinARepeat.setEnabled(False)
+        self.generate_pattern()
+
+    def _checkBRepeatChanged(self):
+        if self.checkBRepeat.isChecked():
+            self.checkBidirectional.setChecked(False)
+            self.spinBRepeat.setEnabled(True)
+        else:
+            self.spinBRepeat.setEnabled(False)
+        self.generate_pattern()
+
+    def _xValueChanged(self):
+        if self.checkSquareScan.isChecked():
+            self.spinBCount.setValue(self.spinACount.value())
+        if self.checkEqualAspect.isChecked():
+            self.spinROIHeight.setValue(self.spinROIWidth.value() / self.spinACount.value() * self.spinBCount.value())
+        self.generate_pattern()
 
 
-class LineScanWidget(QWidget, UiWidget):
+class LineScanWidget(ScanWidget, UiWidget):
 
     def __init__(self):
-        super(QWidget, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
 
-class CircleScanWidget(QWidget, UiWidget):
+class CircleScanWidget(ScanWidget, UiWidget):
 
     def __init__(self):
-        super(QWidget, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
 
 class ControlGroupBox(QGroupBox, UiWidget):
@@ -82,8 +168,7 @@ class ControlGroupBox(QGroupBox, UiWidget):
     stop = pyqtSignal()
 
     def __init__(self):
-        super(QGroupBox, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
         self.pushScan.pressed.connect(self.scan.emit)
         self.pushStop.pressed.connect(self.stop.emit)
@@ -96,8 +181,7 @@ class ScanGroupBox(QGroupBox, UiWidget):
     update = pyqtSignal()
 
     def __init__(self):
-        super(QGroupBox, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
         self._subwidgets = {
             'Raster': RasterScanWidget(),
@@ -112,51 +196,58 @@ class ScanGroupBox(QGroupBox, UiWidget):
         for subwidget in list(self._subwidgets.values()):
             children += subwidget.children()
         for child in children:
-            if type(child) in [QSpinBox, QDoubleSpinBox, QRadioButton]:
+            if type(child) in [QSpinBox, QDoubleSpinBox]:
                 child.valueChanged.connect(self.update.emit)
             elif type(child) in [QCheckBox]:
                 child.stateChanged.connect(self.update.emit)
+            elif type(child) in [QRadioButton]:
+                child.toggled.connect(self.update.emit)
 
-        self.update.connect(lambda: print('Scan pattern updated!'))  # TODO :debug: remove
+        self.update.connect(self.ScanWidget.generate_pattern)
+
+        self.pushPreview.pressed.connect(self._preview)
 
     def _selectSubwidget(self):
         self.replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
+        self.ScanWidget.generate_pattern()
+
+    def _preview(self):
+        import matplotlib.pyplot as plt
+        plt.plot(self.ScanWidget._pattern.x)
+        plt.plot(self.ScanWidget._pattern.y)
+        plt.plot(self.ScanWidget._pattern.line_trigger)
+        plt.show()
 
 
 
 class FileGroupBox(QGroupBox, UiWidget):
 
     def __init__(self):
-        super(QGroupBox, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
 
     def __init__(self):
-        super(QGroupBox, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
 
 class DisplayWidget(QWidget, UiWidget):
 
     def __init__(self):
-        super(QWidget, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
 
 class SpectrumWidget(QWidget, UiWidget):
 
     def __init__(self):
-        super(QWidget, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
 
 class MainWindow(QMainWindow, UiWidget):
 
     def __init__(self):
-        super(QMainWindow, self).__init__()
-        super(UiWidget, self).__init__()
+        super().__init__()
 
         self.replaceWidget(self.ScanGroupBox, ScanGroupBox())
         self.replaceWidget(self.DisplayWidget, DisplayWidget())
