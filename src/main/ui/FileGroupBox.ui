@@ -37,7 +37,7 @@
         <enum>QLayout::SetMinimumSize</enum>
        </property>
        <item row="0" column="0">
-        <widget class="QLineEdit" name="lineExp">
+        <widget class="QLineEdit" name="lineDirectory">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
            <horstretch>1</horstretch>
@@ -85,7 +85,7 @@
       </layout>
      </item>
      <item row="0" column="1">
-      <widget class="QLabel" name="labelExp">
+      <widget class="QLabel" name="labelDirectory">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Minimum" vsizetype="Preferred">
          <horstretch>0</horstretch>

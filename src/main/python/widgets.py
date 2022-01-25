@@ -1,17 +1,20 @@
-from PyQt5.QtWidgets import QWidget, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton
+from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, QFileDialog, QLineEdit, QTextEdit, QComboBox, QLabel
 
 import pyqtgraph as pyqtg
 import os
 from PyQt5 import QtCore
+from PyQt5.QtCore import QLine
 from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal, QObject
+
+import json
 
 from scanpatterns import LineScanPattern, RasterScanPattern, CircleScanPattern
 import numpy as np
 
 class UiWidget:
 
-    def __init__(self, uiname: str = None):
+    def __init__(self, uiname: str = None, statefile: str = None):
         """Base class for QWidget or QObject that uses a Qt Creator ui file.
 
         Automatically loads the .ui file with the same name as the class. Provides convenience function 'replaceWidget'
@@ -29,6 +32,9 @@ class UiWidget:
         ui = os.sep.join([os.getcwd(), 'src', 'main', 'ui', uiname + '.ui'])
         uic.loadUi(ui, self)
 
+        if statefile is not None and os.path.exists(statefile):
+            self._loadState(statefile)
+
     def replaceWidget(self, old_widget: QWidget, new_widget: QWidget):
         """Replace a widget with another."""
         plotwidget_placeholder_layout = old_widget.parent().layout()
@@ -37,6 +43,69 @@ class UiWidget:
         old_widget.hide()
         new_widget.show()
         self.__dict__[old_widget.objectName()] = new_widget  # Goodbye, old widget reference!
+
+    def loadStateFromJson(self, statefile: str):
+        with open(statefile, 'r') as file:
+            print('Opened the .json file.')
+
+    def writeStateToJson(self, statefile: str):
+        with open(statefile, 'w') as file:
+            print(json.dumps(_dictize(self), indent=4))
+            json.dump(_dictize(self), file, indent=4)
+
+
+DICTABLE_TYPES = [
+    QComboBox,
+    QSpinBox,
+    QDoubleSpinBox,
+    QCheckBox,
+    QRadioButton,
+    QLineEdit,
+    QTextEdit,
+]
+
+
+def _dictize(obj: QWidget):
+    """Convert a hierarchy of QWidgets and QLayouts to a dictionary
+
+    Loops over entire tree given a root object. Will only assign a QWidget or QLayout's name and value to the dictionary
+    if it is in DICTABLE_TYPES, therefore having behavior defined in _get_widget_value.
+
+    Args:
+        obj (QWidget or QLayout): Qt Widget or Layout instance to serve as the root of the tree
+    """
+    struct = {}
+    for child in obj.children():
+        if type(child) in DICTABLE_TYPES and not child.objectName().startswith('qt_'):
+            struct[child.objectName()] = _get_widget_value(child)
+        elif len(child.children()) > 0:
+            # Recurse if children have dictable children
+            s = _dictize(child)
+            if len(s) > 0:
+                struct[child.objectName()] = s
+    return struct
+
+
+def _get_widget_value(widget: QWidget):
+    if type(widget) in [QCheckBox, QRadioButton]:
+        return widget.isChecked()
+    elif type(widget) in [QLineEdit, QTextEdit]:
+        return widget.text()
+    elif type(widget) in [QSpinBox, QDoubleSpinBox]:
+        return widget.value()
+    elif type(widget) in [QComboBox]:
+        return widget.currentIndex()
+
+
+def _set_widget_value(widget: QWidget, value):
+    if type(widget) in [QCheckBox, QRadioButton]:
+        widget.setChecked(value)
+    elif type(widget) in [QLineEdit, QTextEdit]:
+        widget.setText(value)
+    elif type(widget) in [QSpinBox, QDoubleSpinBox]:
+        widget.setValue(value)
+    elif type(widget) in [QComboBox]:
+        widget.setCurrentIndex(value)
 
 
 class DisplayWidget(QWidget, UiWidget):
@@ -56,19 +125,24 @@ class ScanWidget(QWidget):
 
     @property
     def x(self):
-        return self._pattern.get_x()
+        return self._pattern.x
 
     @property
     def y(self):
-        return self._pattern.get_x()
+        return self._pattern.y
 
     @property
     def line_trigger(self):
-        return self._pattern.line_trigger()
+        return self._pattern.line_trigger
 
     @property
     def frame_trigger(self):
-        return self._pattern.frame_trigger()
+        return self._pattern.frame_trigger
+
+    @property
+    def pattern(self):
+        return self._pattern
+
 
 
 class RasterScanWidget(ScanWidget, UiWidget):
@@ -83,6 +157,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.checkBRepeat.stateChanged.connect(self._checkBRepeatChanged)
         self.spinACount.valueChanged.connect(self._xValueChanged)
         self.spinROIWidth.valueChanged.connect(self._xValueChanged)
+        self.radioXSaw.toggled.connect(self._profileChanged)
 
     def generate_pattern(self):
         self._pattern = RasterScanPattern()
@@ -106,13 +181,17 @@ class RasterScanWidget(ScanWidget, UiWidget):
         if self.checkEqualAspect.isChecked():
             self.spinROIHeight.setValue(self.spinROIWidth.value())
             self.spinROIHeight.setEnabled(False)
+            self.labelROIHeight.setEnabled(False)
         else:
             self.spinROIHeight.setEnabled(True)
+            self.labelROIHeight.setEnabled(True)
         if self.checkSquareScan.isChecked():
             self.spinBCount.setValue(self.spinACount.value())
             self.spinBCount.setEnabled(False)
+            self.labelBCount.setEnabled(False)
         else:
             self.spinBCount.setEnabled(True)
+            self.labelBCount.setEnabled(True)
         self.generate_pattern()
 
     def _checkBidirectionalChanged(self):
@@ -120,7 +199,12 @@ class RasterScanWidget(ScanWidget, UiWidget):
             self.checkARepeat.setChecked(False)
             self.checkBRepeat.setChecked(False)
             self.radioXSaw.setChecked(True)
-            self.radioYSaw.setChecked(True)
+            self.spinFlybackDuty.setEnabled(False)
+            self.labelFlybackDuty.setEnabled(False)
+        else:
+            self.spinFlybackDuty.setEnabled(True)
+            self.labelFlybackDuty.setEnabled(True)
+
         self.generate_pattern()
 
     def _checkARepeatChanged(self):
@@ -145,6 +229,15 @@ class RasterScanWidget(ScanWidget, UiWidget):
             self.spinBCount.setValue(self.spinACount.value())
         if self.checkEqualAspect.isChecked():
             self.spinROIHeight.setValue(self.spinROIWidth.value() / self.spinACount.value() * self.spinBCount.value())
+        self.generate_pattern()
+
+    def _profileChanged(self):
+        if self.radioXStep.isChecked():
+            self.spinExposureFraction.setEnabled(False)
+            self.labelExposureFraction.setEnabled(False)
+        else:
+            self.spinExposureFraction.setEnabled(True)
+            self.labelExposureFraction.setEnabled(True)
         self.generate_pattern()
 
 
@@ -213,17 +306,63 @@ class ScanGroupBox(QGroupBox, UiWidget):
 
     def _preview(self):
         import matplotlib.pyplot as plt
-        plt.plot(self.ScanWidget._pattern.x)
-        plt.plot(self.ScanWidget._pattern.y)
-        plt.plot(self.ScanWidget._pattern.line_trigger)
+        plt.plot(self.x)
+        plt.plot(self.y)
+        plt.plot(self.line_trigger)
         plt.show()
 
+    @property
+    def x(self):
+        return self.pattern.x
+
+    @property
+    def y(self):
+        return self.pattern.y
+
+    @property
+    def line_trigger(self):
+        return self.pattern.line_trigger
+
+    @property
+    def frame_trigger(self):
+        return self.pattern.frame_trigger
+
+    @property
+    def zroi(self):
+        return self.spinZTop.value(), self.spinZBottom.value()
+
+    @property
+    def pattern(self):
+        return self.ScanWidget.pattern
 
 
 class FileGroupBox(QGroupBox, UiWidget):
 
     def __init__(self):
         super().__init__()
+        self._directory: str = os.getcwd()
+        self._file_name: str = 'default_trial_name'
+
+        self.lineDirectory.setText(self._directory)
+        self.lineFileName.setText(self._file_name)
+
+        self.buttonBrowse.pressed.connect(self._browseForDirectory)
+
+    def _browseForDirectory(self):
+        self._directory = str(QFileDialog.getExistingDirectory(self, "Select Experiment Directory", self._directory))
+        self.lineDirectory.setText(self._directory)
+
+    @property
+    def directory(self):
+        return self._directory
+
+    @property
+    def trial(self):
+        return self._file_name
+
+    @property
+    def filename(self):
+        return os.path.join(self.directory, self.trial)
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
@@ -256,8 +395,44 @@ class MainWindow(QMainWindow, UiWidget):
         self.replaceWidget(self.ProcessingGroupBox, ProcessingGroupBox())
         self.replaceWidget(self.ControlGroupBox, ControlGroupBox())
 
-        self.show()
-
         self.statusBar().setSizeGripEnabled(False)
         self.setFixedSize(self.minimumSize())
+
+        self.show()
+
+        self.writeStateToJson('teststate.json')
+
+"""
+Parameters
+
+DAC_ID_AO_OUT_GALVO_X
+DAC_ID_AO_OUT_GALVO_Y
+DAC_ID_AO_OUT_LINE_TRIGGER
+DAC_ID_AO_FRAME_TRIGGER
+DAC_ID_AO_START_TRIGGER
+DAC_ID_AI_START_TRIGGER
+CAM_ID
+
+SCAN_SIGNAL_X
+SCAN_SIGNAL_Y
+SCAN_SIGNAL_LINE_TRIGGER
+SCAN_SIGNAL_FRAME_TRIGGER
+SCAN_SIGNAL_SAMPLE_RATE
+
+EXPORT_FILE_TYPE
+EXPORT_FILE_NAME
+EXPORT_FILE_SIZE
+EXPORT_NUMBER_OF_FRAMES
+
+
+
+
+
+
+
+
+
+
+
+"""
 
