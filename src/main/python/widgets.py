@@ -410,7 +410,7 @@ class SpectrumWidget(QWidget, UiWidget):
         super().__init__()
 
 
-class SettingsDialog(UiWidget, QDialog):
+class CancelDiscardsChangesDialog(QDialog, UiWidget):
 
     changed = pyqtSignal()
 
@@ -424,6 +424,12 @@ class SettingsDialog(UiWidget, QDialog):
         else:
             # TODO actually compare the new state with old_state
             self.changed.emit()
+
+
+class SettingsDialog(CancelDiscardsChangesDialog):
+
+    def __init__(self):
+        super().__init__()
 
 
 class MainWindow(QMainWindow, UiWidget):
@@ -443,16 +449,19 @@ class MainWindow(QMainWindow, UiWidget):
         self.statusBar().setSizeGripEnabled(False)
         self.setFixedSize(self.minimumSize())
 
-        config_file = os.path.join(OCTview.config_resource_location, '.last')
-        if os.path.exists(config_file):
-            self.loadStateFromJson(config_file)
 
         self._settings_dialog = SettingsDialog()
+        self._settings_dialog.setParent(self)
+        self._settings_dialog.setWindowFlag(True)
 
         self.actionSave_Configuration.triggered.connect(self.saveConfiguration)
         self.actionLoad_Configuration.triggered.connect(self.loadConfiguration)
         self.actionSettings.triggered.connect(self._settings_dialog.showDialog)
         self._settings_dialog.changed.connect(self.reload_required.emit)
+
+        config_file = os.path.join(OCTview.config_resource_location, '.last')
+        if os.path.exists(config_file):
+            self.loadStateFromJson(config_file)
 
         self.show()
 
