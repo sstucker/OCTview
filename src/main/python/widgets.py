@@ -1,11 +1,12 @@
 import json
 import os
+import warnings
 
 import numpy as np
 from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QWidget, QLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
-    QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog
+    QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
 from scanpatterns import LineScanPattern, RasterScanPattern
 
 import OCTview
@@ -23,7 +24,7 @@ def replaceWidget(old_widget: QWidget, new_widget: QWidget):
 
 class UiWidget:
 
-    def __init__(self, uiname: str = None, statefile: str = None):
+    def __init__(self, uiname: str = None):
         """Base class for QWidget or QObject that uses a Qt Creator ui file.
 
         Automatically loads the .ui file with the same name as the class. Provides convenience function 'replaceWidget'
@@ -40,9 +41,6 @@ class UiWidget:
             uiname = self.__class__.__name__
         ui = os.sep.join([OCTview.ui_resource_location, uiname + '.ui'])
         uic.loadUi(ui, self)
-
-        if statefile is not None and os.path.exists(statefile):
-            self._loadState(statefile)
 
     def loadStateFromJson(self, statefile: str):
         with open(statefile, 'r') as file:
@@ -81,10 +79,17 @@ def _undictize(obj, dictionary: dict):
     for key in dictionary.keys():
         try:
             child = getattr(obj, key)
-        except AttributeError:
-            continue
-        if type(getattr(obj, key)) in DICTABLE_TYPES:
-            _set_widget_value(obj.__dict__[key], dictionary[key])
+        except AttributeError:  # For some reason, not all children are in __dict__
+            child = None
+            for c in obj.children():
+                if key == c.objectName():
+                    child = c
+                    break
+            if child is None:
+                warnings.warn(key + ' not found in ' + obj.objectName())
+                continue
+        if type(child) in DICTABLE_TYPES:
+            _set_widget_value(child, dictionary[key])
         else:
             _undictize(child, dictionary[key])
 
@@ -405,7 +410,25 @@ class SpectrumWidget(QWidget, UiWidget):
         super().__init__()
 
 
+class SettingsDialog(UiWidget, QDialog):
+
+    changed = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+
+    def showDialog(self):
+        old_state = _dictize(self)
+        if not bool(self.exec_()):
+            _undictize(self, old_state)
+        else:
+            # TODO actually compare the new state with old_state
+            self.changed.emit()
+
+
 class MainWindow(QMainWindow, UiWidget):
+
+    reload_required = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -424,8 +447,12 @@ class MainWindow(QMainWindow, UiWidget):
         if os.path.exists(config_file):
             self.loadStateFromJson(config_file)
 
+        self._settings_dialog = SettingsDialog()
+
         self.actionSave_Configuration.triggered.connect(self.saveConfiguration)
         self.actionLoad_Configuration.triggered.connect(self.loadConfiguration)
+        self.actionSettings.triggered.connect(self._settings_dialog.showDialog)
+        self._settings_dialog.changed.connect(self.reload_required.emit)
 
         self.show()
 
@@ -449,10 +476,13 @@ class MainWindow(QMainWindow, UiWidget):
         else:
             event.ignore()
 
+    # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
 
-class ConfigurationDialog(QDialog, UiWidget):
-    def __init__(self):
-        super().__init__()
+    @property
+    def darkTheme(self):
+        return self._settings_dialog.radioDark.isChecked()
+
+
 
 
 

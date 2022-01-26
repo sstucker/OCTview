@@ -1,11 +1,8 @@
-import os
-import sys
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from controller import NIOCTController
 from widgets import MainWindow
 import sys
 import qdarkstyle
-import types
 
 
 class _AppContext(ApplicationContext):
@@ -15,20 +12,30 @@ class _AppContext(ApplicationContext):
         self.version = self.build_settings['version']
         self.name = self.build_settings['app_name']
 
-        self._controller = None  # Controller is a member of AppContext but is managed by MainWindow
-
-        # Dark theme
-        self.app.setStyleSheet(qdarkstyle.load_stylesheet())
+        self._controller = None  # Assigned by 'load'
 
         self.ui_resource_location = str(self.get_resource('ui'))
         self.config_resource_location = str(self.get_resource('configurations'))
 
-    def run(self):
-        window = MainWindow()
-        window.setWindowTitle(self.name + ' v' + self.version)
-        window.resize(250, 150)
-        window.show()
+        self.window = None
+
+    def load(self):
+        if self.window is None:
+            sys.exit('Failed to load GUI.')
+        """Load backend"""
+        if self.window.darkTheme:
+            self.app.setStyleSheet(qdarkstyle.load_stylesheet())
+        else:
+            self.app.setStyleSheet('')
         # self._controller = NIOCTController()
+
+    def run(self):
+        self.window = MainWindow()
+        self.window.setWindowTitle(self.name + ' v' + self.version)
+        self.window.resize(250, 150)
+        self.window.reload_required.connect(self.load)
+        self.load()
+        self.window.show()
 
         return self.app.exec_()
 

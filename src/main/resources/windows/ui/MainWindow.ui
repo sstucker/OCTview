@@ -120,15 +120,15 @@
     <addaction name="actionSave_Configuration"/>
     <addaction name="actionLoad_Configuration"/>
     <addaction name="separator"/>
-    <addaction name="actionFile"/>
+    <addaction name="actionSettings"/>
     <addaction name="separator"/>
     <addaction name="actionAbout"/>
    </widget>
    <addaction name="menuPreferences"/>
   </widget>
-  <action name="actionFile">
+  <action name="actionSettings">
    <property name="text">
-    <string>Advanced Settings</string>
+    <string>Global Settings</string>
    </property>
   </action>
   <action name="actionSpectralRadar">

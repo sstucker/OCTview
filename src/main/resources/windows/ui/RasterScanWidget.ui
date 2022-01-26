@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>352</width>
-    <height>216</height>
+    <width>393</width>
+    <height>264</height>
    </rect>
   </property>
   <layout class="QGridLayout" name="gridLayout">
@@ -175,7 +175,7 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QFrame" name="frameXProfile">
+      <widget class="QWidget" name="widgetXProfile" native="true">
        <layout class="QVBoxLayout" name="FastAxisProfile">
         <item>
          <widget class="QRadioButton" name="radioXSaw">
@@ -311,7 +311,7 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QFrame" name="frameYProfile">
+      <widget class="QWidget" name="widgetYProfile" native="true">
        <layout class="QVBoxLayout" name="SlowAxisProfile">
         <item>
          <widget class="QRadioButton" name="radioYSaw">
