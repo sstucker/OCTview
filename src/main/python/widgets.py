@@ -1,16 +1,25 @@
-from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, QFileDialog, QLineEdit, QTextEdit, QComboBox, QLabel
-
-import pyqtgraph as pyqtg
-import os
-from PyQt5 import QtCore
-from PyQt5.QtCore import QLine
-from PyQt5 import uic
-from PyQt5.QtCore import pyqtSignal, QObject
-
 import json
+import os
 
-from scanpatterns import LineScanPattern, RasterScanPattern, CircleScanPattern
 import numpy as np
+from PyQt5 import uic
+from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtWidgets import QWidget, QLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
+    QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog
+from scanpatterns import LineScanPattern, RasterScanPattern
+
+import OCTview
+
+
+def replaceWidget(old_widget: QWidget, new_widget: QWidget):
+    """Replace a widget with another."""
+    plotwidget_placeholder_layout = old_widget.parent().layout()
+    plotwidget_placeholder_layout.replaceWidget(old_widget, new_widget)
+    new_widget.setObjectName(old_widget.objectName())
+    old_widget.hide()
+    new_widget.show()
+    old_widget.parentWidget().__dict__[old_widget.objectName()] = new_widget  # Goodbye, old widget reference!
+
 
 class UiWidget:
 
@@ -29,29 +38,24 @@ class UiWidget:
         # by default, load .ui file of the same name as the class
         if uiname is None:
             uiname = self.__class__.__name__
-        ui = os.sep.join([os.getcwd(), 'src', 'main', 'ui', uiname + '.ui'])
+        ui = os.sep.join([OCTview.ui_resource_location, uiname + '.ui'])
         uic.loadUi(ui, self)
 
         if statefile is not None and os.path.exists(statefile):
             self._loadState(statefile)
 
-    def replaceWidget(self, old_widget: QWidget, new_widget: QWidget):
-        """Replace a widget with another."""
-        plotwidget_placeholder_layout = old_widget.parent().layout()
-        plotwidget_placeholder_layout.replaceWidget(old_widget, new_widget)
-        new_widget.setObjectName(old_widget.objectName())
-        old_widget.hide()
-        new_widget.show()
-        self.__dict__[old_widget.objectName()] = new_widget  # Goodbye, old widget reference!
-
     def loadStateFromJson(self, statefile: str):
         with open(statefile, 'r') as file:
-            print('Opened the .json file.')
+            try:
+                _undictize(self, json.load(file)[self.objectName()])
+            except KeyError:
+                raise ValueError(self.__class__.__name__
+                                 + " instance named '" + self.objectName()
+                                 + "' not found the root of state file " + statefile)
 
     def writeStateToJson(self, statefile: str):
         with open(statefile, 'w') as file:
-            print(json.dumps(_dictize(self), indent=4))
-            json.dump(_dictize(self), file, indent=4)
+            json.dump({self.objectName(): _dictize(self)}, file, indent=4)
 
 
 DICTABLE_TYPES = [
@@ -65,10 +69,30 @@ DICTABLE_TYPES = [
 ]
 
 
-def _dictize(obj: QWidget):
-    """Convert a hierarchy of QWidgets and QLayouts to a dictionary
+def _undictize(obj, dictionary: dict):
+    """Read values and states of QWidgets from a nested dictionary of object names.
 
-    Loops over entire tree given a root object. Will only assign a QWidget or QLayout's name and value to the dictionary
+    Recurses over entire dictionary tree, assigning values to children of obj.
+
+    Args:
+        obj (QWidget or QLayout): Qt Widget or Layout instance to serve as the root of the tree
+        dictionary (dict): Dictionary with keys corresponding to children of obj
+    """
+    for key in dictionary.keys():
+        try:
+            child = getattr(obj, key)
+        except AttributeError:
+            continue
+        if type(getattr(obj, key)) in DICTABLE_TYPES:
+            _set_widget_value(obj.__dict__[key], dictionary[key])
+        else:
+            _undictize(child, dictionary[key])
+
+
+def _dictize(obj):
+    """Convert a hierarchy of QWidgets and QLayouts to a dictionary.
+
+    Recurses over entire tree given a root object. Will only assign a QWidget or QLayout's name and value to the dictionary
     if it is in DICTABLE_TYPES, therefore having behavior defined in _get_widget_value.
 
     Args:
@@ -144,7 +168,6 @@ class ScanWidget(QWidget):
         return self._pattern
 
 
-
 class RasterScanWidget(ScanWidget, UiWidget):
 
     def __init__(self):
@@ -162,18 +185,18 @@ class RasterScanWidget(ScanWidget, UiWidget):
     def generate_pattern(self):
         self._pattern = RasterScanPattern()
         self._pattern.generate(
-            alines = self.spinACount.value(),
-            blines = self.spinBCount.value(),
-            max_trigger_rate = 76000,
-            fov = [self.spinROIWidth.value(), self.spinROIHeight.value()],
-            flyback_duty = 0.2,
-            exposure_fraction = 0.8,
-            fast_axis_step = self.radioXStep.isChecked(),
-            slow_axis_step = self.radioYStep.isChecked(),
-            aline_repeat = [1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
-            bline_repeat = [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
-            bidirectional = self.checkBidirectional.isChecked(),
-            rotation_rad = self.parentWidget().spinRotation.value() * np.pi / 180,
+            alines=self.spinACount.value(),
+            blines=self.spinBCount.value(),
+            max_trigger_rate=76000,
+            fov=[self.spinROIWidth.value(), self.spinROIHeight.value()],
+            flyback_duty=0.2,
+            exposure_fraction=0.8,
+            fast_axis_step=self.radioXStep.isChecked(),
+            slow_axis_step=self.radioYStep.isChecked(),
+            aline_repeat=[1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
+            bline_repeat=[1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
+            bidirectional=self.checkBidirectional.isChecked(),
+            rotation_rad=self.parentWidget().spinRotation.value() * np.pi / 180,
         )
         self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
 
@@ -254,7 +277,6 @@ class CircleScanWidget(ScanWidget, UiWidget):
 
 
 class ControlGroupBox(QGroupBox, UiWidget):
-
     scan = pyqtSignal()
     acquire = pyqtSignal()
     snap = pyqtSignal()
@@ -270,7 +292,6 @@ class ControlGroupBox(QGroupBox, UiWidget):
 
 
 class ScanGroupBox(QGroupBox, UiWidget):
-
     update = pyqtSignal()
 
     def __init__(self):
@@ -301,15 +322,16 @@ class ScanGroupBox(QGroupBox, UiWidget):
         self.pushPreview.pressed.connect(self._preview)
 
     def _selectSubwidget(self):
-        self.replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
+        replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
         self.ScanWidget.generate_pattern()
 
     def _preview(self):
-        import matplotlib.pyplot as plt
-        plt.plot(self.x)
-        plt.plot(self.y)
-        plt.plot(self.line_trigger)
-        plt.show()
+        print('Scan pattern preview')
+        # import matplotlib.pyplot as plt
+        # plt.plot(self.x)
+        # plt.plot(self.y)
+        # plt.plot(self.line_trigger)
+        # plt.show()
 
     @property
     def x(self):
@@ -388,19 +410,51 @@ class MainWindow(QMainWindow, UiWidget):
     def __init__(self):
         super().__init__()
 
-        self.replaceWidget(self.ScanGroupBox, ScanGroupBox())
-        self.replaceWidget(self.DisplayWidget, DisplayWidget())
-        self.replaceWidget(self.FileGroupBox, FileGroupBox())
-        self.replaceWidget(self.SpectrumWidget, SpectrumWidget())
-        self.replaceWidget(self.ProcessingGroupBox, ProcessingGroupBox())
-        self.replaceWidget(self.ControlGroupBox, ControlGroupBox())
+        replaceWidget(self.ScanGroupBox, ScanGroupBox())
+        replaceWidget(self.DisplayWidget, DisplayWidget())
+        replaceWidget(self.FileGroupBox, FileGroupBox())
+        replaceWidget(self.SpectrumWidget, SpectrumWidget())
+        replaceWidget(self.ProcessingGroupBox, ProcessingGroupBox())
+        replaceWidget(self.ControlGroupBox, ControlGroupBox())
 
         self.statusBar().setSizeGripEnabled(False)
         self.setFixedSize(self.minimumSize())
 
+        config_file = os.path.join(OCTview.config_resource_location, '.last')
+        if os.path.exists(config_file):
+            self.loadStateFromJson(config_file)
+
+        self.actionSave_Configuration.triggered.connect(self.saveConfiguration)
+        self.actionLoad_Configuration.triggered.connect(self.loadConfiguration)
+
         self.show()
 
-        self.writeStateToJson('teststate.json')
+    def loadConfiguration(self):
+        file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location, "OCTview configuration file (*.oct)")[0]
+        if os.path.exists(file):
+            self.loadStateFromJson(file)
+
+    def saveConfiguration(self):
+        file = QFileDialog.getSaveFileName(self, "Save Configuration File", OCTview.config_resource_location, "OCTview configuration file (*.oct)")[0]
+        if len(file) > 0:
+            self.writeStateToJson(file)
+
+    # Overload
+    def closeEvent(self, event):
+        quit_msg = "Are you sure you want to exit OCTview?"
+        reply = QMessageBox.question(self, 'Message', quit_msg, QMessageBox.Yes, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.writeStateToJson(os.path.join(OCTview.config_resource_location, '.last'))
+            event.accept()
+        else:
+            event.ignore()
+
+
+class ConfigurationDialog(QDialog, UiWidget):
+    def __init__(self):
+        super().__init__()
+
+
 
 """
 Parameters
@@ -435,4 +489,3 @@ EXPORT_NUMBER_OF_FRAMES
 
 
 """
-

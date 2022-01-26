@@ -3,3 +3,5 @@
 __pycache__/
 workspace.xml
 tasks.xml
+*.oct
+.last
