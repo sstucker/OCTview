@@ -1,12 +1,20 @@
 import ctypes as c
-
+import numpy as np
 
 class NIOCTController:
     """
     In principle, it is possible to attach a new imaging system backend to the OCTview GUI by reimplementing NIOCTController.
     """
 
-    def __init__(self, camera_name, ao_ch_x_name, ao_ch_y_name, ao_ch_lt_name, ao_ch_ft_name, library):
+    def __init__(self,
+                 camera_name,
+                 ao_ch_x_name,
+                 ao_ch_y_name,
+                 ao_ch_lt_name,
+                 ao_ch_ft_name,
+                 ao_ch_st_name,
+                 library
+                 ):
         """Interface to imaging system hardware using NI-IMAQ and NI-DAQ libraries via a ctypes-wrapped .dll.
         
         Args:
@@ -15,11 +23,12 @@ class NIOCTController:
             ao_ch_y_name (str): NI-DAQ analog out channel identifier to be used for Y galvo output
             ao_ch_lt_name (str): NI-DAQ analog out channel identifier to be used for camera triggering
             ao_ch_ft_name (str): NI-DAQ analog out channel identifier to be used for frame grab triggering
+            ao_ch_st_name (str): NI-DAQ analog out channel identifier to be used to trigger other devices on imaging start
             library (str): Path to the NIOCTController .dll
         """
         self._handle = self._lib.NIOCT_open(camera_name.encode('utf-8'), ao_ch_x_name.encode('utf-8'),
                                             ao_ch_y_name.encode('utf-8'), ao_ch_lt_name.encode('utf-8'),
-                                            ao_ch_ft_name.encode('utf-8'))
+                                            ao_ch_ft_name.encode('utf-8'), ao_ch_st_name.encode('utf-8'))
         self._lib = c.LoadLibrary(library)
 
     def __del__(self):
@@ -41,8 +50,8 @@ class NIOCTController:
         """
         if roi_size is None:
             roi_size = aline_size
-        self._lib.NIOCT_configure(self._handle, int(dac_output_rate), int(aline_size), int(roi_offset), int(roi_size),
-                            int(number_of_alines), int(number_of_buffers))
+        self._lib.NIOCT_configure(self._handle, int(dac_output_rate), int(aline_size), int(roi_offset),
+                                  int(roi_size), int(number_of_alines), int(number_of_buffers))
 
     def is_scanning(self):
         """Returns bool indicating whether controller is actively imaging."""
@@ -56,13 +65,17 @@ class NIOCTController:
         """Returns bool indicating whether controller is fully configured and ready to scan."""
         return self._lib.NIOCT_is_ready_to_scan(self._handle)
 
-    def set_processing(self, intpdk, apod_window):
+    def set_processing(self, subtract_background, interp, intpdk, apod_window):
         """Set parameters of SD-OCT processing. Can be called during a scan.
         Args:
+            enabled (bool): If False, spectral data is saved.
+            subtract_background (bool): If True, carry out background subtraction
+            interp (bool): If True, carry out linear-in-wavelength -> linear-in-wavenumber interpolation.
             intpdk (float): Parameter for linear-in-wavelength -> linear-in-wavenmber interpolation.
             apod_window (np.ndarray): Window which is multiplied by each spectral A-line prior to FFT i.e. Hanning window.
         """
-        self._lib.NIOCT_setProcessing(self._handle, np.double(intpdk), apod_window)
+        self._lib.NIOCT_setProcessing(self._handle, bool(enabled), bool(subtract_background), bool(interp),
+                                      np.float64(intpdk), apod_window)
 
     def set_scan(self, x, y, lt, ft):
         """Sets the signals used to drive the galvos and trigger camera and frame grabber. Can be called during a scan.
@@ -100,8 +113,7 @@ class NIOCTController:
             max_bytes (int): Maximum size each file can be before a new one is created.
             frames_to_save (int): Number of frames to save.
         """
-        self._lib.NIOCT_saveN(self._handle, file_name.split('.')[0].encode('utf-8'), int(max_bytes),
-                        int(frames_to_save))
+        self._lib.NIOCT_saveN(self._handle, file_name.split('.')[0].encode('utf-8'), int(max_bytes), int(frames_to_save))
 
     def stop_save(self):
         """Stop streaming data to disk."""

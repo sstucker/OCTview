@@ -11,6 +11,7 @@ from scanpatterns import LineScanPattern, RasterScanPattern
 
 import OCTview
 
+ALINE_SIZE = 2048
 
 def replaceWidget(old_widget: QWidget, new_widget: QWidget):
     """Replace a widget with another."""
@@ -187,6 +188,12 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.spinROIWidth.valueChanged.connect(self._xValueChanged)
         self.radioXSaw.toggled.connect(self._profileChanged)
 
+        self._settings_dialog = RasterScanDialog()
+        self._settings_dialog.setParent(self)
+        self._settings_dialog.setWindowFlag(True)
+
+        self.buttonSettings.pressed.connect(self._settings_dialog.showDialog)
+
     def generate_pattern(self):
         self._pattern = RasterScanPattern()
         self._pattern.generate(
@@ -194,8 +201,8 @@ class RasterScanWidget(ScanWidget, UiWidget):
             blines=self.spinBCount.value(),
             max_trigger_rate=76000,
             fov=[self.spinROIWidth.value(), self.spinROIHeight.value()],
-            flyback_duty=0.2,
-            exposure_fraction=0.8,
+            flyback_duty=self.spinFlybackDuty.value() / 100,
+            exposure_fraction=self.spinExposureFraction.value() / 100,
             fast_axis_step=self.radioXStep.isChecked(),
             slow_axis_step=self.radioYStep.isChecked(),
             aline_repeat=[1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
@@ -260,12 +267,8 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.generate_pattern()
 
     def _profileChanged(self):
-        if self.radioXStep.isChecked():
-            self.spinExposureFraction.setEnabled(False)
-            self.labelExposureFraction.setEnabled(False)
-        else:
-            self.spinExposureFraction.setEnabled(True)
-            self.labelExposureFraction.setEnabled(True)
+        self.spinExposureFraction.setEnabled(not self.radioXStep.isChecked())
+        self.labelExposureFraction.setEnabled(not self.radioXStep.isChecked())
         self.generate_pattern()
 
 
@@ -282,6 +285,7 @@ class CircleScanWidget(ScanWidget, UiWidget):
 
 
 class ControlGroupBox(QGroupBox, UiWidget):
+
     scan = pyqtSignal()
     acquire = pyqtSignal()
     snap = pyqtSignal()
@@ -391,11 +395,78 @@ class FileGroupBox(QGroupBox, UiWidget):
     def filename(self):
         return os.path.join(self.directory, self.trial)
 
+    @property
+    def save_metadata(self):
+        return self.checkMetadata.isChecked()
+
+    @property
+    def filetype(self):
+        return self.comboFileType.currentIndex()
+
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
 
+    changed = pyqtSignal()
+
     def __init__(self):
         super().__init__()
+
+        self._windows = {
+            'Hanning': np.hanning(ALINE_SIZE),
+            'Blackman': np.blackman(ALINE_SIZE)
+        }
+        self._null_window = np.ones(ALINE_SIZE)
+
+        self.checkApodization.toggled.connect(self._apod_toggled)
+        self.checkInterpolation.toggled.connect(self._interp_toggled)
+
+    def _apod_toggled(self):
+        self.labelApodization.setEnabled(self.checkApodization.isChecked())
+        self.comboApodization.setEnabled(self.checkApodization.isChecked())
+
+    def _interp_toggled(self):
+        self.labelInterpDk.setEnabled(self.checkInterpolation.isChecked())
+        self.spinInterpDk.setEnabled(self.checkInterpolation.isChecked())
+
+    # def _img_processing_toggled(self):
+    #     self.radioAverage.setEnabled(self.checkImageProcessing.isChecked())
+    #     self.spinAverage.setEnabled(self.checkImageProcessing.isChecked())
+    #     self.radioDifference.setEnabled(self.checkImageProcessing.isChecked())
+
+    @property
+    def apodization_window(self):
+        if self.checkApodization.isChecked() and self.isChecked():
+            return self._windows[self.comboApodization.currentText()]
+        else:
+            return self._null_window
+
+    # @property
+    # def averaging(self):
+    #     if self.isChecked():
+    #         return self.radioAverage.isChecked(), self.spinAverage.value()
+    #     else:
+    #         return False, 0
+    #
+    # @property
+    # def difference(self):
+    #     if self.isChecked():
+    #         return self.radioDifference.isChecked()
+    #     else:
+    #         return False
+
+    @property
+    def interpolation(self):
+        if self.isChecked():
+            return self.checkInterpolation.isChecked(), self.spinInterpDk.value()
+        else:
+            return False
+
+    @property
+    def background_subtraction(self):
+        if self.isChecked():
+            return self.checkMeanSpectrumSubtraction.isChecked()
+        else:
+            return False
 
 
 class DisplayWidget(QWidget, UiWidget):
@@ -432,6 +503,12 @@ class SettingsDialog(CancelDiscardsChangesDialog):
         super().__init__()
 
 
+class RasterScanDialog(CancelDiscardsChangesDialog):
+
+    def __init__(self):
+        super().__init__()
+
+
 class MainWindow(QMainWindow, UiWidget):
 
     reload_required = pyqtSignal()
@@ -448,7 +525,6 @@ class MainWindow(QMainWindow, UiWidget):
 
         self.statusBar().setSizeGripEnabled(False)
         self.setFixedSize(self.minimumSize())
-
 
         self._settings_dialog = SettingsDialog()
         self._settings_dialog.setParent(self)
@@ -492,9 +568,6 @@ class MainWindow(QMainWindow, UiWidget):
         return self._settings_dialog.radioDark.isChecked()
 
 
-
-
-
 """
 Parameters
 
@@ -516,15 +589,5 @@ EXPORT_FILE_TYPE
 EXPORT_FILE_NAME
 EXPORT_FILE_SIZE
 EXPORT_NUMBER_OF_FRAMES
-
-
-
-
-
-
-
-
-
-
 
 """
