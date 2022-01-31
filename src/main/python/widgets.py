@@ -4,10 +4,12 @@ import warnings
 
 import numpy as np
 from PyQt5 import uic
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import pyqtSignal, QObject, QThread
 from PyQt5.QtWidgets import QWidget, QLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
 from scanpatterns import LineScanPattern, RasterScanPattern
+
+from threading import Thread
 
 import OCTview
 
@@ -176,6 +178,8 @@ class ScanWidget(QWidget):
 
 class RasterScanWidget(ScanWidget, UiWidget):
 
+    pattern_updated = pyqtSignal()
+
     def __init__(self):
         super().__init__()
 
@@ -194,23 +198,81 @@ class RasterScanWidget(ScanWidget, UiWidget):
 
         self.buttonSettings.pressed.connect(self._settings_dialog.showDialog)
 
-    def generate_pattern(self):
+        # Pattern generation takes place in this thread
+        self._pattern_gen_thread = Thread()
+        self.pattern_updated.connect(self._pattern_generated)
+        # _pattern_generated assigns _new_pattern to _pattern
+        self._new_pattern = RasterScanPattern()
         self._pattern = RasterScanPattern()
-        self._pattern.generate(
-            alines=self.spinACount.value(),
-            blines=self.spinBCount.value(),
-            max_trigger_rate=76000,
-            fov=[self.spinROIWidth.value(), self.spinROIHeight.value()],
-            flyback_duty=self.spinFlybackDuty.value() / 100,
-            exposure_fraction=self.spinExposureFraction.value() / 100,
-            fast_axis_step=self.radioXStep.isChecked(),
-            slow_axis_step=self.radioYStep.isChecked(),
-            aline_repeat=[1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
-            bline_repeat=[1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
-            bidirectional=self.checkBidirectional.isChecked(),
-            rotation_rad=self.parentWidget().spinRotation.value() * np.pi / 180,
-        )
+
+    def _generate_pattern(self, **kwargs):
+        """Creates new scan pattern and assigns it to _new_pattern and then emits 'pattern_updated'.
+
+        _new_pattern should be created here and read in the main thread in the callback ONLY..
+
+        Args:
+            **kwargs: arguments passed to `RasterScanPattern.generate()`
+        """
+        self._new_pattern = RasterScanPattern()
+        self._new_pattern.generate(**kwargs)
+        self.pattern_updated.emit()
+
+    def _pattern_generated(self):
+        self._pattern = self._new_pattern  # New pattern should not be read anywhere else
+        self._pattern_gen_thread.join()
         self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
+
+    def generate_pattern(self):
+        if self._pattern_gen_thread.is_alive():
+            """
+            Don't start new pattern gen if there is already some in progress. This keeps GUI responsive with the expense
+            that quick successive changes to a large pattern may not be reflected in the GUI before scanning
+            """
+            return
+        self._pattern_gen_thread = Thread(target=self._generate_pattern, kwargs={
+            'alines': self.spinACount.value(),
+            'blines': self.spinBCount.value(),
+            'max_trigger_rate': 76000,
+            'fov': [self.spinROIWidth.value(), self.spinROIHeight.value()],
+            'flyback_duty': self.spinFlybackDuty.value() / 100,
+            'exposure_fraction': self.spinExposureFraction.value() / 100,
+            'fast_axis_step': self.radioXStep.isChecked(),
+            'slow_axis_step': self.radioYStep.isChecked(),
+            'aline_repeat': [1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
+            'bline_repeat': [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
+            'bidirectional': self.checkBidirectional.isChecked(),
+            'rotation_rad': self.parentWidget().spinRotation.value() * np.pi / 180,
+        })
+        self._pattern_gen_thread.start()
+
+    def fixSize(self, fixed: bool):
+        """Disables all widgets that allow the editing of the image size. This cannot be changed during a scan.
+
+        Args:
+            fixed (bool): if True, widgets are disabled.
+        """
+        self.spinARepeat.setEnabled(not fixed)
+        self.spinBRepeat.setEnabled(not fixed)
+        self.checkARepeat.setEnabled(not fixed)
+        self.checkBRepeat.setEnabled(not fixed)
+        self.spinACount.setEnabled(not fixed)
+        self.spinBCount.setEnabled(not fixed)
+        self.checkSquareScan.setEnabled(not fixed)
+        self.buttonSettings.setEnabled(not fixed)
+
+    @property
+    def a_repeats(self):
+        if self.checkARepeat.isChecked():
+            return self.spinARepeat.value()
+        else:
+            return 0
+
+    @property
+    def b_repeats(self):
+        if self.checkBRepeat.isChecked():
+            return self.spinBRepeat.value()
+        else:
+            return 0
 
     def _aspectChanged(self):
         if self.checkEqualAspect.isChecked():
@@ -301,7 +363,8 @@ class ControlGroupBox(QGroupBox, UiWidget):
 
 
 class ScanGroupBox(QGroupBox, UiWidget):
-    update = pyqtSignal()
+
+    changed = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -314,21 +377,23 @@ class ScanGroupBox(QGroupBox, UiWidget):
         self._selectSubwidget()
         self.comboScanPattern.currentIndexChanged.connect(self._selectSubwidget)
 
-        # All widgets should emit the scan pattern update signal
+        # All widgets should emit the scan pattern changed signal
         children = self.children()
         for subwidget in list(self._subwidgets.values()):
             children += subwidget.children()
         for child in children:
             if type(child) in [QSpinBox, QDoubleSpinBox]:
-                child.valueChanged.connect(self.update.emit)
+                child.valueChanged.connect(self.changed.emit)
             elif type(child) in [QCheckBox]:
-                child.stateChanged.connect(self.update.emit)
+                child.stateChanged.connect(self.changed.emit)
             elif type(child) in [QRadioButton]:
-                child.toggled.connect(self.update.emit)
+                child.toggled.connect(self.changed.emit)
 
-        self.update.connect(self.ScanWidget.generate_pattern)
+        self.changed.connect(self.ScanWidget.generate_pattern)
 
         self.pushPreview.pressed.connect(self._preview)
+
+        self.changed.emit()
 
     def _selectSubwidget(self):
         replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
@@ -336,11 +401,20 @@ class ScanGroupBox(QGroupBox, UiWidget):
 
     def _preview(self):
         print('Scan pattern preview')
-        # import matplotlib.pyplot as plt
-        # plt.plot(self.x)
-        # plt.plot(self.y)
-        # plt.plot(self.line_trigger)
-        # plt.show()
+        import matplotlib.pyplot as plt
+        plt.plot(self.x)
+        plt.plot(self.y)
+        plt.plot(self.line_trigger)
+        plt.show()
+
+    def toggleScanningMode(self, scanning_mode: bool):
+        self.ScanWidget.fixSize(scanning_mode)
+        self.spinZTop.setEnabled(not scanning_mode)
+        self.labelZTop.setEnabled(not scanning_mode)
+        self.spinZBottom.setEnabled(not scanning_mode)
+        self.labelZBottom.setEnabled(not scanning_mode)
+        self.comboScanPattern.setEnabled(not scanning_mode)
+        self.labelScanPatternType.setEnabled(not scanning_mode)
 
     @property
     def x(self):
@@ -365,6 +439,14 @@ class ScanGroupBox(QGroupBox, UiWidget):
     @property
     def pattern(self):
         return self.ScanWidget.pattern
+
+    @property
+    def a_repeats(self):
+        return self.ScanWidget.a_repeats
+
+    @property
+    def b_repeats(self):
+        return self.ScanWidget.b_repeats
 
 
 class FileGroupBox(QGroupBox, UiWidget):
@@ -406,8 +488,6 @@ class FileGroupBox(QGroupBox, UiWidget):
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
 
-    changed = pyqtSignal()
-
     def __init__(self):
         super().__init__()
 
@@ -417,21 +497,28 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         }
         self._null_window = np.ones(ALINE_SIZE)
 
-        self.checkApodization.toggled.connect(self._apod_toggled)
-        self.checkInterpolation.toggled.connect(self._interp_toggled)
+        self.checkApodization.toggled.connect(self._apodToggled)
+        self.checkInterpolation.toggled.connect(self._interpToggled)
+        self.radioFrameNone.toggled.connect(self._frameProcessingToggled)
 
-    def _apod_toggled(self):
+    def _apodToggled(self):
         self.labelApodization.setEnabled(self.checkApodization.isChecked())
         self.comboApodization.setEnabled(self.checkApodization.isChecked())
 
-    def _interp_toggled(self):
+    def _interpToggled(self):
         self.labelInterpDk.setEnabled(self.checkInterpolation.isChecked())
         self.spinInterpDk.setEnabled(self.checkInterpolation.isChecked())
 
-    # def _img_processing_toggled(self):
-    #     self.radioAverage.setEnabled(self.checkImageProcessing.isChecked())
-    #     self.spinAverage.setEnabled(self.checkImageProcessing.isChecked())
-    #     self.radioDifference.setEnabled(self.checkImageProcessing.isChecked())
+    def _frameProcessingToggled(self):
+        self.spinFrameAverage.setEnabled(self.radioFrameAverage.isChecked())
+
+    def setRepeatProcessingDisplay(self, shown: bool):
+        self.groupRepeatProcessing.setVisible(shown)
+
+    def toggleScanningMode(self, scanning: bool):
+        self.groupFrameProcessing.setEnabled(not scanning)
+        self.groupRepeatProcessing.setEnabled(not scanning)
+        self.setCheckable(not scanning)
 
     @property
     def apodization_window(self):
@@ -439,20 +526,6 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
             return self._windows[self.comboApodization.currentText()]
         else:
             return self._null_window
-
-    # @property
-    # def averaging(self):
-    #     if self.isChecked():
-    #         return self.radioAverage.isChecked(), self.spinAverage.value()
-    #     else:
-    #         return False, 0
-    #
-    # @property
-    # def difference(self):
-    #     if self.isChecked():
-    #         return self.radioDifference.isChecked()
-    #     else:
-    #         return False
 
     @property
     def interpolation(self):
@@ -493,7 +566,7 @@ class CancelDiscardsChangesDialog(QDialog, UiWidget):
         if not bool(self.exec_()):
             _undictize(self, old_state)
         else:
-            # TODO actually compare the new state with old_state
+            # TODO actually compare the new state with old_state before emitting this
             self.changed.emit()
 
 
@@ -522,9 +595,23 @@ class MainWindow(QMainWindow, UiWidget):
         replaceWidget(self.SpectrumWidget, SpectrumWidget())
         replaceWidget(self.ProcessingGroupBox, ProcessingGroupBox())
         replaceWidget(self.ControlGroupBox, ControlGroupBox())
+        self.ScanGroupBox = self.centralWidget.ScanGroupBox
+        self.DisplayWidget = self.centralWidget.DisplayWidget
+        self.FileGroupBox = self.centralWidget.FileGroupBox
+        self.SpectrumWidget = self.centralWidget.SpectrumWidget
+        self.ProcessingGroupBox = self.centralWidget.ProcessingGroupBox
+        self.ControlGroupBox = self.centralWidget.ControlGroupBox
+
 
         self.statusBar().setSizeGripEnabled(False)
         self.setFixedSize(self.minimumSize())
+
+        self.ScanGroupBox.changed.connect(
+            lambda: self.ProcessingGroupBox.setRepeatProcessingDisplay(
+                self.ScanGroupBox.a_repeats > 1
+                or self.ScanGroupBox.b_repeats > 1
+            )
+        )
 
         self._settings_dialog = SettingsDialog()
         self._settings_dialog.setParent(self)
@@ -539,7 +626,11 @@ class MainWindow(QMainWindow, UiWidget):
         if os.path.exists(config_file):
             self.loadStateFromJson(config_file)
 
+        self.ControlGroupBox.scan.connect(lambda: self.toggleScanningMode(True))
+        self.ControlGroupBox.acquire.connect(lambda: self.toggleScanningMode(False))
+
         self.show()
+
 
     def loadConfiguration(self):
         file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location, "OCTview configuration file (*.oct)")[0]
@@ -560,6 +651,10 @@ class MainWindow(QMainWindow, UiWidget):
             event.accept()
         else:
             event.ignore()
+
+    def toggleScanningMode(self, scanning: bool):
+        self.ScanGroupBox.toggleScanningMode(scanning)
+        self.ProcessingGroupBox.toggleScanningMode(scanning)
 
     # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
 

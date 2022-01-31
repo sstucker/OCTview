@@ -39,6 +39,10 @@ class _AppContext(ApplicationContext):
 
         return self.app.exec_()
 
+    # @property
+    # def window(self):
+    #     return self.window
+
 
 # Module interface
 AppContext = _AppContext()
