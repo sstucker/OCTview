@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>widgetSpectrum</class>
- <widget class="QWidget" name="widgetSpectrum">
+ <class>SpectrumWidget</class>
+ <widget class="QWidget" name="SpectrumWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,18 +11,14 @@
    </rect>
   </property>
   <layout class="QGridLayout" name="layoutSpectrumGroup">
-   <item row="1" column="0">
-    <widget class="QCheckBox" name="checkRemoveDC">
-     <property name="toolTip">
-      <string>Plot the apodized, DC-subtracted version of the spectrum which is used to generate the A-line</string>
+   <item row="0" column="1">
+    <widget class="QWidget" name="SpectrumPlotWidget" native="true">
+     <property name="maximumSize">
+      <size>
+       <width>200</width>
+       <height>100</height>
+      </size>
      </property>
-     <property name="text">
-      <string>DC-subtracted</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="0" colspan="2">
-    <widget class="QWidget" name="SpectrumDisplayWidget" native="true">
      <property name="autoFillBackground">
       <bool>true</bool>
      </property>

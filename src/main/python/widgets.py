@@ -5,9 +5,12 @@ import warnings
 import numpy as np
 from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal, QObject, QThread
-from PyQt5.QtWidgets import QWidget, QLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
+from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
 from scanpatterns import LineScanPattern, RasterScanPattern
+
+import pyqtgraph
+import pyqtgraph.opengl
 
 from threading import Thread
 
@@ -138,12 +141,6 @@ def _set_widget_value(widget: QWidget, value):
         widget.setValue(value)
     elif type(widget) in [QComboBox]:
         widget.setCurrentIndex(value)
-
-
-class DisplayWidget(QWidget, UiWidget):
-
-    def __init__(self):
-        super().__init__()
 
 
 class ScanWidget(QWidget):
@@ -542,16 +539,74 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
             return False
 
 
+class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
+
+    yrange = property()
+    wavelengths = property()
+
+    def __init__(self, wavelengths, yrange=[0, 4096]):
+
+        super().__init__()
+
+        self.resize(200, 100)
+
+        self._wavelengths = wavelengths
+        self._n = len(self._wavelengths)
+
+        self._plot = self.addPlot()
+        self._plot.buttonsHidden = True
+        self._plot.setYRange(yrange[0], yrange[1])
+        self._plot.setLabel('bottom', text='λ (nm)')
+
+        self._spectrum = self._plot.plot(color='#FFFFFF')
+
+        self._current_data = 0
+        self.plot(np.zeros(self._n))
+
+    def plot(self, data):
+        self._current_data = data
+        self._spectrum.setData(self._wavelengths, self._current_data)
+        pyqtgraph.QtGui.QApplication.processEvents()
+
+    @yrange.setter
+    def yrange(self, yrange):
+        self.plot.setYRange(yrange[0], yrange[1])
+
+    @wavelengths.setter
+    def wavelengths(self, wavelengths):
+        self._wavelengths = wavelengths
+        self._n = len(self._wavelengths)
+
+
+class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
+
+    def __init__(self):
+
+        super().__init__()
+        self._grid = pyqtgraph.opengl.GLGridItem()
+        self._volume = pyqtgraph.opengl.GLVolumeItem(np.random.random([16, 16, 16, 16]).astype(np.ubyte), smooth=False)
+        # self.orbit(256, 256)
+        self.setCameraPosition(0, 0, 0)
+        self.opts['distance'] = 200
+        self.show()
+        self.setWindowTitle('pyqtgraph example: GLVolumeItem')
+        self.addItem(self._grid)
+        self.addItem(self._volume)
+
+
 class DisplayWidget(QWidget, UiWidget):
 
     def __init__(self):
         super().__init__()
+
+        replaceWidget(self.VolumeWidget, VolumeWidget())
 
 
 class SpectrumWidget(QWidget, UiWidget):
 
     def __init__(self):
         super().__init__()
+        replaceWidget(self.SpectrumPlotWidget, SpectrumPlotWidget(np.arange(0, 2048)))
 
 
 class CancelDiscardsChangesDialog(QDialog, UiWidget):
@@ -604,7 +659,7 @@ class MainWindow(QMainWindow, UiWidget):
 
 
         self.statusBar().setSizeGripEnabled(False)
-        self.setFixedSize(self.minimumSize())
+        # self.setFixedSize(self.minimumSize())
 
         self.ScanGroupBox.changed.connect(
             lambda: self.ProcessingGroupBox.setRepeatProcessingDisplay(

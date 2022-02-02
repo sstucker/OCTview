@@ -6,50 +6,12 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>328</width>
-    <height>164</height>
+    <width>363</width>
+    <height>215</height>
    </rect>
   </property>
   <layout class="QGridLayout" name="layoutVisB">
-   <item row="7" column="0">
-    <widget class="QRadioButton" name="radioBScan">
-     <property name="toolTip">
-      <string>View B-scans (X, Z projection)</string>
-     </property>
-     <property name="text">
-      <string>B-scan</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="6" column="4">
-    <widget class="QLabel" name="sliceLabel">
-     <property name="sizePolicy">
-      <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-       <horstretch>0</horstretch>
-       <verstretch>0</verstretch>
-      </sizepolicy>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>80</width>
-       <height>0</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>80</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <property name="text">
-      <string>  0/0  </string>
-     </property>
-    </widget>
-   </item>
-   <item row="8" column="0">
+   <item row="10" column="0">
     <widget class="QRadioButton" name="radioEnface">
      <property name="toolTip">
       <string>View enface C-scans (X, Y projection)</string>
@@ -62,50 +24,7 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="0">
-    <widget class="QCheckBox" name="checkScanThrough">
-     <property name="toolTip">
-      <string>Scan automatically through the volume, or select a slice with the slider</string>
-     </property>
-     <property name="text">
-      <string>Scan automatically</string>
-     </property>
-     <property name="checked">
-      <bool>false</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="7" column="1">
-    <widget class="QCheckBox" name="checkMIP">
-     <property name="toolTip">
-      <string>View the maximum intensity projection along the slice axis</string>
-     </property>
-     <property name="text">
-      <string>MIP</string>
-     </property>
-    </widget>
-   </item>
-   <item row="7" column="2">
-    <widget class="QCheckBox" name="checkDb">
-     <property name="toolTip">
-      <string>If checked, applies 20*log10 transformation</string>
-     </property>
-     <property name="text">
-      <string>dB</string>
-     </property>
-     <property name="checked">
-      <bool>false</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="0" rowspan="4" colspan="5">
-    <widget class="QWidget" name="widget3D" native="true">
-     <property name="autoFillBackground">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="6" column="1" colspan="3">
+   <item row="8" column="1" colspan="3">
     <widget class="QSlider" name="sliderSlice">
      <property name="enabled">
       <bool>true</bool>
@@ -132,6 +51,90 @@
       <enum>QSlider::TicksBelow</enum>
      </property>
     </widget>
+   </item>
+   <item row="9" column="1">
+    <widget class="QCheckBox" name="checkMIP">
+     <property name="toolTip">
+      <string>View the maximum intensity projection along the slice axis</string>
+     </property>
+     <property name="text">
+      <string>MIP</string>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="4">
+    <widget class="QLabel" name="sliceLabel">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>80</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>80</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <property name="text">
+      <string>  0/0  </string>
+     </property>
+    </widget>
+   </item>
+   <item row="8" column="0">
+    <widget class="QCheckBox" name="checkScanThrough">
+     <property name="toolTip">
+      <string>Scan automatically through the volume, or select a slice with the slider</string>
+     </property>
+     <property name="text">
+      <string>Scan automatically</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="0" rowspan="4" colspan="5">
+    <widget class="QWidget" name="VolumeWidget" native="true">
+     <property name="autoFillBackground">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="0">
+    <widget class="QRadioButton" name="radioBScan">
+     <property name="toolTip">
+      <string>View B-scans (X, Z projection)</string>
+     </property>
+     <property name="text">
+      <string>B-scan</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="2">
+    <widget class="QCheckBox" name="checkDb">
+     <property name="toolTip">
+      <string>If checked, applies 20*log10 transformation</string>
+     </property>
+     <property name="text">
+      <string>dB</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="5" column="0" colspan="5">
+    <widget class="QWidget" name="BScanWidget" native="true"/>
    </item>
   </layout>
  </widget>

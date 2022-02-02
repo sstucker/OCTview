@@ -1,11 +1,14 @@
 altgraph==0.17.2
 fbs==1.0.3
 future==0.18.2
+importlib-metadata==4.8.3
 macholib==1.15.2
 numpy==1.19.5
 packaging==21.3
 pefile==2021.9.3
-PyInstaller==3.4
+pyinstaller==4.8
+pyinstaller-hooks-contrib==2021.5
+PyOpenGL==3.1.5
 pyparsing==3.0.6
 PyQt5==5.15.6
 PyQt5-Qt5==5.15.2
@@ -14,4 +17,6 @@ pyqtgraph==0.11.1
 pywin32-ctypes==0.2.0
 QDarkStyle==3.0.3
 QtPy==2.0.0
-scanpatterns==0.0.1
+scanpatterns==0.1.2
+typing_extensions==4.0.1
+zipp==3.6.0
