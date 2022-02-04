@@ -4,10 +4,12 @@ import warnings
 
 import numpy as np
 from PyQt5 import uic
-from PyQt5.QtCore import pyqtSignal, QObject, QThread
+from PyQt5.QtCore import pyqtSignal, QObject, QThread, QTimer
 from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
 from scanpatterns import LineScanPattern, RasterScanPattern
+
+from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
 
 import pyqtgraph
 import pyqtgraph.opengl
@@ -583,15 +585,94 @@ class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
     def __init__(self):
 
         super().__init__()
-        self._grid = pyqtgraph.opengl.GLGridItem()
-        self._volume = pyqtgraph.opengl.GLVolumeItem(np.random.random([16, 16, 16, 16]).astype(np.ubyte), smooth=False)
-        # self.orbit(256, 256)
-        self.setCameraPosition(0, 0, 0)
-        self.opts['distance'] = 200
-        self.show()
-        self.setWindowTitle('pyqtgraph example: GLVolumeItem')
-        self.addItem(self._grid)
+        # self._grid = pyqtgraph.opengl.GLGridItem()
+        self._axis = pyqtgraph.opengl.GLAxisItem()
+
+        img = np.random.random([128, 128, 200])
+        data = np.empty(img.shape + (4,), dtype=np.ubyte)
+        data[..., 0] = img * (255. / (img.max() / 1))
+        data[..., 3] = (data[..., 3].astype(float) / 255.) ** 2 * 255
+
+        self._volume = pyqtgraph.opengl.GLVolumeItem(data, sliceDensity=1, smooth=True, glOptions='translucent')
+
+        self.opts['distance'] = 600
+        # self.addItem(self._grid)
+        self.addItem(self._axis)
         self.addItem(self._volume)
+        self.show()
+
+    def updateData(self, volume):
+
+        extent = volume.shape * 3
+        # self._grid.setSize(x=extent[0], y=extent[1], z=extent[2])
+        self._axis.setSize(x=extent[0], y=extent[1], z=extent[2])
+
+        data = np.empty(volume.shape + (4,), dtype=np.ubyte)
+        data[..., 0] = volume * (255. / (volume.max() / 1))
+        data[..., 3] = (data[..., 3].astype(float) / 255.) ** 2 * 255
+        self._volume.setData(data)
+
+
+class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
+
+    def __init__(self, title=None, vert_slider=True):
+        super().__init__()
+
+        self._plot = self.addPlot()
+        self._plot.setAspectLocked(True)
+        self._plot.showGrid(x=True, y=True)
+        self._plot.invertY()
+        self._plot.setLabel('left', units='m')
+        self._plot.setLabel('bottom', units='m')
+        self._image = pyqtgraph.ImageItem()
+        self._plot.addItem(self._image)
+        if vert_slider:
+            self.slider_angle = 0
+        else:
+            self.slider_angle = 90
+        self._slider = pyqtgraphSlider(movable=True, angle=self.slider_angle)
+        self._slider.setPen(width=4, color='y')
+        self._slider.setHoverPen(width=6, color='#FFFFFF')
+        self._slider.sigPositionChanged.connect(self._setSlice)
+        self._slider.setZValue(1)
+        self._plot.addItem(self._slider)
+
+        self._index = 0
+        self._sf = [1, 1]
+        self._data_shape = None
+        # if title is not None:
+        #     self._plot.setLabel('top', text=title)
+
+    def setAspect(self, dx, dy):
+        self._image.scale(1 / self._sf[0], 1 / self._sf[1])  # Undo any previous scaling
+        sfx = (1 / self._data_shape[0]) * dx
+        sfy = (1 / self._data_shape[1]) * dy
+        self._sf = [sfx, sfy]
+        if self.slider_angle == 90:
+            fov = self._sf[0] * self._data_shape[0]
+        else:
+            fov = self._sf[1] * self._data_shape[1]
+        self._slider.setBounds([0, fov])
+        self._image.scale(sfx, sfy)
+
+    def updateData(self, volume, fov=None):
+        self._data_shape = volume.shape
+        if fov is not None:
+            self.setAspect(fov[0], fov[1])
+        self._image.setImage(volume[..., int(self._slider.value())])
+
+    def _setSlice(self):
+        if self.slider_angle == 90:
+            fov = self._sf[0]
+        else:
+            fov = self._sf[1]
+        self._slice = int(self._slider.value() / fov)
+
+    def showSlider(self, show: bool):
+        if show:
+            self._slider.show()
+        else:
+            self._slider.hide()
 
 
 class DisplayWidget(QWidget, UiWidget):
@@ -599,7 +680,26 @@ class DisplayWidget(QWidget, UiWidget):
     def __init__(self):
         super().__init__()
 
-        replaceWidget(self.VolumeWidget, VolumeWidget())
+        self._volume = VolumeWidget()
+        self._enface = BScanWidget(vert_slider=False, title='Enface view')
+        self._bscan = BScanWidget(title='B-scan view')
+
+        replaceWidget(self.VolumeWidget, self._volume)
+        replaceWidget(self.BScanWidget, self._enface)
+        replaceWidget(self.EnfaceWidget, self._bscan)
+
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._update)
+        self._timer.start(100)
+
+    def _update(self):
+        img = np.random.random([128, 128, 200])
+        if self.tabDisplay.currentIndex() == 0:
+            self._enface.updateData(img, fov=[1 * 10**-6, 1 * 10**-6])
+            self._bscan.updateData(img, fov=[1 * 10**-6, 1 * 10**-6])
+        elif self.tabDisplay.currentIndex() == 1:
+            self._volume.updateData(img)
+        pyqtgraph.QtGui.QApplication.processEvents()
 
 
 class SpectrumWidget(QWidget, UiWidget):

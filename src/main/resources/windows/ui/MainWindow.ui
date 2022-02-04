@@ -48,7 +48,14 @@
        <widget class="QWidget" name="SpectrumWidget" native="true"/>
       </item>
       <item row="0" column="2" rowspan="4" colspan="2">
-       <widget class="QWidget" name="DisplayWidget" native="true"/>
+       <widget class="QWidget" name="DisplayWidget" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+       </widget>
       </item>
       <item row="1" column="0">
        <widget class="QWidget" name="ProcessingGroupBox" native="true"/>
@@ -109,7 +116,7 @@
      <x>0</x>
      <y>0</y>
      <width>712</width>
-     <height>21</height>
+     <height>17</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuPreferences">
