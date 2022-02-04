@@ -511,12 +511,16 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
     def _frameProcessingToggled(self):
         self.spinFrameAverage.setEnabled(self.radioFrameAverage.isChecked())
 
-    def setRepeatProcessingDisplay(self, shown: bool):
-        self.groupRepeatProcessing.setVisible(shown)
+    def setARepeatProcessingDisplay(self, shown: bool):
+        self.groupARepeatProcessing.setVisible(shown)
+
+    def setBRepeatProcessingDisplay(self, shown: bool):
+        self.groupBRepeatProcessing.setVisible(shown)
 
     def toggleScanningMode(self, scanning: bool):
         self.groupFrameProcessing.setEnabled(not scanning)
-        self.groupRepeatProcessing.setEnabled(not scanning)
+        self.groupARepeatProcessing.setEnabled(not scanning)
+        self.groupBRepeatProcessing.setEnabled(not scanning)
         self.setCheckable(not scanning)
 
     @property
@@ -615,7 +619,7 @@ class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
 
 class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
 
-    def __init__(self, title=None, vert_slider=True):
+    def __init__(self, title=None, hslider=False, vslider=False):
         super().__init__()
 
         self._plot = self.addPlot()
@@ -626,53 +630,71 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self._plot.setLabel('bottom', units='m')
         self._image = pyqtgraph.ImageItem()
         self._plot.addItem(self._image)
-        if vert_slider:
-            self.slider_angle = 0
-        else:
-            self.slider_angle = 90
-        self._slider = pyqtgraphSlider(movable=True, angle=self.slider_angle)
-        self._slider.setPen(width=4, color='y')
-        self._slider.setHoverPen(width=6, color='#FFFFFF')
-        self._slider.sigPositionChanged.connect(self._setSlice)
-        self._slider.setZValue(1)
-        self._plot.addItem(self._slider)
 
-        self._index = 0
+        if hslider:
+            self._hslider = pyqtgraphSlider(movable=True, angle=0)
+            self._hslider.setPen(width=2, color='#FFFF0099')
+            self._hslider.setHoverPen(width=3, color='#FFFFFF99')
+            self._hslider.sigPositionChanged.connect(self._setSlice)
+            self._hslider.setZValue(1)
+            self._plot.addItem(self._hslider)
+        else:
+            self._hslider = None
+
+        if vslider:
+            self._vslider = pyqtgraphSlider(movable=True, angle=90)
+            self._vslider.setPen(width=2, color='#FFFF0099')
+            self._vslider.setHoverPen(width=3, color='#FFFFFF99')
+            self._vslider.sigPositionChanged.connect(self._setSlice)
+            self._vslider.setZValue(1)
+            self._plot.addItem(self._vslider)
+        else:
+            self._vslider = None
+
+        self._vslice = None
+        self._hslice = None
+
         self._sf = [1, 1]
         self._data_shape = None
         # if title is not None:
         #     self._plot.setLabel('top', text=title)
+
+    def setVSliderHidden(self, hidden: bool):
+        if self._vslider is not None:
+            if hidden:
+                self._vslider.hide()
+            else:
+                self._vslider.show()
+
+    def setHSliderHidden(self, hidden: bool):
+        if self._hslider is not None:
+            if hidden:
+                self._hslider.hide()
+            else:
+                self._hslider.show()
 
     def setAspect(self, dx, dy):
         self._image.scale(1 / self._sf[0], 1 / self._sf[1])  # Undo any previous scaling
         sfx = (1 / self._data_shape[0]) * dx
         sfy = (1 / self._data_shape[1]) * dy
         self._sf = [sfx, sfy]
-        if self.slider_angle == 90:
-            fov = self._sf[0] * self._data_shape[0]
-        else:
-            fov = self._sf[1] * self._data_shape[1]
-        self._slider.setBounds([0, fov])
+        if self._vslider is not None:
+            self._vslider.setBounds([0, self._sf[0] * self._data_shape[0]])
+        if self._hslider is not None:
+            self._hslider.setBounds([0, self._sf[1] * self._data_shape[1]])
         self._image.scale(sfx, sfy)
 
     def updateData(self, volume, fov=None):
         self._data_shape = volume.shape
         if fov is not None:
             self.setAspect(fov[0], fov[1])
-        self._image.setImage(volume[..., int(self._slider.value())])
+        self._image.setImage(volume[..., 0])
 
     def _setSlice(self):
-        if self.slider_angle == 90:
-            fov = self._sf[0]
-        else:
-            fov = self._sf[1]
-        self._slice = int(self._slider.value() / fov)
-
-    def showSlider(self, show: bool):
-        if show:
-            self._slider.show()
-        else:
-            self._slider.hide()
+        if self._hslider is not None:
+            self._hslice = int(self._hslider.value() / self._sf[0])
+        if self._vslider is not None:
+            self._vslice = int(self._vslider.value() / self._sf[1])
 
 
 class DisplayWidget(QWidget, UiWidget):
@@ -681,16 +703,34 @@ class DisplayWidget(QWidget, UiWidget):
         super().__init__()
 
         self._volume = VolumeWidget()
-        self._enface = BScanWidget(vert_slider=False, title='Enface view')
-        self._bscan = BScanWidget(title='B-scan view')
+        self._enface = BScanWidget(title='Enface view', hslider=True, vslider=True)
+        self._enface.setVSliderHidden(True)
+        self._bscan = BScanWidget(title='B-scan view', hslider=True)
 
         replaceWidget(self.VolumeWidget, self._volume)
-        replaceWidget(self.BScanWidget, self._enface)
-        replaceWidget(self.EnfaceWidget, self._bscan)
+        replaceWidget(self.EnfaceWidget, self._enface)
+        replaceWidget(self.BScanWidget, self._bscan)
+
+        self.checkEnfaceMIP.toggled.connect(self._enfaceMIPCheckChanged)
+        self.checkBScanMIP.toggled.connect(self._updateEnfaceSliders)
+        self.radioViewX.toggled.connect(self._updateEnfaceSliders)
 
         self._timer = QTimer()
         self._timer.timeout.connect(self._update)
         self._timer.start(100)
+
+    def _enfaceMIPCheckChanged(self):
+        self._bscan.setHSliderHidden(self.checkEnfaceMIP.isChecked())
+
+    def _updateEnfaceSliders(self):
+            self.radioViewX.setEnabled(not self.checkBScanMIP.isChecked())
+            self.radioViewY.setEnabled(not self.checkBScanMIP.isChecked())
+            if self.radioViewX.isChecked():
+                self._enface.setVSliderHidden(True)
+                self._enface.setHSliderHidden(self.checkBScanMIP.isChecked())
+            else:
+                self._enface.setVSliderHidden(self.checkBScanMIP.isChecked())
+                self._enface.setHSliderHidden(True)
 
     def _update(self):
         img = np.random.random([128, 128, 200])
@@ -759,14 +799,9 @@ class MainWindow(QMainWindow, UiWidget):
 
 
         self.statusBar().setSizeGripEnabled(False)
-        # self.setFixedSize(self.minimumSize())
+        self.setFixedSize(self.minimumSize())
 
-        self.ScanGroupBox.changed.connect(
-            lambda: self.ProcessingGroupBox.setRepeatProcessingDisplay(
-                self.ScanGroupBox.a_repeats > 1
-                or self.ScanGroupBox.b_repeats > 1
-            )
-        )
+        self.ScanGroupBox.changed.connect(self._showRepeatProcessing)
 
         self._settings_dialog = SettingsDialog()
         self._settings_dialog.setParent(self)
@@ -810,6 +845,16 @@ class MainWindow(QMainWindow, UiWidget):
     def toggleScanningMode(self, scanning: bool):
         self.ScanGroupBox.toggleScanningMode(scanning)
         self.ProcessingGroupBox.toggleScanningMode(scanning)
+
+    def _showRepeatProcessing(self):
+        self.ProcessingGroupBox.setARepeatProcessingDisplay(
+            self.ScanGroupBox.a_repeats > 1
+            and type(self.ScanGroupBox.pattern) == RasterScanPattern
+        )
+        self.ProcessingGroupBox.setBRepeatProcessingDisplay(
+            self.ScanGroupBox.b_repeats > 1
+            and type(self.ScanGroupBox.pattern) == RasterScanPattern
+        )
 
     # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
 

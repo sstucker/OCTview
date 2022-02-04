@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>800</width>
-    <height>215</height>
+    <height>312</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -37,14 +37,49 @@
      </property>
      <widget class="QWidget" name="tab2D">
       <attribute name="title">
-       <string>B-Scan/Enface</string>
+       <string>Cross-section Display</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout">
        <item>
         <widget class="QWidget" name="EnfaceWidget" native="true"/>
        </item>
        <item>
+        <widget class="QCheckBox" name="checkEnfaceMIP">
+         <property name="text">
+          <string>Enface MIP</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QWidget" name="BScanWidget" native="true"/>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="layoutBScan">
+         <item>
+          <widget class="QCheckBox" name="checkBScanMIP">
+           <property name="text">
+            <string>B-scan MIP</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="radioViewX">
+           <property name="text">
+            <string>View slow-axis (X)</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="radioViewY">
+           <property name="text">
+            <string>View fast-axis (Y)</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
        </item>
       </layout>
      </widget>
