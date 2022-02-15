@@ -147,6 +147,8 @@ def _set_widget_value(widget: QWidget, value):
 
 class ScanWidget(QWidget):
 
+    
+
     def __init__(self):
         super().__init__()
         self._pattern = LineScanPattern()
@@ -177,7 +179,8 @@ class ScanWidget(QWidget):
 
 class RasterScanWidget(ScanWidget, UiWidget):
 
-    pattern_updated = pyqtSignal()
+    _pattern_updated = pyqtSignal()  # Reports generation thread finished
+    pattern_updated = pyqtSignal()  # Reports new pattern assigned to clients
 
     def __init__(self):
         super().__init__()
@@ -199,13 +202,13 @@ class RasterScanWidget(ScanWidget, UiWidget):
 
         # Pattern generation takes place in this thread
         self._pattern_gen_thread = Thread()
-        self.pattern_updated.connect(self._pattern_generated)
+        self._pattern_updated.connect(self._pattern_generated)
         # _pattern_generated assigns _new_pattern to _pattern
         self._new_pattern = RasterScanPattern()
         self._pattern = RasterScanPattern()
 
     def _generate_pattern(self, **kwargs):
-        """Creates new scan pattern and assigns it to _new_pattern and then emits 'pattern_updated'.
+        """Creates new scan pattern and assigns it to _new_pattern and then emits '_pattern_updated'.
 
         _new_pattern should be created here and read in the main thread in the callback ONLY..
 
@@ -214,12 +217,14 @@ class RasterScanWidget(ScanWidget, UiWidget):
         """
         self._new_pattern = RasterScanPattern()
         self._new_pattern.generate(**kwargs)
-        self.pattern_updated.emit()
+        self._pattern_updated.emit()
+
 
     def _pattern_generated(self):
         self._pattern = self._new_pattern  # New pattern should not be read anywhere else
         self._pattern_gen_thread.join()
         self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
+        self.pattern_updated.emit()
 
     def generate_pattern(self):
         if self._pattern_gen_thread.is_alive():
@@ -300,7 +305,6 @@ class RasterScanWidget(ScanWidget, UiWidget):
         else:
             self.spinFlybackDuty.setEnabled(True)
             self.labelFlybackDuty.setEnabled(True)
-
         self.generate_pattern()
 
     def _checkARepeatChanged(self):
@@ -389,8 +393,13 @@ class ScanGroupBox(QGroupBox, UiWidget):
                 child.toggled.connect(self.changed.emit)
 
         self.changed.connect(self.ScanWidget.generate_pattern)
+        self.ScanWidget.pattern_updated.connect(self._update_preview)
 
         self.pushPreview.pressed.connect(self._preview)
+
+        self._preview_window = ScanDisplayWindow()
+        self._preview_window.setParent(self)
+        self._preview_window.setWindowFlag(True)
 
         self.changed.emit()
 
@@ -398,13 +407,14 @@ class ScanGroupBox(QGroupBox, UiWidget):
         replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
         self.ScanWidget.generate_pattern()
 
+    def _update_preview(self):
+        if self._preview_window.isVisible():
+            self._preview_window.previewPattern(self.pattern)
+
     def _preview(self):
-        print('Scan pattern preview')
-        import matplotlib.pyplot as plt
-        plt.plot(self.x)
-        plt.plot(self.y)
-        plt.plot(self.line_trigger)
-        plt.show()
+        if not self._preview_window.isVisible():
+            print('Scan pattern preview')
+            self._preview_window.previewPattern(self.pattern)
 
     def toggleScanningMode(self, scanning_mode: bool):
         self.ScanWidget.fixSize(scanning_mode)
@@ -446,6 +456,53 @@ class ScanGroupBox(QGroupBox, UiWidget):
     @property
     def b_repeats(self):
         return self.ScanWidget.b_repeats
+
+
+class ScanDisplayWindow(QFrame):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.hide()
+
+        self._graphics_window = pyqtgraph.GraphicsWindow()
+        self._signal_plot = self._graphics_window.addPlot(row=0, col=0, rowspan=1, colspan=2)
+
+        print(type(self._graphics_window))
+        print(type(self._signal_plot))
+
+        self._line_trigger_item = self._signal_plot.plot()
+        self._frame_trigger_item = self._signal_plot.plot()
+        self._x_item = self._signal_plot.plot()
+        self._y_item = self._signal_plot.plot()
+        self._trigger_legend = self._signal_plot.addLegend()
+
+        self._scan_plot = self._graphics_window.addPlot(row=1, col=0, rowspan=2, colspan=2)
+        self._scan_item = self._scan_plot.plot()
+        self._scan_points_item = self._scan_plot.plot()
+        self._scan_plot.setAspectLocked()
+
+        self._layout = QGridLayout()
+        self._layout.addWidget(self._graphics_window)
+        self.setLayout(self._layout)
+
+    def previewPattern(self, pattern: LineScanPattern):
+
+        t = np.arange(len(pattern.x))
+        self._line_trigger_item.setData(x=t, y=pattern.line_trigger, name='Line trigger')
+        self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
+        self._x_item.setData(x=t, y=pattern.x, name='x')
+        self._y_item.setData(x=t, y=pattern.y, name='y')
+
+        exp = np.zeros(len(pattern.x)).astype(np.int32)
+        exp[pattern.line_trigger.astype(bool)] = 1
+        x_pts = pattern.x
+        y_pts = pattern.y
+        self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=0.5, color='#FEFEFE'), antialias=False, autodownsample=True)
+        self._scan_points_item.setData(x=x_pts, y=y_pts, connect=exp, pen=pyqtgraph.mkPen(width=3, color='r', capstyle='round'), antialias=True, autodownsample=True)
+
+        self.show()
 
 
 class FileGroupBox(QGroupBox, UiWidget):
@@ -603,7 +660,6 @@ class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
         # self.addItem(self._grid)
         self.addItem(self._axis)
         self.addItem(self._volume)
-        self.show()
 
     def updateData(self, volume):
 
@@ -733,6 +789,7 @@ class DisplayWidget(QWidget, UiWidget):
                 self._enface.setHSliderHidden(True)
 
     def _update(self):
+
         img = np.random.random([128, 128, 200])
         if self.tabDisplay.currentIndex() == 0:
             self._enface.updateData(img, fov=[1 * 10**-6, 1 * 10**-6])
@@ -819,7 +876,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.scan.connect(lambda: self.toggleScanningMode(True))
         self.ControlGroupBox.acquire.connect(lambda: self.toggleScanningMode(False))
 
-        self.show()
+        self._showRepeatProcessing()
 
 
     def loadConfiguration(self):
