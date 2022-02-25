@@ -489,11 +489,12 @@ class ScanDisplayWindow(QFrame):
 
     def previewPattern(self, pattern: LineScanPattern):
 
-        t = np.arange(len(pattern.x))
+        t = np.arange(len(pattern.x)) * 1 / pattern.sample_rate
         self._line_trigger_item.setData(x=t, y=pattern.line_trigger, name='Line trigger')
         self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
         self._x_item.setData(x=t, y=pattern.x, name='x')
         self._y_item.setData(x=t, y=pattern.y, name='y')
+        self._scan_plot.xlim(0, t)
 
         exp = np.zeros(len(pattern.x)).astype(np.int32)
         exp[pattern.line_trigger.astype(bool)] = 1
@@ -854,9 +855,8 @@ class MainWindow(QMainWindow, UiWidget):
         self.ProcessingGroupBox = self.centralWidget.ProcessingGroupBox
         self.ControlGroupBox = self.centralWidget.ControlGroupBox
 
-
-        self.statusBar().setSizeGripEnabled(False)
-        self.setFixedSize(self.minimumSize())
+        # self.statusBar().setSizeGripEnabled(False)
+        # self.setFixedSize(self.minimumSize())
 
         self.ScanGroupBox.changed.connect(self._showRepeatProcessing)
 
