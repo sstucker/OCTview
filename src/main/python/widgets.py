@@ -7,7 +7,7 @@ from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal, QObject, QThread, QTimer
 from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
-from scanpatterns import LineScanPattern, RasterScanPattern
+from scanpatterns import LineScanPattern, RasterScanPattern, Figure8ScanPattern
 
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
 
@@ -18,7 +18,10 @@ from threading import Thread
 
 import OCTview
 
+
+# TODO make parametric
 ALINE_SIZE = 2048
+
 
 def replaceWidget(old_widget: QWidget, new_widget: QWidget):
     """Replace a widget with another."""
@@ -64,6 +67,7 @@ class UiWidget:
             json.dump({self.objectName(): _dictize(self)}, file, indent=4)
 
 
+# These Widget types will be dictized and undictized by the functions below
 DICTABLE_TYPES = [
     QComboBox,
     QSpinBox,
@@ -146,8 +150,6 @@ def _set_widget_value(widget: QWidget, value):
 
 
 class ScanWidget(QWidget):
-
-    
 
     def __init__(self):
         super().__init__()
@@ -302,6 +304,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
             self.radioXSaw.setChecked(True)
             self.spinFlybackDuty.setEnabled(False)
             self.labelFlybackDuty.setEnabled(False)
+            self.radioXStep.setChecked(False)
         else:
             self.spinFlybackDuty.setEnabled(True)
             self.labelFlybackDuty.setEnabled(True)
@@ -353,7 +356,6 @@ class ControlGroupBox(QGroupBox, UiWidget):
 
     scan = pyqtSignal()
     acquire = pyqtSignal()
-    snap = pyqtSignal()
     stop = pyqtSignal()
 
     def __init__(self):
@@ -362,7 +364,22 @@ class ControlGroupBox(QGroupBox, UiWidget):
         self.pushScan.pressed.connect(self.scan.emit)
         self.pushStop.pressed.connect(self.stop.emit)
         self.pushAcquire.pressed.connect(self.acquire.emit)
-        self.pushSnap.pressed.connect(self.stop.emit)
+
+        self.checkNumberedAcquisition.toggled.connect(self._numbered_check_changed)
+        self.spinFramesToAcquire.valueChanged.connect(self._frames_to_acquire_changed)
+
+    def _numbered_check_changed(self):
+        self.spinFramesToAcquire.setEnabled(self.checkNumberedAcquisition.isChecked())
+
+    def _frames_to_acquire_changed(self):
+        if self.spinFramesToAcquire.value() > 1:
+            self.spinFramesToAcquire.setSuffix(' frames')
+        else:
+            self.spinFramesToAcquire.setSuffix(' frame')
+
+    @property
+    def framesToAcquire(self):
+        return self.spinFramesToAcquire.value()
 
 
 class ScanGroupBox(QGroupBox, UiWidget):
@@ -374,7 +391,7 @@ class ScanGroupBox(QGroupBox, UiWidget):
 
         self._subwidgets = {
             'Raster': RasterScanWidget(),
-            'Line': LineScanWidget(),
+            'Figure-8': LineScanWidget(),
             'Circle': CircleScanWidget()
         }
         self._selectSubwidget()
