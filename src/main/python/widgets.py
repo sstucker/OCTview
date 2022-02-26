@@ -1,23 +1,21 @@
 import json
 import os
 import warnings
-
-import numpy as np
-from PyQt5 import uic
-from PyQt5.QtCore import pyqtSignal, QObject, QThread, QTimer
-from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, QRadioButton, \
-    QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
-from scanpatterns import LineScanPattern, RasterScanPattern, Figure8ScanPattern
-
-from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
-
-import pyqtgraph
-import pyqtgraph.opengl
-
 from threading import Thread
 
-import OCTview
+import numpy as np
+import pyqtgraph
+import pyqtgraph.opengl
+from PyQt5 import uic
+from PyQt5.QtCore import pyqtSignal, QTimer
+from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, \
+    QRadioButton, \
+    QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
+from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
+from scanpatterns import LineScanPattern, RasterScanPattern
 
+import OCTview
+from controller import NIOCTController
 
 # TODO make parametric
 ALINE_SIZE = 2048
@@ -180,7 +178,6 @@ class ScanWidget(QWidget):
 
 
 class RasterScanWidget(ScanWidget, UiWidget):
-
     _pattern_updated = pyqtSignal()  # Reports generation thread finished
     pattern_updated = pyqtSignal()  # Reports new pattern assigned to clients
 
@@ -220,7 +217,6 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self._new_pattern = RasterScanPattern()
         self._new_pattern.generate(**kwargs)
         self._pattern_updated.emit()
-
 
     def _pattern_generated(self):
         self._pattern = self._new_pattern  # New pattern should not be read anywhere else
@@ -353,7 +349,6 @@ class CircleScanWidget(ScanWidget, UiWidget):
 
 
 class ControlGroupBox(QGroupBox, UiWidget):
-
     scan = pyqtSignal()
     acquire = pyqtSignal()
     stop = pyqtSignal()
@@ -383,7 +378,6 @@ class ControlGroupBox(QGroupBox, UiWidget):
 
 
 class ScanGroupBox(QGroupBox, UiWidget):
-
     changed = pyqtSignal()
 
     def __init__(self):
@@ -478,7 +472,6 @@ class ScanGroupBox(QGroupBox, UiWidget):
 class ScanDisplayWindow(QFrame):
 
     def __init__(self):
-
         super().__init__()
 
         self.hide()
@@ -505,7 +498,6 @@ class ScanDisplayWindow(QFrame):
         self.setLayout(self._layout)
 
     def previewPattern(self, pattern: LineScanPattern):
-
         t = np.arange(len(pattern.x)) * 1 / pattern.sample_rate
         self._line_trigger_item.setData(x=t, y=pattern.line_trigger, name='Line trigger')
         self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
@@ -517,8 +509,11 @@ class ScanDisplayWindow(QFrame):
         exp[pattern.line_trigger.astype(bool)] = 1
         x_pts = pattern.x
         y_pts = pattern.y
-        self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=0.5, color='#FEFEFE'), antialias=False, autodownsample=True)
-        self._scan_points_item.setData(x=x_pts, y=y_pts, connect=exp, pen=pyqtgraph.mkPen(width=3, color='r', capstyle='round'), antialias=True, autodownsample=True)
+        self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=0.5, color='#FEFEFE'),
+                                antialias=False, autodownsample=True)
+        self._scan_points_item.setData(x=x_pts, y=y_pts, connect=exp,
+                                       pen=pyqtgraph.mkPen(width=3, color='r', capstyle='round'), antialias=True,
+                                       autodownsample=True)
 
         self.show()
 
@@ -586,11 +581,17 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
     def _frameProcessingToggled(self):
         self.spinFrameAverage.setEnabled(self.radioFrameAverage.isChecked())
 
-    def setARepeatProcessingDisplay(self, shown: bool):
-        self.groupARepeatProcessing.setVisible(shown)
+    def setARepeatProcessingDisplay(self, rpt: int):
+        self.groupARepeatProcessing.setVisible(rpt > 1)
+        self.radioARepeatDifference.setVisible(rpt == 2)
+        if not rpt == 2 and self.radioARepeatDifference.isChecked():
+            self.radioARepeatNone.setChecked(True)
 
-    def setBRepeatProcessingDisplay(self, shown: bool):
-        self.groupBRepeatProcessing.setVisible(shown)
+    def setBRepeatProcessingDisplay(self, rpt: int):
+        self.groupBRepeatProcessing.setVisible(rpt > 1)
+        self.radioBRepeatDifference.setVisible(rpt == 2)
+        if not rpt == 2 and self.radioARepeatDifference.isChecked():
+            self.radioBRepeatNone.setChecked(True)
 
     def toggleScanningMode(self, scanning: bool):
         self.groupFrameProcessing.setEnabled(not scanning)
@@ -621,12 +622,10 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
 
 
 class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
-
     yrange = property()
     wavelengths = property()
 
     def __init__(self, wavelengths, yrange=[0, 4096]):
-
         super().__init__()
 
         self.resize(200, 100)
@@ -662,7 +661,6 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
 class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
 
     def __init__(self):
-
         super().__init__()
         # self._grid = pyqtgraph.opengl.GLGridItem()
         self._axis = pyqtgraph.opengl.GLAxisItem()
@@ -680,7 +678,6 @@ class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
         self.addItem(self._volume)
 
     def updateData(self, volume):
-
         extent = volume.shape * 3
         # self._grid.setSize(x=extent[0], y=extent[1], z=extent[2])
         self._axis.setSize(x=extent[0], y=extent[1], z=extent[2])
@@ -797,21 +794,21 @@ class DisplayWidget(QWidget, UiWidget):
         self._bscan.setHSliderHidden(self.checkEnfaceMIP.isChecked())
 
     def _updateEnfaceSliders(self):
-            self.radioViewX.setEnabled(not self.checkBScanMIP.isChecked())
-            self.radioViewY.setEnabled(not self.checkBScanMIP.isChecked())
-            if self.radioViewX.isChecked():
-                self._enface.setVSliderHidden(True)
-                self._enface.setHSliderHidden(self.checkBScanMIP.isChecked())
-            else:
-                self._enface.setVSliderHidden(self.checkBScanMIP.isChecked())
-                self._enface.setHSliderHidden(True)
+        self.radioViewX.setEnabled(not self.checkBScanMIP.isChecked())
+        self.radioViewY.setEnabled(not self.checkBScanMIP.isChecked())
+        if self.radioViewX.isChecked():
+            self._enface.setVSliderHidden(True)
+            self._enface.setHSliderHidden(self.checkBScanMIP.isChecked())
+        else:
+            self._enface.setVSliderHidden(self.checkBScanMIP.isChecked())
+            self._enface.setHSliderHidden(True)
 
     def _update(self):
 
         img = np.random.random([128, 128, 200])
         if self.tabDisplay.currentIndex() == 0:
-            self._enface.updateData(img, fov=[1 * 10**-6, 1 * 10**-6])
-            self._bscan.updateData(img, fov=[1 * 10**-6, 1 * 10**-6])
+            self._enface.updateData(img, fov=[1 * 10 ** -6, 1 * 10 ** -6])
+            self._bscan.updateData(img, fov=[1 * 10 ** -6, 1 * 10 ** -6])
         elif self.tabDisplay.currentIndex() == 1:
             self._volume.updateData(img)
         pyqtgraph.QtGui.QApplication.processEvents()
@@ -825,7 +822,6 @@ class SpectrumWidget(QWidget, UiWidget):
 
 
 class CancelDiscardsChangesDialog(QDialog, UiWidget):
-
     changed = pyqtSignal()
 
     def __init__(self):
@@ -853,7 +849,6 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 
 
 class MainWindow(QMainWindow, UiWidget):
-
     reload_required = pyqtSignal()
 
     def __init__(self):
@@ -895,14 +890,18 @@ class MainWindow(QMainWindow, UiWidget):
 
         self._showRepeatProcessing()
 
+        self._open_controller()
+        self._configure_image()
 
     def loadConfiguration(self):
-        file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location, "OCTview configuration file (*.oct)")[0]
+        file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
+                                           "OCTview configuration file (*.oct)")[0]
         if os.path.exists(file):
             self.loadStateFromJson(file)
 
     def saveConfiguration(self):
-        file = QFileDialog.getSaveFileName(self, "Save Configuration File", OCTview.config_resource_location, "OCTview configuration file (*.oct)")[0]
+        file = QFileDialog.getSaveFileName(self, "Save Configuration File", OCTview.config_resource_location,
+                                           "OCTview configuration file (*.oct)")[0]
         if len(file) > 0:
             self.writeStateToJson(file)
 
@@ -921,38 +920,83 @@ class MainWindow(QMainWindow, UiWidget):
         self.ProcessingGroupBox.toggleScanningMode(scanning)
 
     def _showRepeatProcessing(self):
-        self.ProcessingGroupBox.setARepeatProcessingDisplay(
-            self.ScanGroupBox.a_repeats > 1
-            and type(self.ScanGroupBox.pattern) == RasterScanPattern
+        self.ProcessingGroupBox.setARepeatProcessingDisplay(self.ScanGroupBox.a_repeats)
+        self.ProcessingGroupBox.setBRepeatProcessingDisplay(self.ScanGroupBox.b_repeats)
+
+    def _open_controller(self):
+        # Could switch between various backends here if you wanted
+        self.controller = NIOCTController(os.path.join(OCTview.lib_resource_location, 'fastnisdoct/fastnisdoct.dll'))
+        self.controller.open(
+            self.camera_device_name,
+            self.analog_output_galvo_x_ch_name,
+            self.analog_output_galvo_y_ch_name,
+            self.analog_output_line_trig_ch_name,
+            self.analog_output_frame_trig_ch_name,
+            self.analog_output_start_trig_ch_name,
         )
-        self.ProcessingGroupBox.setBRepeatProcessingDisplay(
-            self.ScanGroupBox.b_repeats > 1
-            and type(self.ScanGroupBox.pattern) == RasterScanPattern
+
+    def _configure_image(self):
+        self.controller.configure_image(
+            self.max_line_rate,
+            self.aline_size,
+            64,
+            64,
+            1,
+            1,
+            self.number_of_image_buffers,
+            self.ScanGroupBox.zroi[0],
+            self.ScanGroupBox.zroi[1]
         )
 
     # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
 
     @property
-    def darkTheme(self):
+    def scanPattern(self) -> LineScanPattern:
+        return self.ScanGroupBox.pattern
+
+    @property
+    def darkTheme(self) -> bool:
         return self._settings_dialog.radioDark.isChecked()
+
+    @property
+    def camera_device_name(self) -> str:
+        return self._settings_dialog.lineCameraName.text()
+
+    @property
+    def max_line_rate(self) -> int:
+        return int(1000 * self._settings_dialog.spinMaxLineRate.value() - 1)  # Convert from kHz float to Hz int
+
+    @property
+    def aline_size(self) -> int:
+        return self._settings_dialog.spinAlineSize.value()
+
+    @property
+    def number_of_image_buffers(self) -> int:
+        return int(self._settings_dialog.spinNumberOfBuffers.value())
+
+    @property
+    def analog_output_galvo_x_ch_name(self) -> str:
+        return self._settings_dialog.lineXChName.text()
+
+    @property
+    def analog_output_galvo_y_ch_name(self) -> str:
+        return self._settings_dialog.lineYChName.text()
+
+    @property
+    def analog_output_line_trig_ch_name(self) -> str:
+        return self._settings_dialog.lineLineTrigChName.text()
+
+    @property
+    def analog_output_frame_trig_ch_name(self) -> str:
+        return self._settings_dialog.lineFrameTrigChName.text()
+
+    @property
+    def analog_output_start_trig_ch_name(self) -> str:
+        return self._settings_dialog.lineStartTrigChName.text()
 
 
 """
 Parameters
-
-DAC_ID_AO_OUT_GALVO_X
-DAC_ID_AO_OUT_GALVO_Y
-DAC_ID_AO_OUT_LINE_TRIGGER
-DAC_ID_AO_FRAME_TRIGGER
-DAC_ID_AO_START_TRIGGER
-DAC_ID_AI_START_TRIGGER
-CAM_ID
-
-SCAN_SIGNAL_X
-SCAN_SIGNAL_Y
-SCAN_SIGNAL_LINE_TRIGGER
-SCAN_SIGNAL_FRAME_TRIGGER
-SCAN_SIGNAL_SAMPLE_RATE
 
 EXPORT_FILE_TYPE
 EXPORT_FILE_NAME

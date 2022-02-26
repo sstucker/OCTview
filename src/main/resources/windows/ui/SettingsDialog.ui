@@ -25,23 +25,37 @@
      <layout class="QFormLayout" name="formLayout">
       <item row="0" column="0">
        <widget class="QLabel" name="labelCameraName">
+        <property name="toolTip">
+         <string>The name of the line camera device</string>
+        </property>
         <property name="text">
          <string>Camera name</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QLineEdit" name="lineCameraName"/>
+       <widget class="QLineEdit" name="lineCameraName">
+        <property name="toolTip">
+         <string>The name of the line camera device</string>
+        </property>
+        <property name="text">
+         <string>cam1</string>
+        </property>
+       </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="labelNumberOfBuffers">
         <property name="text">
-         <string>Number of Buffers</string>
+         <string>Number of buffers</string>
         </property>
        </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QSpinBox" name="spinNumberOfBuffers"/>
+       <widget class="QSpinBox" name="spinNumberOfBuffers">
+        <property name="value">
+         <number>4</number>
+        </property>
+       </widget>
       </item>
       <item row="2" column="0">
        <widget class="QLabel" name="labelAlineSize">
@@ -63,64 +77,113 @@
         </property>
        </widget>
       </item>
+      <item row="3" column="1">
+       <widget class="QDoubleSpinBox" name="spinMaxLineRate">
+        <property name="suffix">
+         <string> kHz</string>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="minimum">
+         <double>1.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>1000.000000000000000</double>
+        </property>
+        <property name="value">
+         <double>76.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="labelMaxLineRate">
+        <property name="text">
+         <string>Max line rate</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
    <item row="0" column="1">
     <widget class="QGroupBox" name="groupDAC">
      <property name="title">
-      <string>DAC Interface</string>
+      <string>NI-DAQ interface analog output channel names</string>
      </property>
      <layout class="QFormLayout" name="formLayout_2">
       <item row="0" column="0">
        <widget class="QLabel" name="labelXChName">
+        <property name="toolTip">
+         <string/>
+        </property>
         <property name="text">
-         <string>X Galvo Output Channel Name</string>
+         <string>X Galvo</string>
         </property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="labelYChName">
         <property name="text">
-         <string>Y Galvo Output Channel Name</string>
+         <string>Y Galvo</string>
         </property>
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QLineEdit" name="lineXChName"/>
+       <widget class="QLineEdit" name="lineXChName">
+        <property name="text">
+         <string>Dev1/ao0</string>
+        </property>
+       </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QLineEdit" name="lineYChName"/>
+       <widget class="QLineEdit" name="lineYChName">
+        <property name="text">
+         <string>Dev1/ao1</string>
+        </property>
+       </widget>
       </item>
       <item row="2" column="0">
        <widget class="QLabel" name="labelLineTrigChName">
         <property name="text">
-         <string>Line Trigger Output Channel Name</string>
+         <string>Line Trigger</string>
         </property>
        </widget>
       </item>
       <item row="4" column="0">
        <widget class="QLabel" name="labelStartTrigChName">
         <property name="text">
-         <string>Start Trigger Output Channel Name</string>
+         <string>Start Trigger</string>
         </property>
        </widget>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="labelFrameTrigChName">
         <property name="text">
-         <string>Frame Trigger Output Channel Name</string>
+         <string>Frame Trigger</string>
         </property>
        </widget>
       </item>
       <item row="2" column="1">
-       <widget class="QLineEdit" name="labelLineTrigChName_2"/>
+       <widget class="QLineEdit" name="lineLineTrigChName">
+        <property name="text">
+         <string>Dev1/ao3</string>
+        </property>
+       </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QLineEdit" name="lineFrameTrigChName"/>
+       <widget class="QLineEdit" name="lineFrameTrigChName">
+        <property name="text">
+         <string>Dev1/ao2</string>
+        </property>
+       </widget>
       </item>
       <item row="4" column="1">
-       <widget class="QLineEdit" name="lineStartTrigChName"/>
+       <widget class="QLineEdit" name="lineStartTrigChName">
+        <property name="text">
+         <string>Dev1/ao5</string>
+        </property>
+       </widget>
       </item>
      </layout>
     </widget>

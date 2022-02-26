@@ -16,6 +16,7 @@ class _AppContext(ApplicationContext):
 
         self.ui_resource_location = str(self.get_resource('ui'))
         self.config_resource_location = str(self.get_resource('configurations'))
+        self.lib_resource_location = str(self.get_resource('lib'))
 
         self.window = None
 
@@ -48,4 +49,5 @@ class _AppContext(ApplicationContext):
 AppContext = _AppContext()
 ui_resource_location = AppContext.ui_resource_location
 config_resource_location = AppContext.config_resource_location
+lib_resource_location = AppContext.lib_resource_location
 run = AppContext.run

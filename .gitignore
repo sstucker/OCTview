@@ -5,3 +5,13 @@ workspace.xml
 tasks.xml
 *.oct
 .last
+.vs
+*.tlog
+*.obj
+*.lib
+*.dll
+*.exp
+*.ilk
+*.pdb
+*.ipdb
+*.iobj
