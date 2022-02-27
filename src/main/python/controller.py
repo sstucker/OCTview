@@ -1,5 +1,16 @@
 import ctypes as c
 import numpy as np
+from numpy.ctypeslib import ndpointer
+
+
+c_bool_p = ndpointer(dtype=np.bool, ndim=1, flags='C_CONTIGUOUS')
+c_int_p = ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS')
+c_bool_p = ndpointer(dtype=np.bool, ndim=1, flags='C_CONTIGUOUS')
+c_uint16_p = ndpointer(dtype=np.uint16, ndim=1, flags='C_CONTIGUOUS')
+c_uint32_p = ndpointer(dtype=np.uint32, ndim=1, flags='C_CONTIGUOUS')
+c_float_p = ndpointer(dtype=np.float32, ndim=1, flags='C_CONTIGUOUS')
+c_double_p = ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
+c_complex64_p = ndpointer(dtype=np.complex64, ndim=1, flags='C_CONTIGUOUS')
 
 
 class NIOCTController:
@@ -16,6 +27,14 @@ class NIOCTController:
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
         self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
+        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
+        self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int, c.c_int]
+        self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int]
+
+        self._lib.nisdoct_get_state.restype = c.c_int
+        self._lib.nisdoct_ready.restype = c.c_bool
+        self._lib.nisdoct_scanning.restype = c.c_bool
+        self._lib.nisdoct_acquiring.restype = c.c_bool
 
     def open(self,
              camera_name,
@@ -53,6 +72,9 @@ class NIOCTController:
             bytes(ao_ch_st_name, encoding='utf8')
         )
 
+    def close(self):
+        self._lib.nisdoct_close()
+
     def configure_image(
             self,
             dac_output_rate: int,
@@ -83,7 +105,7 @@ class NIOCTController:
         """
         if roi_size is None:
             roi_size = aline_size
-        self._lib.nisdoct_configure_processing(
+        self._lib.nisdoct_configure_image(
             int(dac_output_rate),
             int(aline_size),
             int(number_of_alines),
@@ -119,20 +141,37 @@ class NIOCTController:
         """
         a_rpt_proc_flag = 0
         b_rpt_proc_flag = 0
-        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing), (a_rpt_proc_flag, a_rpt_proc_flag)):
-            if rpt_proc == 'average':
-                flag = 1
-            elif rpt_proc == 'difference':
-                flag = 2
+        # for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing), (a_rpt_proc_flag, a_rpt_proc_flag)):
+        #     if rpt_proc == 'average':
+        #         flag = 1
+        #     elif rpt_proc == 'difference':
+        #         flag = 2
         self._lib.nisdoct_configure_processing(
             bool(enabled),
             bool(subtract_background),
             bool(interp),
-            np.float64(intpdk),
+            float(intpdk),
             np.array(apod_window).astype(np.float32),
             a_rpt_proc_flag,
             b_rpt_proc_flag,
             int(n_frame_avg)
+        )
+
+    def set_scan(self, x, y, lt, ft):
+        """Sets the signals used to drive the galvos and trigger camera and frame grabber. Can be called during a scan.
+
+        Args:
+            x (np.ndarray): X galvo drive signal
+            y (np.ndarray): Y galvo drive signal
+            lt (np.ndarray): Camera A-line exposure trigger signal
+            ft (np.ndarray): Frame grabber trigger signal
+        """
+        self._lib.nisdoct_set_pattern(
+            np.array(x).astype(np.float64),
+            np.array(y).astype(np.float64),
+            np.array(lt).astype(np.float64),
+            np.array(ft).astype(np.float64),
+            len(x)
         )
 
     #
@@ -147,18 +186,6 @@ class NIOCTController:
     # def is_ready_to_scan(self):
     #     """Returns bool indicating whether controller is fully configured and ready to scan."""
     #     return self._lib.NIOCT_is_ready_to_scan(self._handle)
-    #
-    #
-    # def set_scan(self, x, y, lt, ft):
-    #     """Sets the signals used to drive the galvos and trigger camera and frame grabber. Can be called during a scan.
-    #
-    #     Args:
-    #         x (np.ndarray): X galvo drive signal
-    #         y (np.ndarray): Y galvo drive signal
-    #         lt (np.ndarray): Camera A-line exposure trigger signal
-    #         ft (np.ndarray): Frame grabber trigger signal
-    #     """
-    #     self._lib.NIOCT_setScan(self._handle, x, y, lt, ft, len(x))
     #
     # def start_scan(self):
     #     """Start imaging without streaming any data to disk."""

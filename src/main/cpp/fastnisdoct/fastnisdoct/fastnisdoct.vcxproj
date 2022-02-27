@@ -154,6 +154,9 @@
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="fastnisdoct.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="spscqueue.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

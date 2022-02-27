@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>459</width>
-    <height>256</height>
+    <height>273</height>
    </rect>
   </property>
   <property name="toolTip">
@@ -112,6 +112,9 @@
      </property>
      <property name="singleStep">
       <double>0.001000000000000</double>
+     </property>
+     <property name="value">
+      <double>0.300000000000000</double>
      </property>
     </widget>
    </item>
@@ -238,6 +241,12 @@
         </property>
         <property name="suffix">
          <string> frames</string>
+        </property>
+        <property name="minimum">
+         <number>2</number>
+        </property>
+        <property name="maximum">
+         <number>100</number>
         </property>
        </widget>
       </item>

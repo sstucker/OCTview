@@ -184,6 +184,9 @@ class RasterScanWidget(ScanWidget, UiWidget):
     def __init__(self):
         super().__init__()
 
+        # TODO implement bidirectional patterns
+        self.checkBidirectional.setVisible(False)
+
         self.checkSquareScan.stateChanged.connect(self._aspectChanged)
         self.checkEqualAspect.stateChanged.connect(self._aspectChanged)
         self.checkBidirectional.stateChanged.connect(self._checkBidirectionalChanged)
@@ -561,10 +564,10 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         super().__init__()
 
         self._windows = {
-            'Hanning': np.hanning(ALINE_SIZE),
-            'Blackman': np.blackman(ALINE_SIZE)
+            'Hanning': np.hanning,
+            'Blackman': np.blackman
         }
-        self._null_window = np.ones(ALINE_SIZE)
+        self._null_window = np.ones
 
         self.checkApodization.toggled.connect(self._apodToggled)
         self.checkInterpolation.toggled.connect(self._interpToggled)
@@ -600,25 +603,57 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.setCheckable(not scanning)
 
     @property
-    def apodization_window(self):
+    def enabled(self):
+        return self.isChecked()
+
+    @property
+    def background_subtraction(self):
+        return self.checkMeanSpectrumSubtraction.isChecked()
+
+    @property
+    def interpolation(self):
+        return self.checkInterpolation.isChecked()
+
+    @property
+    def interpdk(self):
+        return self.spinInterpDk.value()
+
+    @property
+    def apodization_window(self) -> callable:
+        """Returns function which defines the apodization window. Takes A-line size as an argument."""
         if self.checkApodization.isChecked() and self.isChecked():
             return self._windows[self.comboApodization.currentText()]
         else:
             return self._null_window
 
     @property
-    def interpolation(self):
-        if self.isChecked():
-            return self.checkInterpolation.isChecked(), self.spinInterpDk.value()
+    def a_repeat_processing(self):
+        if self.radioARepeatNone.isChecked():
+            return None
+        elif self.radioARepeatAverage.isChecked():
+            return 'average'
+        elif self.radioARepeatDifference.isChecked():
+            return 'difference'
         else:
-            return False
+            return None
 
     @property
-    def background_subtraction(self):
-        if self.isChecked():
-            return self.checkMeanSpectrumSubtraction.isChecked()
+    def b_repeat_processing(self):
+        if self.radioBRepeatNone.isChecked():
+            return None
+        elif self.radioBRepeatAverage.isChecked():
+            return 'average'
+        elif self.radioBRepeatDifference.isChecked():
+            return 'difference'
         else:
-            return False
+            return None
+
+    @property
+    def frame_averaging(self):
+        if not self.radioFrameAverage.isChecked():
+            return 0
+        else:
+            return self.spinFrameAverage.value()
 
 
 class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
@@ -891,7 +926,9 @@ class MainWindow(QMainWindow, UiWidget):
         self._showRepeatProcessing()
 
         self._open_controller()
+        self._configure_processing()
         self._configure_image()
+        self._update_scan_pattern()
 
     def loadConfiguration(self):
         file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
@@ -908,6 +945,7 @@ class MainWindow(QMainWindow, UiWidget):
     # Overload
     def closeEvent(self, event):
         quit_msg = "Are you sure you want to exit OCTview?"
+        self._close_controller()
         reply = QMessageBox.question(self, 'Message', quit_msg, QMessageBox.Yes, QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.writeStateToJson(os.path.join(OCTview.config_resource_location, '.last'))
@@ -935,23 +973,47 @@ class MainWindow(QMainWindow, UiWidget):
             self.analog_output_start_trig_ch_name,
         )
 
+    def _close_controller(self):
+        self.controller.close()
+
     def _configure_image(self):
+        (zstart, zstop) = self.ScanGroupBox.zroi
         self.controller.configure_image(
             self.max_line_rate,
             self.aline_size,
-            64,
-            64,
-            1,
-            1,
+            self.scan_pattern.total_number_of_alines,
+            self.scan_pattern.dimensions[0],
+            self.scan_pattern.aline_repeat,
+            self.scan_pattern.bline_repeat,
             self.number_of_image_buffers,
-            self.ScanGroupBox.zroi[0],
-            self.ScanGroupBox.zroi[1]
+            zstart,
+            zstop
+        )
+
+    def _configure_processing(self):
+        self.controller.configure_processing(
+            self.ProcessingGroupBox.enabled,
+            self.ProcessingGroupBox.background_subtraction,
+            self.ProcessingGroupBox.interpolation,
+            self.ProcessingGroupBox.interpdk,
+            self.ProcessingGroupBox.apodization_window(self.aline_size),
+            aline_repeat_processing=self.ProcessingGroupBox.a_repeat_processing,
+            bline_repeat_processing=self.ProcessingGroupBox.b_repeat_processing,
+            n_frame_avg=self.ProcessingGroupBox.frame_averaging
+        )
+
+    def _update_scan_pattern(self):
+        self.controller.set_scan(
+            self.scan_pattern.x,
+            self.scan_pattern.y,
+            self.scan_pattern.line_trigger,
+            self.scan_pattern.frame_trigger,
         )
 
     # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
 
     @property
-    def scanPattern(self) -> LineScanPattern:
+    def scan_pattern(self) -> LineScanPattern:
         return self.ScanGroupBox.pattern
 
     @property
