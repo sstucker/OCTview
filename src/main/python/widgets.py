@@ -376,7 +376,7 @@ class ControlGroupBox(QGroupBox, UiWidget):
             self.spinFramesToAcquire.setSuffix(' frame')
 
     @property
-    def framesToAcquire(self):
+    def frames_to_acquire(self):
         return self.spinFramesToAcquire.value()
 
 
@@ -427,7 +427,6 @@ class ScanGroupBox(QGroupBox, UiWidget):
 
     def _preview(self):
         if not self._preview_window.isVisible():
-            print('Scan pattern preview')
             self._preview_window.previewPattern(self.pattern)
 
     def toggleScanningMode(self, scanning_mode: bool):
@@ -482,9 +481,6 @@ class ScanDisplayWindow(QFrame):
         self._graphics_window = pyqtgraph.GraphicsWindow()
         self._signal_plot = self._graphics_window.addPlot(row=0, col=0, rowspan=1, colspan=2)
 
-        print(type(self._graphics_window))
-        print(type(self._signal_plot))
-
         self._line_trigger_item = self._signal_plot.plot()
         self._frame_trigger_item = self._signal_plot.plot()
         self._x_item = self._signal_plot.plot()
@@ -525,6 +521,8 @@ class FileGroupBox(QGroupBox, UiWidget):
 
     def __init__(self):
         super().__init__()
+        self.setFixedSize(self.minimumSize())
+
         self._directory: str = os.getcwd()
         self._file_name: str = 'default_trial_name'
 
@@ -700,6 +698,8 @@ class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
         # self._grid = pyqtgraph.opengl.GLGridItem()
         self._axis = pyqtgraph.opengl.GLAxisItem()
 
+        self.setFixedSize(self.minimumSize())
+
         img = np.random.random([128, 128, 200])
         data = np.empty(img.shape + (4,), dtype=np.ubyte)
         data[..., 0] = img * (255. / (img.max() / 1))
@@ -727,6 +727,8 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
 
     def __init__(self, title=None, hslider=False, vslider=False):
         super().__init__()
+
+        self.setFixedSize(self.minimumSize())
 
         self._plot = self.addPlot()
         self._plot.setAspectLocked(True)
@@ -884,11 +886,24 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 
 
 class MainWindow(QMainWindow, UiWidget):
-    reload_required = pyqtSignal()
+
+    reload_required = pyqtSignal()  # A significant change has been made to the backend configuration and it must be completely reloaded
+
+    closed = pyqtSignal()  # MainWindow has been closed
+
+    scan = pyqtSignal()  # Scan command
+
+    acquire = pyqtSignal()  # Acquire command
+
+    stop = pyqtSignal()  # Stop command
+
+    stop = pyqtSignal()  # Stop command
+
 
     def __init__(self):
         super().__init__()
 
+        # Populate layout with subwidgets
         replaceWidget(self.ScanGroupBox, ScanGroupBox())
         replaceWidget(self.DisplayWidget, DisplayWidget())
         replaceWidget(self.FileGroupBox, FileGroupBox())
@@ -903,7 +918,6 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox = self.centralWidget.ControlGroupBox
 
         # self.statusBar().setSizeGripEnabled(False)
-        # self.setFixedSize(self.minimumSize())
 
         self.ScanGroupBox.changed.connect(self._showRepeatProcessing)
 
@@ -923,12 +937,11 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.scan.connect(lambda: self.toggleScanningMode(True))
         self.ControlGroupBox.acquire.connect(lambda: self.toggleScanningMode(False))
 
-        self._showRepeatProcessing()
+        self.ControlGroupBox.scan.connect(lambda: self.scan.emit)
+        self.ControlGroupBox.acquire.connect(lambda: self.acquire.emit)
+        self.ControlGroupBox.stop.connect(lambda: self.stop.emit)
 
-        self._open_controller()
-        self._configure_processing()
-        self._configure_image()
-        self._update_scan_pattern()
+        self._showRepeatProcessing()
 
     def loadConfiguration(self):
         file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
@@ -945,10 +958,10 @@ class MainWindow(QMainWindow, UiWidget):
     # Overload
     def closeEvent(self, event):
         quit_msg = "Are you sure you want to exit OCTview?"
-        self._close_controller()
         reply = QMessageBox.question(self, 'Message', quit_msg, QMessageBox.Yes, QMessageBox.No)
         if reply == QMessageBox.Yes:
             self.writeStateToJson(os.path.join(OCTview.config_resource_location, '.last'))
+            self.closed.emit()
             event.accept()
         else:
             event.ignore()
@@ -961,56 +974,39 @@ class MainWindow(QMainWindow, UiWidget):
         self.ProcessingGroupBox.setARepeatProcessingDisplay(self.ScanGroupBox.a_repeats)
         self.ProcessingGroupBox.setBRepeatProcessingDisplay(self.ScanGroupBox.b_repeats)
 
-    def _open_controller(self):
-        # Could switch between various backends here if you wanted
-        self.controller = NIOCTController(os.path.join(OCTview.lib_resource_location, 'fastnisdoct/fastnisdoct.dll'))
-        self.controller.open(
-            self.camera_device_name,
-            self.analog_output_galvo_x_ch_name,
-            self.analog_output_galvo_y_ch_name,
-            self.analog_output_line_trig_ch_name,
-            self.analog_output_frame_trig_ch_name,
-            self.analog_output_start_trig_ch_name,
-        )
-
-    def _close_controller(self):
-        self.controller.close()
-
-    def _configure_image(self):
-        (zstart, zstop) = self.ScanGroupBox.zroi
-        self.controller.configure_image(
-            self.max_line_rate,
-            self.aline_size,
-            self.scan_pattern.total_number_of_alines,
-            self.scan_pattern.dimensions[0],
-            self.scan_pattern.aline_repeat,
-            self.scan_pattern.bline_repeat,
-            self.number_of_image_buffers,
-            zstart,
-            zstop
-        )
-
-    def _configure_processing(self):
-        self.controller.configure_processing(
-            self.ProcessingGroupBox.enabled,
-            self.ProcessingGroupBox.background_subtraction,
-            self.ProcessingGroupBox.interpolation,
-            self.ProcessingGroupBox.interpdk,
-            self.ProcessingGroupBox.apodization_window(self.aline_size),
-            aline_repeat_processing=self.ProcessingGroupBox.a_repeat_processing,
-            bline_repeat_processing=self.ProcessingGroupBox.b_repeat_processing,
-            n_frame_avg=self.ProcessingGroupBox.frame_averaging
-        )
-
-    def _update_scan_pattern(self):
-        self.controller.set_scan(
-            self.scan_pattern.x,
-            self.scan_pattern.y,
-            self.scan_pattern.line_trigger,
-            self.scan_pattern.frame_trigger,
-        )
-
     # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
+
+    @property
+    def processing_enabled(self) -> bool:
+        return self.ProcessingGroupBox.enabled
+
+    @property
+    def background_subtraction_enabled(self) -> bool:
+        return self.ProcessingGroupBox.background_subtraction
+
+    @property
+    def interpolation_enabled(self) -> bool:
+        return self.ProcessingGroupBox.interpolation
+
+    @property
+    def interpdk(self) -> float:
+        return self.ProcessingGroupBox.interpdk
+
+    @property
+    def apodization_window(self) -> np.ndarray:
+        return self.ProcessingGroupBox.apodization_window(self.aline_size)
+
+    @property
+    def aline_repeat_processing(self) -> str:
+        return self.ProcessingGroupBox.a_repeat_processing
+
+    @property
+    def bline_repeat_processing(self) -> str:
+        return self.ProcessingGroupBox.b_repeat_processing
+
+    @property
+    def frame_averaging(self) -> int:
+        return self.ProcessingGroupBox.frame_averaging
 
     @property
     def scan_pattern(self) -> LineScanPattern:
@@ -1027,6 +1023,10 @@ class MainWindow(QMainWindow, UiWidget):
     @property
     def max_line_rate(self) -> int:
         return int(1000 * self._settings_dialog.spinMaxLineRate.value() - 1)  # Convert from kHz float to Hz int
+
+    @property
+    def zroi(self) -> (int, int):
+        return self.ScanGroupBox.zroi
 
     @property
     def aline_size(self) -> int:
@@ -1056,13 +1056,6 @@ class MainWindow(QMainWindow, UiWidget):
     def analog_output_start_trig_ch_name(self) -> str:
         return self._settings_dialog.lineStartTrigChName.text()
 
-
-"""
-Parameters
-
-EXPORT_FILE_TYPE
-EXPORT_FILE_NAME
-EXPORT_FILE_SIZE
-EXPORT_NUMBER_OF_FRAMES
-
-"""
+    @property
+    def frames_to_acquire(self):
+        return self.ControlGroupBox.frames_to_acquire
