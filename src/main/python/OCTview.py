@@ -39,9 +39,15 @@ class _AppContext(ApplicationContext):
         # Connect MainWindow signals to backend interface
         self.window.reload_required.connect(self.load)
         self.window.scan.connect(self._start_scan)
-        # self.window.acquire.connect(self._start_acquisition)
+        self.window.acquire.connect(self._start_acquisition)
         self.window.stop.connect(self._stop)
         self.window.closed.connect(self._close_controller)
+        self.window.scan_changed.connect(self._update_scan_pattern)
+
+        # Repeated update execution keeps GUI in step with controller
+        self._update_timer = QTimer()
+        self._update_timer.timeout.connect(self._update)
+        self._update_timer.start(100)  # 10 Hz
 
         self.load()
         self._open_controller()
@@ -51,6 +57,17 @@ class _AppContext(ApplicationContext):
         self.window.show()
 
         return self.app.exec_()
+
+
+    def _update(self):
+        state = self.controller.state
+        print('State', state)
+        if state == 'scanning':
+            self.window.set_mode_scanning()
+        elif state == 'acquiring':
+            self.window.set_mode_acquiring()
+        elif state == 'ready':
+            self.window.set_mode_ready()
 
     # -- Backend interface ------------------------------------------------
 
@@ -110,10 +127,19 @@ class _AppContext(ApplicationContext):
         )
 
     def _start_scanning(self):
-        self.controller.start_scan()
+        if self.controller.state == 'acquiring':
+            self.controller.stop_acquisition()
+        else:
+            self.controller.start_scan()
 
-    # def _start_acquisition(self):
-    #     self.controller.start_acquisition()
+    def _start_acquisition(self):
+        if self.controller.state != 'scanning' and self.controller.state == 'ready':
+            self.controller.start_scan()
+        self.controller.start_acquisition(
+            self.window.filename,
+            self.window.file_max_bytes,
+            self.window.frames_to_acquire
+        )
 
     def _stop(self):
         self.controller.stop_acquisition()

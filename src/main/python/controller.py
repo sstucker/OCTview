@@ -195,7 +195,7 @@ class NIOCTController:
             frames_to_acquire: The number of frames to acquire. If -1, acquisition continues until `stop_acquisition` is called.
         """
         self._lib.nisdoct_start_acquisition(
-            os.path.normpath(file),
+            bytes(file, encoding='utf8'),
             np.longlong(max_bytes),
             int(frames_to_acquire)
         )
@@ -210,6 +210,11 @@ class NIOCTController:
         Returns: 1 if UNOPENED, 2 if OPEN 3 if READY, 4 if SCANNING, 5 if ACQUIRING, 6 if ERROR.
         """
         return self._lib.nisdoct_get_state()
+
+    @property
+    def state(self) -> str:
+        """Returns string form of state."""
+        return ['', 'unopened', 'open', 'ready', 'scanning', 'acquiring', 'error'][self.get_state()]
 
     def ready(self) -> bool:
         """Returns True if controller is in the READY state."""

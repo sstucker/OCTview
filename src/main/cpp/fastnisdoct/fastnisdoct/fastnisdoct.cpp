@@ -13,10 +13,9 @@
 #include <condition_variable>
 
 #include "spscqueue.h"
-
+#include <complex>
 
 #define IDLE_SLEEP_TIME 1000
-
 
 // msgs are passed into the main thread
 
@@ -35,7 +34,17 @@
 #define STATE_ACQUIRIING		  static_cast<int>( 5 )
 #define STATE_ERROR				  static_cast<int>( 6 )
 
+struct raw_frame {
+	const uint16_t* buffer;
+	int aline_size;
+	int number_of_alines;
+};
 
+struct processed_frame {
+	const std::complex<float>* buffer;
+	int aline_size;
+	int number_of_alines;
+};
 
 struct state_msg {
 	
@@ -74,7 +83,6 @@ struct state_msg {
 	int n_frames_to_acquire;
 };
 
-
 spsc_bounded_queue_t<state_msg> msg_queue(32);
 
 bool image_configured = false;
@@ -83,12 +91,10 @@ bool scan_defined = false;
 
 std::atomic_int state = STATE_UNOPENED;
 
-
 inline bool ready_to_scan()
 {
 	return (image_configured && processing_configured && scan_defined);
 }
-
 
 inline void recv_msg()
 {
@@ -99,7 +105,7 @@ inline void recv_msg()
 		{
 			printf("MSG_CONFIGURE_IMAGE received\n");
 			image_configured = true;
-			if (ready_to_scan())
+			if (ready_to_scan() && state != STATE_SCANNING)
 			{
 				state = STATE_READY;
 			}
@@ -108,7 +114,7 @@ inline void recv_msg()
 		{
 			printf("MSG_CONFIGURE_PROCESSING received\n");
 			processing_configured = true;
-			if (ready_to_scan())
+			if (ready_to_scan() && state != STATE_SCANNING)
 			{
 				state = STATE_READY;
 			}
@@ -117,7 +123,7 @@ inline void recv_msg()
 		{
 			printf("MSG_SET_PATTERN received\n");
 			scan_defined = true;
-			if (ready_to_scan())
+			if (ready_to_scan() && state != STATE_SCANNING)
 			{
 				state = STATE_READY;
 			}
@@ -161,7 +167,7 @@ inline void recv_msg()
 	}
 	else
 	{
-		printf("Queue was empty.\n");
+		// printf("Queue was empty.\n");
 	}
 }
 
@@ -186,7 +192,6 @@ void _main()
 		{
 
 		}
-		printf("Main is running. State is %i\n", state.load());
 		fflush(stdout);
 	}
 }
@@ -316,6 +321,9 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	)
 	{
 		printf("nisdoct_start_acquisition\n");
+		printf("file: %s\n", file);
+		printf("max_bytes (in GB): %i\n", max_bytes / (long long)1073741824);
+		printf("n_frames_to_acquire: %i\n", n_frames_to_acquire);
 
 		state_msg msg;
 		msg.flag = MSG_START_ACQUISITION;
@@ -333,7 +341,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) int nisdoct_get_state()
 	{
-		printf("get_state = %i\n", state.load());
 		return state.load();
 	}
 

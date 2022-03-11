@@ -359,12 +359,45 @@ class ControlGroupBox(QGroupBox, UiWidget):
     def __init__(self):
         super().__init__()
 
+        self.pushScan.pressed.connect(self.set_mode_not_ready)
         self.pushScan.pressed.connect(self.scan.emit)
+        self.pushStop.pressed.connect(self.set_mode_not_ready)
         self.pushStop.pressed.connect(self.stop.emit)
+        self.pushAcquire.pressed.connect(self.set_mode_not_ready)
         self.pushAcquire.pressed.connect(self.acquire.emit)
 
         self.checkNumberedAcquisition.toggled.connect(self._numbered_check_changed)
         self.spinFramesToAcquire.valueChanged.connect(self._frames_to_acquire_changed)
+
+        self.set_mode_not_ready()
+
+    def set_mode_not_ready(self):
+        self.pushScan.setEnabled(False)
+        self.pushAcquire.setEnabled(False)
+        self.pushStop.setEnabled(False)
+        self.spinFramesToAcquire.setEnabled(False)
+        self.checkNumberedAcquisition.setEnabled(False)
+
+    def set_mode_scanning(self):
+        self.pushScan.setEnabled(False)
+        self.pushAcquire.setEnabled(True)
+        self.pushStop.setEnabled(True)
+        self.spinFramesToAcquire.setEnabled(True)
+        self.checkNumberedAcquisition.setEnabled(True)
+
+    def set_mode_acquiring(self):
+        self.pushScan.setEnabled(True)
+        self.pushAcquire.setEnabled(False)
+        self.pushStop.setEnabled(True)
+        self.spinFramesToAcquire.setEnabled(False)
+        self.checkNumberedAcquisition.setEnabled(False)
+
+    def set_mode_ready(self):
+        self.pushScan.setEnabled(True)
+        self.pushAcquire.setEnabled(True)
+        self.pushStop.setEnabled(False)
+        self.spinFramesToAcquire.setEnabled(True)
+        self.checkNumberedAcquisition.setEnabled(True)
 
     def _numbered_check_changed(self):
         self.spinFramesToAcquire.setEnabled(self.checkNumberedAcquisition.isChecked())
@@ -377,7 +410,10 @@ class ControlGroupBox(QGroupBox, UiWidget):
 
     @property
     def frames_to_acquire(self):
-        return self.spinFramesToAcquire.value()
+        if self.checkNumberedAcquisition.isChecked():
+            return self.spinFramesToAcquire.value()
+        else:
+            return -1
 
 
 class ScanGroupBox(QGroupBox, UiWidget):
@@ -502,7 +538,7 @@ class ScanDisplayWindow(QFrame):
         self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
         self._x_item.setData(x=t, y=pattern.x, name='x')
         self._y_item.setData(x=t, y=pattern.y, name='y')
-        self._scan_plot.xlim(0, t)
+        # self._scan_plot.xlim(0, t)
 
         exp = np.zeros(len(pattern.x)).astype(np.int32)
         exp[pattern.line_trigger.astype(bool)] = 1
@@ -521,7 +557,7 @@ class FileGroupBox(QGroupBox, UiWidget):
 
     def __init__(self):
         super().__init__()
-        self.setFixedSize(self.minimumSize())
+        # self.setFixedSize(self.minimumSize())
 
         self._directory: str = os.getcwd()
         self._file_name: str = 'default_trial_name'
@@ -554,6 +590,15 @@ class FileGroupBox(QGroupBox, UiWidget):
     @property
     def filetype(self):
         return self.comboFileType.currentIndex()
+
+    @property
+    def max_bytes(self) -> int:
+        txt = self.comboFileSize.currentText()
+        units = {
+            'MB': np.longlong(1048576),
+            'GB': np.longlong(1073741824),
+        }
+        return units[txt.split(' ')[1]] * np.longlong(int(txt.split(' ')[0]))
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
@@ -728,7 +773,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
     def __init__(self, title=None, hslider=False, vslider=False):
         super().__init__()
 
-        self.setFixedSize(self.minimumSize())
+        # self.setFixedSize(self.minimumSize())
 
         self._plot = self.addPlot()
         self._plot.setAspectLocked(True)
@@ -888,13 +933,11 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 class MainWindow(QMainWindow, UiWidget):
 
     reload_required = pyqtSignal()  # A significant change has been made to the backend configuration and it must be completely reloaded
-
+    scan_changed = pyqtSignal()  # Scan pattern has been changed
+    processing_changed = pyqtSignal()  # Processing parameters have been changed
     closed = pyqtSignal()  # MainWindow has been closed
-
     scan = pyqtSignal()  # Scan command
-
     acquire = pyqtSignal()  # Acquire command
-
     stop = pyqtSignal()  # Stop command
 
     def __init__(self):
@@ -927,16 +970,15 @@ class MainWindow(QMainWindow, UiWidget):
         self.actionSettings.triggered.connect(self._settings_dialog.showDialog)
         self._settings_dialog.changed.connect(self.reload_required.emit)
 
+        self.ControlGroupBox.scan.connect(self._scan)
+        self.ControlGroupBox.acquire.connect(self._acquire)
+        self.ControlGroupBox.stop.connect(self._stop)
+
+        self.ScanGroupBox.changed.connect(self.scan_changed.emit)
+
         config_file = os.path.join(OCTview.config_resource_location, '.last')
         if os.path.exists(config_file):
             self.loadStateFromJson(config_file)
-
-        self.ControlGroupBox.scan.connect(lambda: self.toggleScanningMode(True))
-        self.ControlGroupBox.acquire.connect(lambda: self.toggleScanningMode(False))
-
-        self.ControlGroupBox.scan.connect(self.scan.emit)
-        self.ControlGroupBox.acquire.connect(self.acquire.emit)
-        self.ControlGroupBox.stop.connect(self.stop.emit)
 
         self._showRepeatProcessing()
 
@@ -963,9 +1005,38 @@ class MainWindow(QMainWindow, UiWidget):
         else:
             event.ignore()
 
-    def toggleScanningMode(self, scanning: bool):
-        self.ScanGroupBox.toggleScanningMode(scanning)
-        self.ProcessingGroupBox.toggleScanningMode(scanning)
+    def _scan(self):
+        self.scan.emit()
+
+    def _acquire(self):
+        self.acquire.emit()
+
+    def _stop(self):
+        self.stop.emit()
+
+    def set_mode_scanning(self):
+        self.ControlGroupBox.set_mode_scanning()
+        self.ScanGroupBox.toggleScanningMode(True)
+        self.ProcessingGroupBox.toggleScanningMode(True)
+        self.FileGroupBox.setEnabled(True)
+        self.ScanGroupBox.setEnabled(True)
+        self.ProcessingGroupBox.setEnabled(True)
+
+    def set_mode_acquiring(self):
+        self.ControlGroupBox.set_mode_acquiring()
+        self.ScanGroupBox.toggleScanningMode(True)
+        self.ProcessingGroupBox.toggleScanningMode(True)
+        self.FileGroupBox.setEnabled(False)
+        self.ScanGroupBox.setEnabled(False)
+        self.ProcessingGroupBox.setEnabled(False)
+
+    def set_mode_ready(self):
+        self.ControlGroupBox.set_mode_ready()
+        self.ScanGroupBox.toggleScanningMode(False)
+        self.ProcessingGroupBox.toggleScanningMode(False)
+        self.FileGroupBox.setEnabled(True)
+        self.ScanGroupBox.setEnabled(True)
+        self.ProcessingGroupBox.setEnabled(True)
 
     def _showRepeatProcessing(self):
         self.ProcessingGroupBox.setARepeatProcessingDisplay(self.ScanGroupBox.a_repeats)
@@ -1054,5 +1125,13 @@ class MainWindow(QMainWindow, UiWidget):
         return self._settings_dialog.lineStartTrigChName.text()
 
     @property
-    def frames_to_acquire(self):
+    def frames_to_acquire(self) -> int:
         return self.ControlGroupBox.frames_to_acquire
+
+    @property
+    def file_max_bytes(self) -> np.longlong:
+        return self.FileGroupBox.max_bytes
+
+    @property
+    def filename(self) -> str:
+        return self.FileGroupBox.filename
