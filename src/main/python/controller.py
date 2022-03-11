@@ -1,6 +1,7 @@
 import ctypes as c
 import numpy as np
 from numpy.ctypeslib import ndpointer
+import os
 
 
 c_bool_p = ndpointer(dtype=np.bool, ndim=1, flags='C_CONTIGUOUS')
@@ -30,6 +31,7 @@ class NIOCTController:
         self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int]
+        self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
 
         self._lib.nisdoct_get_state.restype = c.c_int
         self._lib.nisdoct_ready.restype = c.c_bool
@@ -141,11 +143,11 @@ class NIOCTController:
         """
         a_rpt_proc_flag = 0
         b_rpt_proc_flag = 0
-        # for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing), (a_rpt_proc_flag, a_rpt_proc_flag)):
-        #     if rpt_proc == 'average':
-        #         flag = 1
-        #     elif rpt_proc == 'difference':
-        #         flag = 2
+        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing), (a_rpt_proc_flag, a_rpt_proc_flag)):
+            if rpt_proc == 'average':
+                flag = 1
+            elif rpt_proc == 'difference':
+                flag = 2
         self._lib.nisdoct_configure_processing(
             bool(enabled),
             bool(subtract_background),
@@ -174,50 +176,53 @@ class NIOCTController:
             len(x)
         )
 
-    #
-    # def is_scanning(self):
-    #     """Returns bool indicating whether controller is actively imaging."""
-    #     return self._lib.NIOCT_is_scanning(self._handle)
-    #
-    # def is_saving(self):
-    #     """Returns bool indicating whether controller is streaming data to the disk."""
-    #     return self._lib.NIOCT_is_saving(self._handle)
-    #
-    # def is_ready_to_scan(self):
-    #     """Returns bool indicating whether controller is fully configured and ready to scan."""
-    #     return self._lib.NIOCT_is_ready_to_scan(self._handle)
-    #
-    # def start_scan(self):
-    #     """Start imaging without streaming any data to disk."""
-    #     self._lib.NIOCT_startScan(self._handle)
-    #
-    # def stop_scan(self):
-    #     """Halt any imaging or streaming taking place."""
-    #     self._lib.NIOCT_stopScan(self._handle)
-    #
-    # def start_save(self, file_name, max_bytes):
-    #     """Begins streaming a TIFF file to disk until scanning stops or stop_save is called.
-    #
-    #     Args:
-    #         file_name (str):Desired name of output file
-    #         max_bytes (int):Maximum size each file can be before a new one is created
-    #     """
-    #     self._lib.NIOCT_startSave(self._handle, file_name.split('.')[0].encode('utf-8'), int(max_bytes))
-    #
-    # def save_n(self, file_name, max_bytes, frames_to_save):
-    #     """Streams frames_to_save frames to disk.
-    #
-    #     Arg:
-    #         file_name (str): Desired name of output file.
-    #         max_bytes (int): Maximum size each file can be before a new one is created.
-    #         frames_to_save (int): Number of frames to save.
-    #     """
-    #     self._lib.NIOCT_saveN(self._handle, file_name.split('.')[0].encode('utf-8'), int(max_bytes), int(frames_to_save))
-    #
-    # def stop_save(self):
-    #     """Stop streaming data to disk."""
-    #     self._lib.NIOCT_stopSave(self._handle)
-    #
+    def start_scan(self):
+        """Starts scanning if system is ready."""
+        self._lib.nisdoct_start_scan()
+
+    def stop_scan(self):
+        """Stops scanning."""
+        self._lib.nisdoct_stop_scan()
+
+    def start_acquisition(self, file: str, max_bytes: np.longlong, frames_to_acquire: int = -1):
+        """Starts streaming arrays to disk at the path supplied by file.
+
+        Only successful if the controller is scanning.
+
+        Args:
+            file: Path on disk.
+            max_bytes: Maximum size of each file before starting a new one.
+            frames_to_acquire: The number of frames to acquire. If -1, acquisition continues until `stop_acquisition` is called.
+        """
+        self._lib.nisdoct_start_acquisition(
+            os.path.normpath(file),
+            np.longlong(max_bytes),
+            int(frames_to_acquire)
+        )
+
+    def stop_acquisition(self):
+        """Stops acquisition of a file. Will interrupt a numbered acquisition."""
+        self._lib.nisdoct_stop_acquisition()
+
+    def get_state(self) -> int:
+        """Get state of the controller as an integer.
+
+        Returns: 1 if UNOPENED, 2 if OPEN 3 if READY, 4 if SCANNING, 5 if ACQUIRING, 6 if ERROR.
+        """
+        return self._lib.nisdoct_get_state()
+
+    def ready(self) -> bool:
+        """Returns True if controller is in the READY state."""
+        return self._lib.nisdoct_ready()
+
+    def scanning(self) -> bool:
+        """Returns True if controller is in the SCANNING state."""
+        return self._lib.nisdoct_scanning()
+
+    def acquiring(self) -> bool:
+        """Returns True if controller is in the ACQUIRING state."""
+        return self._lib.nisdoct_acquiring()
+
     # def grab_frame(self, output):
     #     return self._lib.NIOCT_grabFrame(self._handle, output)
     #

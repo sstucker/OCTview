@@ -897,9 +897,6 @@ class MainWindow(QMainWindow, UiWidget):
 
     stop = pyqtSignal()  # Stop command
 
-    stop = pyqtSignal()  # Stop command
-
-
     def __init__(self):
         super().__init__()
 
@@ -937,9 +934,9 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.scan.connect(lambda: self.toggleScanningMode(True))
         self.ControlGroupBox.acquire.connect(lambda: self.toggleScanningMode(False))
 
-        self.ControlGroupBox.scan.connect(lambda: self.scan.emit)
-        self.ControlGroupBox.acquire.connect(lambda: self.acquire.emit)
-        self.ControlGroupBox.stop.connect(lambda: self.stop.emit)
+        self.ControlGroupBox.scan.connect(self.scan.emit)
+        self.ControlGroupBox.acquire.connect(self.acquire.emit)
+        self.ControlGroupBox.stop.connect(self.stop.emit)
 
         self._showRepeatProcessing()
 

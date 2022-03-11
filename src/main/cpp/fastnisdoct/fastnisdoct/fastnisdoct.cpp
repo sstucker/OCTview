@@ -10,8 +10,12 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
+#include <condition_variable>
 
 #include "spscqueue.h"
+
+
+#define IDLE_SLEEP_TIME 1000
 
 
 // msgs are passed into the main thread
@@ -29,6 +33,8 @@
 #define STATE_READY               static_cast<int>( 3 )
 #define STATE_SCANNING            static_cast<int>( 4 )
 #define STATE_ACQUIRIING		  static_cast<int>( 5 )
+#define STATE_ERROR				  static_cast<int>( 6 )
+
 
 
 struct state_msg {
@@ -36,7 +42,7 @@ struct state_msg {
 	int flag;
 	
 	const char* cam_name;
-	const char* ao_x_ch;
+	const char* ao_x_ch; 
 	const char* ao_y_ch;
 	const char* ao_lt_ch;
 	const char* ao_ft_ch;
@@ -68,11 +74,23 @@ struct state_msg {
 	int n_frames_to_acquire;
 };
 
+
 spsc_bounded_queue_t<state_msg> msg_queue(32);
+
+bool image_configured = false;
+bool processing_configured = false;
+bool scan_defined = false;
 
 std::atomic_int state = STATE_UNOPENED;
 
-void recv_msg()
+
+inline bool ready_to_scan()
+{
+	return (image_configured && processing_configured && scan_defined);
+}
+
+
+inline void recv_msg()
 {
 	state_msg msg;
 	if (msg_queue.dequeue(msg))
@@ -80,14 +98,29 @@ void recv_msg()
 		if (msg.flag & MSG_CONFIGURE_IMAGE)
 		{
 			printf("MSG_CONFIGURE_IMAGE received\n");
+			image_configured = true;
+			if (ready_to_scan())
+			{
+				state = STATE_READY;
+			}
 		}
 		else if (msg.flag & MSG_CONFIGURE_PROCESSING)
 		{
 			printf("MSG_CONFIGURE_PROCESSING received\n");
+			processing_configured = true;
+			if (ready_to_scan())
+			{
+				state = STATE_READY;
+			}
 		}
 		else if (msg.flag & MSG_SET_PATTERN)
 		{
 			printf("MSG_SET_PATTERN received\n");
+			scan_defined = true;
+			if (ready_to_scan())
+			{
+				state = STATE_READY;
+			}
 		}
 		else if (msg.flag & MSG_START_SCAN)
 		{
@@ -136,16 +169,30 @@ std::atomic_bool main_running = false;
 std::thread main_t;
 void _main()
 {
+	state = STATE_OPEN;
 	while (main_running)
 	{
-		Sleep(1000);
-		printf("Main is running. State is %i\n", state.load());
 		recv_msg();
+		if (state == STATE_UNOPENED || state == STATE_OPEN || state == STATE_READY)
+		{
+			Sleep(IDLE_SLEEP_TIME);  // Block for awhile if not scanning
+		}
+		else if (state == STATE_ERROR)
+		{
+			printf("Error!\n");
+			return;
+		}
+		else  // if SCANNING or ACQUIRING
+		{
+
+		}
+		printf("Main is running. State is %i\n", state.load());
+		fflush(stdout);
 	}
 }
 
 
-extern "C"
+extern "C"  // DLL interface. Functions should enqueue messages or interact with the main_t.
 {
 
 	__declspec(dllexport) void nisdoct_open(
@@ -264,7 +311,7 @@ extern "C"
 
 	__declspec(dllexport) void nisdoct_start_acquisition(
 		const char* file,
-		int max_bytes,
+		long long max_bytes,
 		int n_frames_to_acquire
 	)
 	{
@@ -292,38 +339,17 @@ extern "C"
 
 	__declspec(dllexport) bool nisdoct_ready()
 	{
-		if (state.load() == STATE_READY)
-		{
-			return true;
-		}
-		else
-		{
-			return false;
-		}
+		return (state.load() == STATE_READY);
 	}
 
 	__declspec(dllexport) bool nisdoct_scanning()
 	{
-		if (state.load() == STATE_SCANNING)
-		{
-			return true;
-		}
-		else
-		{
-			return false;
-		}
+		return (state.load() == STATE_SCANNING);
 	}
 
 	__declspec(dllexport) bool nisdoct_acquiring()
 	{
-		if (state.load() == STATE_ACQUIRIING)
-		{
-			return true;
-		}
-		else
-		{
-			return false;
-		}
+		return (state.load() == STATE_ACQUIRIING);
 	}
 
 }

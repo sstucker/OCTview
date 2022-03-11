@@ -35,16 +35,30 @@ class _AppContext(ApplicationContext):
         self.window = MainWindow()
         self.window.setWindowTitle(self.name + ' v' + self.version)
         self.window.resize(250, 150)
+
+        # Connect MainWindow signals to backend interface
         self.window.reload_required.connect(self.load)
+        self.window.scan.connect(self._start_scan)
+        # self.window.acquire.connect(self._start_acquisition)
+        self.window.stop.connect(self._stop)
+        self.window.closed.connect(self._close_controller)
+
         self.load()
         self._open_controller()
         self._configure_image()
         self._configure_processing()
+        self._update_scan_pattern()
         self.window.show()
 
         return self.app.exec_()
 
     # -- Backend interface ------------------------------------------------
+
+    def _start_scan(self):
+        self.controller.start_scan()
+
+    def _stop_scan(self):
+        self.controller.start_scan()
 
     def _open_controller(self):
         # Could switch between various backends here if you wanted
@@ -59,7 +73,7 @@ class _AppContext(ApplicationContext):
         )
 
     def _close_controller(self):
-        self.window.controller.close()
+        self.controller.close()
 
     def _configure_image(self):
         (zstart, zstop) = self.window.zroi
@@ -94,6 +108,16 @@ class _AppContext(ApplicationContext):
             self.window.scan_pattern.line_trigger,
             self.window.scan_pattern.frame_trigger,
         )
+
+    def _start_scanning(self):
+        self.controller.start_scan()
+
+    # def _start_acquisition(self):
+    #     self.controller.start_acquisition()
+
+    def _stop(self):
+        self.controller.stop_acquisition()
+        self.controller.stop_scan()
 
 
 # Module interface
