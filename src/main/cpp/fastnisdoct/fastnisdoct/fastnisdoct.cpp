@@ -11,8 +11,10 @@
 #include <thread>
 #include <chrono>
 #include <condition_variable>
+#include <mutex>
 
 #include "spscqueue.h"
+#include "AlineProcessingPool.h"
 #include <complex>
 
 #define IDLE_SLEEP_TIME 1000
@@ -65,7 +67,7 @@ struct state_msg {
 	int number_of_buffers;
 	int roi_offset;
 	int roi_size;
-	bool enabled;
+	bool fft_enabled;
 	bool subtract_background;
 	bool interp;
 	double intpdk;
@@ -91,10 +93,12 @@ bool scan_defined = false;
 
 std::atomic_int state = STATE_UNOPENED;
 
+
 inline bool ready_to_scan()
 {
 	return (image_configured && processing_configured && scan_defined);
 }
+
 
 inline void recv_msg()
 {
@@ -170,6 +174,7 @@ inline void recv_msg()
 		// printf("Queue was empty.\n");
 	}
 }
+
 
 std::atomic_bool main_running = false;
 std::thread main_t;
@@ -256,7 +261,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	}
 
 	__declspec(dllexport) void nisdoct_configure_processing(
-		bool enabled,
+		bool fft_enabled,
 		bool subtract_background,
 		bool interp,
 		double intpdk,
@@ -267,7 +272,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	)
 	{
 		printf("nisdoct_configure_processing\n");
-		printf("enabled: %i\n", enabled);
+		printf("fft_enabled: %i\n", fft_enabled);
 		printf("subtract_background: %i\n", subtract_background);
 		printf("interp: %i\n", interp);
 		printf("intpdk: %f\n", intpdk);

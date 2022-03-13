@@ -643,7 +643,6 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.groupFrameProcessing.setEnabled(not scanning)
         self.groupARepeatProcessing.setEnabled(not scanning)
         self.groupBRepeatProcessing.setEnabled(not scanning)
-        self.setCheckable(not scanning)
 
     @property
     def enabled(self):
@@ -870,7 +869,7 @@ class DisplayWidget(QWidget, UiWidget):
 
         self._timer = QTimer()
         self._timer.timeout.connect(self._update)
-        self._timer.start(100)
+        self._timer.start(1000)
 
     def _enfaceMIPCheckChanged(self):
         self._bscan.setHSliderHidden(self.checkEnfaceMIP.isChecked())
@@ -1021,6 +1020,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.FileGroupBox.setEnabled(True)
         self.ScanGroupBox.setEnabled(True)
         self.ProcessingGroupBox.setEnabled(True)
+        self.menubar.setEnabled(False)
 
     def set_mode_acquiring(self):
         self.ControlGroupBox.set_mode_acquiring()
@@ -1029,6 +1029,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.FileGroupBox.setEnabled(False)
         self.ScanGroupBox.setEnabled(False)
         self.ProcessingGroupBox.setEnabled(False)
+        self.menubar.setEnabled(False)
 
     def set_mode_ready(self):
         self.ControlGroupBox.set_mode_ready()
@@ -1037,6 +1038,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.FileGroupBox.setEnabled(True)
         self.ScanGroupBox.setEnabled(True)
         self.ProcessingGroupBox.setEnabled(True)
+        self.menubar.setEnabled(True)
 
     def _showRepeatProcessing(self):
         self.ProcessingGroupBox.setARepeatProcessingDisplay(self.ScanGroupBox.a_repeats)

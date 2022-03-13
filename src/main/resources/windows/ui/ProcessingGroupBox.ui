@@ -17,86 +17,10 @@
    <string>Processing</string>
   </property>
   <property name="checkable">
-   <bool>true</bool>
+   <bool>false</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="2" column="1">
-    <widget class="QCheckBox" name="checkApodization">
-     <property name="toolTip">
-      <string>If checked, spectra will be DC-subtracted and then multiplied by a window function</string>
-     </property>
-     <property name="text">
-      <string>Apodization</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="1" colspan="2">
-    <widget class="QCheckBox" name="checkInterpolation">
-     <property name="toolTip">
-      <string>If true, linear-in-wavenumber values are interpolated (1st order) from linear-in-wavelength spectra</string>
-     </property>
-     <property name="text">
-      <string>Lambda-k interpolation</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-     <property name="tristate">
-      <bool>false</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="3">
-    <widget class="QLabel" name="labelInterpDk">
-     <property name="layoutDirection">
-      <enum>Qt::RightToLeft</enum>
-     </property>
-     <property name="text">
-      <string>𝛿𝑘</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
-   <item row="2" column="3">
-    <widget class="QLabel" name="labelApodization">
-     <property name="text">
-      <string>Window type</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-     </property>
-    </widget>
-   </item>
    <item row="2" column="5">
-    <widget class="QComboBox" name="comboApodization">
-     <item>
-      <property name="text">
-       <string>Hanning</string>
-      </property>
-     </item>
-     <item>
-      <property name="text">
-       <string>Blackman</string>
-      </property>
-     </item>
-    </widget>
-   </item>
-   <item row="0" column="1" colspan="2">
-    <widget class="QCheckBox" name="checkMeanSpectrumSubtraction">
-     <property name="text">
-      <string>Mean spectrum subtraction</string>
-     </property>
-     <property name="checked">
-      <bool>true</bool>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="5">
     <widget class="QDoubleSpinBox" name="spinInterpDk">
      <property name="layoutDirection">
       <enum>Qt::LeftToRight</enum>
@@ -118,91 +42,83 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="1" colspan="5">
-    <widget class="QGroupBox" name="groupARepeatProcessing">
-     <property name="title">
-      <string>A-line Repeat Processing</string>
-     </property>
-     <property name="flat">
-      <bool>true</bool>
-     </property>
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <widget class="QRadioButton" name="radioARepeatNone">
-        <property name="text">
-         <string>None</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioARepeatDifference">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Difference</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioARepeatAverage">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Average</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
+   <item row="3" column="5">
+    <widget class="QComboBox" name="comboApodization">
+     <item>
+      <property name="text">
+       <string>Hanning</string>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Blackman</string>
+      </property>
+     </item>
     </widget>
    </item>
-   <item row="4" column="1" colspan="5">
-    <widget class="QGroupBox" name="groupBRepeatProcessing">
-     <property name="title">
-      <string>B-line Repeat Processing</string>
+   <item row="3" column="1">
+    <widget class="QCheckBox" name="checkApodization">
+     <property name="toolTip">
+      <string>If checked, spectra will be DC-subtracted and then multiplied by a window function</string>
      </property>
-     <property name="flat">
+     <property name="text">
+      <string>Apodization</string>
+     </property>
+     <property name="checked">
       <bool>true</bool>
      </property>
-     <layout class="QHBoxLayout" name="horizontalLayout_3">
-      <item>
-       <widget class="QRadioButton" name="radioBRepeatNone">
-        <property name="text">
-         <string>None</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioBRepeatDifference">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Difference</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioBRepeatAverage">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="text">
-         <string>Average</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
     </widget>
    </item>
-   <item row="5" column="1" colspan="5">
+   <item row="3" column="3">
+    <widget class="QLabel" name="labelApodization">
+     <property name="text">
+      <string>Window type</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1" colspan="2">
+    <widget class="QCheckBox" name="checkMeanSpectrumSubtraction">
+     <property name="text">
+      <string>Mean spectrum subtraction</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="1" colspan="2">
+    <widget class="QCheckBox" name="checkInterpolation">
+     <property name="toolTip">
+      <string>If true, linear-in-wavenumber values are interpolated (1st order) from linear-in-wavelength spectra</string>
+     </property>
+     <property name="text">
+      <string>Lambda-k interpolation</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
+     <property name="tristate">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item row="2" column="3">
+    <widget class="QLabel" name="labelInterpDk">
+     <property name="layoutDirection">
+      <enum>Qt::RightToLeft</enum>
+     </property>
+     <property name="text">
+      <string>𝛿𝑘</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item row="7" column="1" colspan="5">
     <widget class="QGroupBox" name="groupFrameProcessing">
      <property name="title">
       <string>Frame processing</string>
@@ -251,6 +167,100 @@
        </widget>
       </item>
      </layout>
+    </widget>
+   </item>
+   <item row="5" column="1" colspan="5">
+    <widget class="QGroupBox" name="groupARepeatProcessing">
+     <property name="title">
+      <string>A-line Repeat Processing</string>
+     </property>
+     <property name="flat">
+      <bool>true</bool>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <item>
+       <widget class="QRadioButton" name="radioARepeatNone">
+        <property name="text">
+         <string>None</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="radioARepeatDifference">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Difference</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="radioARepeatAverage">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Average</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="6" column="1" colspan="5">
+    <widget class="QGroupBox" name="groupBRepeatProcessing">
+     <property name="title">
+      <string>B-line Repeat Processing</string>
+     </property>
+     <property name="flat">
+      <bool>true</bool>
+     </property>
+     <layout class="QHBoxLayout" name="horizontalLayout_3">
+      <item>
+       <widget class="QRadioButton" name="radioBRepeatNone">
+        <property name="text">
+         <string>None</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="radioBRepeatDifference">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Difference</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QRadioButton" name="radioBRepeatAverage">
+        <property name="enabled">
+         <bool>true</bool>
+        </property>
+        <property name="text">
+         <string>Average</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="4" column="1">
+    <widget class="QCheckBox" name="checkFFT">
+     <property name="text">
+      <string>FFT</string>
+     </property>
+     <property name="checked">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
   </layout>

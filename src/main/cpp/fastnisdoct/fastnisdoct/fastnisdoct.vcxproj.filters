@@ -26,5 +26,11 @@
     <ClInclude Include="spscqueue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="AlineProcessingPool.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WavenumberInterpolationPlan.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
