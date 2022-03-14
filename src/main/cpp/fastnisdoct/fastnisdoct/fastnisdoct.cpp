@@ -15,6 +15,7 @@
 
 #include "spscqueue.h"
 #include "AlineProcessingPool.h"
+#include "ni.h"
 #include <complex>
 
 #define IDLE_SLEEP_TIME 1000
@@ -85,14 +86,46 @@ struct state_msg {
 	int n_frames_to_acquire;
 };
 
+inline void printf_state_data(state_msg s)
+{
+	printf("camera name: %s\n", s.cam_name);
+	printf("ao x galvo name: %s\n", s.ao_x_ch);
+	printf("ao y galvo name: %s\n", s.ao_y_ch);
+	printf("ao lt galvo name: %s\n", s.ao_lt_ch);
+	printf("ao ft galvo name: %s\n", s.ao_ft_ch);
+	printf("ao st galvo name: %s\n", s.ao_st_ch);
+	printf("dac_output_rate: %i\n", s.dac_output_rate);
+	printf("aline_size: %i\n", s.aline_size);
+	printf("number_of_alines: %i\n", s.number_of_alines);
+	printf("alines_per_b: %i\n", s.alines_per_b);
+	printf("aline_repeat: %i\n", s.aline_repeat);
+	printf("bline_repeat: %i\n", s.bline_repeat);
+	printf("number_of_buffers: %i\n", s.number_of_buffers);
+	printf("roi_offset: %i\n", s.roi_offset);
+	printf("roi_size: %i\n", s.roi_size);
+	printf("fft_enabled: %i\n", s.fft_enabled);
+	printf("subtract_background: %i\n", s.subtract_background);
+	printf("interp: %i\n", s.interp);
+	printf("intpdk: %f\n", s.intpdk);
+	printf("apod_window: <%p>\n", s.apod_window);
+	printf("a_rpt_proc_flag: %i\n", s.a_rpt_proc_flag);
+	printf("b_rpt_proc_flag: %i\n", s.b_rpt_proc_flag);
+	printf("n_frame_avg: %i\n", s.n_frame_avg);
+	printf("file: %s\n", s.file);
+	printf("max_bytes (in GB): %i\n", s.max_bytes / (long long)1073741824);
+	printf("n_frames_to_acquire: %i\n", s.n_frames_to_acquire);
+}
+
 spsc_bounded_queue_t<state_msg> msg_queue(32);
+
+AlineProcessingPool* aline_processing_pool;
 
 bool image_configured = false;
 bool processing_configured = false;
 bool scan_defined = false;
 
 std::atomic_int state = STATE_UNOPENED;
-
+state_msg state_data;
 
 inline bool ready_to_scan()
 {
@@ -108,6 +141,17 @@ inline void recv_msg()
 		if (msg.flag & MSG_CONFIGURE_IMAGE)
 		{
 			printf("MSG_CONFIGURE_IMAGE received\n");
+
+			state_data.dac_output_rate = msg.dac_output_rate;
+			state_data.aline_size = msg.aline_size;
+			state_data.number_of_alines = msg.number_of_alines;
+			state_data.alines_per_b = msg.alines_per_b;
+			state_data.aline_repeat = msg.aline_repeat;
+			state_data.bline_repeat = msg.bline_repeat;
+			state_data.number_of_buffers = msg.number_of_buffers;
+			state_data.roi_offset = msg.roi_offset;
+			state_data.roi_size = msg.roi_size;
+
 			image_configured = true;
 			if (ready_to_scan() && state != STATE_SCANNING)
 			{
@@ -117,10 +161,36 @@ inline void recv_msg()
 		else if (msg.flag & MSG_CONFIGURE_PROCESSING)
 		{
 			printf("MSG_CONFIGURE_PROCESSING received\n");
-			processing_configured = true;
-			if (ready_to_scan() && state != STATE_SCANNING)
+			if (image_configured)  // Image must be configured before processing can be
 			{
-				state = STATE_READY;
+				state_data.fft_enabled = msg.fft_enabled;
+				state_data.subtract_background = msg.subtract_background;
+				state_data.interp = msg.interp;
+				state_data.intpdk = msg.intpdk;
+				state_data.apod_window = msg.apod_window;
+				state_data.a_rpt_proc_flag = msg.a_rpt_proc_flag;
+				state_data.b_rpt_proc_flag = msg.b_rpt_proc_flag;
+				state_data.n_frame_avg = msg.n_frame_avg;
+
+				// Initialize the AlineProcessingPool. This creates an FFTW plan and may take a long time.
+				aline_processing_pool = new AlineProcessingPool(
+					state_data.aline_size,
+					state_data.number_of_alines,
+					state_data.roi_offset,
+					state_data.roi_size,
+					msg.subtract_background,
+					msg.interp,
+					msg.fft_enabled,
+					msg.intpdk,
+					msg.apod_window
+				);
+
+				processing_configured = true;
+
+				if (ready_to_scan() && state != STATE_SCANNING)
+				{
+					state = STATE_READY;
+				}
 			}
 		}
 		else if (msg.flag & MSG_SET_PATTERN)
@@ -138,6 +208,7 @@ inline void recv_msg()
 			if (state.load() == STATE_READY)
 			{
 				state.store(STATE_SCANNING);
+				aline_processing_pool->start();
 			}
 		}
 		else if (msg.flag & MSG_STOP_SCAN)
@@ -145,6 +216,7 @@ inline void recv_msg()
 			printf("MSG_STOP_SCAN received\n");
 			if (state.load() == STATE_SCANNING)
 			{
+				aline_processing_pool->terminate();
 				state.store(STATE_READY);
 			}
 		}
@@ -214,14 +286,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		const char* ao_st_ch
 	)
 	{
-		printf("nisdoct_open\n");
-		printf("camera name: %s\n", cam_name);
-		printf("ao x galvo name: %s\n", ao_x_ch);
-		printf("ao y galvo name: %s\n", ao_y_ch);
-		printf("ao lt galvo name: %s\n", ao_lt_ch);
-		printf("ao ft galvo name: %s\n", ao_ft_ch);
-		printf("ao st galvo name: %s\n", ao_st_ch);
-
 		main_running = true;
 		main_t = std::thread(&_main);
 	}
@@ -230,6 +294,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	{
 		main_running = false;
 		main_t.join();
+		delete aline_processing_pool;
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(
@@ -244,18 +309,16 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int roi_size
 	)
 	{
-		printf("nisdoct_configure_image\n");
-		printf("dac_output_rate: %i\n", dac_output_rate);
-		printf("aline_size: %i\n", aline_size);
-		printf("number_of_alines: %i\n", number_of_alines);
-		printf("alines_per_b: %i\n", alines_per_b);
-		printf("aline_repeat: %i\n", aline_repeat);
-		printf("bline_repeat: %i\n", bline_repeat);
-		printf("number_of_buffers: %i\n", number_of_buffers);
-		printf("roi_offset: %i\n", roi_offset);
-		printf("roi_size: %i\n", roi_size);
-
 		state_msg msg;
+		msg.dac_output_rate = dac_output_rate;
+		msg.aline_size = aline_size;
+		msg.number_of_alines = number_of_alines;
+		msg.alines_per_b = alines_per_b;
+		msg.aline_repeat = aline_repeat;
+		msg.bline_repeat = bline_repeat;
+		msg.number_of_buffers = number_of_buffers;
+		msg.roi_offset = roi_offset;
+		msg.roi_size = roi_size;
 		msg.flag = MSG_CONFIGURE_IMAGE;
 		msg_queue.enqueue(msg);
 	}
@@ -271,17 +334,15 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int n_frame_avg
 	)
 	{
-		printf("nisdoct_configure_processing\n");
-		printf("fft_enabled: %i\n", fft_enabled);
-		printf("subtract_background: %i\n", subtract_background);
-		printf("interp: %i\n", interp);
-		printf("intpdk: %f\n", intpdk);
-		printf("apod_window: <%p>\n", apod_window);
-		printf("a_rpt_proc_flag: %i\n", a_rpt_proc_flag);
-		printf("b_rpt_proc_flag: %i\n", b_rpt_proc_flag);
-		printf("n_frame_avg: %i\n", n_frame_avg);
-
 		state_msg msg;
+		msg.fft_enabled = fft_enabled;
+		msg.subtract_background = subtract_background;
+		msg.interp = interp;
+		msg.intpdk = intpdk;
+		msg.apod_window = apod_window;
+		msg.a_rpt_proc_flag = a_rpt_proc_flag;
+		msg.b_rpt_proc_flag = b_rpt_proc_flag;
+		msg.n_frame_avg = n_frame_avg;
 		msg.flag = MSG_CONFIGURE_PROCESSING;
 		msg_queue.enqueue(msg);
 	}
@@ -294,9 +355,12 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int n_samples
 	)
 	{
-		printf("nisdoct_set_pattern\n");
-
 		state_msg msg;
+		msg.x = x;
+		msg.y = y;
+		msg.line_trigger = line_trigger;
+		msg.frame_trigger = frame_trigger;
+		msg.n_samples = n_samples;
 		msg.flag = MSG_SET_PATTERN;
 		msg_queue.enqueue(msg);
 	}
@@ -325,12 +389,10 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int n_frames_to_acquire
 	)
 	{
-		printf("nisdoct_start_acquisition\n");
-		printf("file: %s\n", file);
-		printf("max_bytes (in GB): %i\n", max_bytes / (long long)1073741824);
-		printf("n_frames_to_acquire: %i\n", n_frames_to_acquire);
-
 		state_msg msg;
+		msg.file = file;
+		msg.max_bytes = max_bytes;
+		msg.n_frames_to_acquire = n_frames_to_acquire;
 		msg.flag = MSG_START_ACQUISITION;
 		msg_queue.enqueue(msg);
 	}

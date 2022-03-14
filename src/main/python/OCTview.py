@@ -61,7 +61,7 @@ class _AppContext(ApplicationContext):
 
     def _update(self):
         state = self.controller.state
-        print('State', state)
+        # print('State', state)
         if state == 'scanning':
             self.window.set_mode_scanning()
         elif state == 'acquiring':
