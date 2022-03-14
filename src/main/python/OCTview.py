@@ -1,5 +1,5 @@
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
-from PyQt5.QtCore import QTimer
+from PyQt5.QtCore import QTimer, Qt
 from controller import NIOCTController
 from widgets import MainWindow
 import sys
@@ -18,6 +18,8 @@ class _AppContext(ApplicationContext):
         self.ui_resource_location = str(self.get_resource('ui'))
         self.config_resource_location = str(self.get_resource('configurations'))
         self.lib_resource_location = str(self.get_resource('lib'))
+
+        self.app.setAttribute(Qt.AA_EnableHighDpiScaling)
 
         # Assigned on run
         self.window = None  # Qt window
@@ -38,7 +40,7 @@ class _AppContext(ApplicationContext):
 
         # Connect MainWindow signals to backend interface
         self.window.reload_required.connect(self.load)
-        self.window.scan.connect(self._start_scan)
+        self.window.scan.connect(self._start_scanning)
         self.window.acquire.connect(self._start_acquisition)
         self.window.stop.connect(self._stop)
         self.window.closed.connect(self._close_controller)
@@ -70,12 +72,6 @@ class _AppContext(ApplicationContext):
             self.window.set_mode_ready()
 
     # -- Backend interface ------------------------------------------------
-
-    def _start_scan(self):
-        self.controller.start_scan()
-
-    def _stop_scan(self):
-        self.controller.start_scan()
 
     def _open_controller(self):
         # Could switch between various backends here if you wanted
@@ -119,6 +115,8 @@ class _AppContext(ApplicationContext):
         )
 
     def _update_scan_pattern(self):
+        # if self.controller.state != 'scanning' and self.controller.state != 'acquiring':
+        #     self._configure_image()
         self.controller.set_scan(
             self.window.scan_pattern.x,
             self.window.scan_pattern.y,

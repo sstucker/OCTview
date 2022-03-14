@@ -28,7 +28,7 @@ void aline_processing_worker(std::atomic_bool* running, JobQueue* queue)
 {
 	while (running->load() == true)
 	{
-		printf("Worker %i is working...\n", std::this_thread::get_id());
+		// printf("Worker %i is working...\n", std::this_thread::get_id());
 		aline_processing_job_msg msg;
 		if (queue->dequeue(msg))
 		{
@@ -36,7 +36,7 @@ void aline_processing_worker(std::atomic_bool* running, JobQueue* queue)
 		}
 		else
 		{
-			printf("Queue was empty!\n");
+			// printf("Queue was empty!\n");
 		}
 		Sleep(1000);
 		fflush(stdout);

@@ -32,8 +32,14 @@
    </item>
    <item row="0" column="0" colspan="4">
     <widget class="QTabWidget" name="tabDisplay">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="tab2D">
       <attribute name="title">
@@ -51,7 +57,14 @@
         </widget>
        </item>
        <item>
-        <widget class="QWidget" name="BScanWidget" native="true"/>
+        <widget class="QWidget" name="BScanWidget" native="true">
+         <property name="sizePolicy">
+          <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+           <horstretch>0</horstretch>
+           <verstretch>0</verstretch>
+          </sizepolicy>
+         </property>
+        </widget>
        </item>
        <item>
         <layout class="QHBoxLayout" name="layoutBScan">

@@ -168,6 +168,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AlineProcessingPool.h" />
+    <ClInclude Include="CircAcqBuffer.h" />
     <ClInclude Include="spscqueue.h" />
     <ClInclude Include="WavenumberInterpolationPlan.h" />
   </ItemGroup>

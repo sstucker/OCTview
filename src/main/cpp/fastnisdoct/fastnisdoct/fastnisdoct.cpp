@@ -15,6 +15,7 @@
 
 #include "spscqueue.h"
 #include "AlineProcessingPool.h"
+#include "CircAcqBuffer.h"
 #include "ni.h"
 #include <complex>
 
@@ -127,6 +128,9 @@ bool scan_defined = false;
 std::atomic_int state = STATE_UNOPENED;
 state_msg state_data;
 
+CircAcqBuffer<uint16_t>* raw_frame_buffer = NULL;
+CircAcqBuffer<std::complex<float>>* processed_alines_buffer = NULL;
+
 inline bool ready_to_scan()
 {
 	return (image_configured && processing_configured && scan_defined);
@@ -141,6 +145,8 @@ inline void recv_msg()
 		if (msg.flag & MSG_CONFIGURE_IMAGE)
 		{
 			printf("MSG_CONFIGURE_IMAGE received\n");
+			image_configured = false;
+			state = STATE_OPEN;
 
 			state_data.dac_output_rate = msg.dac_output_rate;
 			state_data.aline_size = msg.aline_size;
@@ -151,6 +157,14 @@ inline void recv_msg()
 			state_data.number_of_buffers = msg.number_of_buffers;
 			state_data.roi_offset = msg.roi_offset;
 			state_data.roi_size = msg.roi_size;
+
+			float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * msg.aline_size * msg.number_of_alines) + (sizeof(std::complex<float>) * msg.roi_size * msg.number_of_alines) + (sizeof(std::complex<float>) * msg.roi_size * (msg.number_of_alines / msg.aline_repeat)));
+
+			printf("Allocating 3 ring buffers, total size %f GB...\n", total_buffer_size / 1073741824.0);
+			// printf_state_data(state_data);
+			raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
+			processed_alines_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, state_data.roi_size * state_data.number_of_alines);
+			printf("Buffers allocated.\n");
 
 			image_configured = true;
 			if (ready_to_scan() && state != STATE_SCANNING)

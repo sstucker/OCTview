@@ -742,7 +742,8 @@ class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
         # self._grid = pyqtgraph.opengl.GLGridItem()
         self._axis = pyqtgraph.opengl.GLAxisItem()
 
-        self.setFixedSize(self.minimumSize())
+        # self.setFixedSize(self.minimumSize())
+        self.resize(100, 100)
 
         img = np.random.random([128, 128, 200])
         data = np.empty(img.shape + (4,), dtype=np.ubyte)
@@ -772,7 +773,8 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
     def __init__(self, title=None, hslider=False, vslider=False):
         super().__init__()
 
-        # self.setFixedSize(self.minimumSize())
+        self.setFixedSize(self.minimumSize())
+        # self.resize(100, 100)
 
         self._plot = self.addPlot()
         self._plot.setAspectLocked(True)

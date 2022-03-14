@@ -32,41 +32,31 @@
    <enum>QTabWidget::Triangular</enum>
   </property>
   <widget class="QWidget" name="centralWidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <layout class="QGridLayout" name="gridLayout">
     <property name="sizeConstraint">
      <enum>QLayout::SetFixedSize</enum>
     </property>
-    <item row="1" column="1">
-     <layout class="QGridLayout" name="centralLayout">
-      <property name="sizeConstraint">
-       <enum>QLayout::SetFixedSize</enum>
+    <item row="1" column="0">
+     <spacer name="horizontalSpacer">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
       </property>
-      <item row="0" column="0" colspan="2">
-       <widget class="QWidget" name="ScanGroupBox" native="true"/>
-      </item>
-      <item row="1" column="1">
-       <widget class="QWidget" name="SpectrumWidget" native="true"/>
-      </item>
-      <item row="0" column="2" rowspan="4" colspan="2">
-       <widget class="QWidget" name="DisplayWidget" native="true">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="0">
-       <widget class="QWidget" name="ProcessingGroupBox" native="true"/>
-      </item>
-      <item row="2" column="0" colspan="2">
-       <widget class="QWidget" name="FileGroupBox" native="true"/>
-      </item>
-      <item row="3" column="0" colspan="2">
-       <widget class="QWidget" name="ControlGroupBox" native="true"/>
-      </item>
-     </layout>
+      <property name="sizeType">
+       <enum>QSizePolicy::Maximum</enum>
+      </property>
+      <property name="sizeHint" stdset="0">
+       <size>
+        <width>8</width>
+        <height>0</height>
+       </size>
+      </property>
+     </spacer>
     </item>
     <item row="0" column="1">
      <spacer name="verticalSpacer">
@@ -84,21 +74,43 @@
       </property>
      </spacer>
     </item>
-    <item row="1" column="0">
-     <spacer name="horizontalSpacer">
-      <property name="orientation">
-       <enum>Qt::Horizontal</enum>
+    <item row="1" column="1">
+     <layout class="QGridLayout" name="centralLayout">
+      <property name="sizeConstraint">
+       <enum>QLayout::SetFixedSize</enum>
       </property>
-      <property name="sizeType">
-       <enum>QSizePolicy::Maximum</enum>
-      </property>
-      <property name="sizeHint" stdset="0">
-       <size>
-        <width>8</width>
-        <height>0</height>
-       </size>
-      </property>
-     </spacer>
+      <item row="1" column="0">
+       <widget class="QWidget" name="ProcessingGroupBox" native="true"/>
+      </item>
+      <item row="2" column="0" colspan="2">
+       <widget class="QWidget" name="FileGroupBox" native="true"/>
+      </item>
+      <item row="3" column="0" colspan="2">
+       <widget class="QWidget" name="ControlGroupBox" native="true"/>
+      </item>
+      <item row="0" column="0" colspan="2">
+       <widget class="QWidget" name="ScanGroupBox" native="true"/>
+      </item>
+      <item row="1" column="1">
+       <widget class="QWidget" name="SpectrumWidget" native="true"/>
+      </item>
+      <item row="0" column="2" rowspan="4">
+       <widget class="QWidget" name="DisplayWidget" native="true">
+        <property name="sizePolicy">
+         <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
+          <horstretch>0</horstretch>
+          <verstretch>0</verstretch>
+         </sizepolicy>
+        </property>
+        <property name="maximumSize">
+         <size>
+          <width>16777215</width>
+          <height>960</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </item>
    </layout>
   </widget>
@@ -116,7 +128,7 @@
      <x>0</x>
      <y>0</y>
      <width>712</width>
-     <height>17</height>
+     <height>21</height>
     </rect>
    </property>
    <widget class="QMenu" name="menuPreferences">
