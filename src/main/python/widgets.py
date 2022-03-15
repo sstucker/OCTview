@@ -156,23 +156,18 @@ class ScanWidget(QWidget):
     def generate_pattern(self):
         raise NotImplementedError()
 
-    @property
     def x(self):
         return self._pattern.x
 
-    @property
     def y(self):
         return self._pattern.y
 
-    @property
     def line_trigger(self):
         return self._pattern.line_trigger
 
-    @property
     def frame_trigger(self):
         return self._pattern.frame_trigger
 
-    @property
     def pattern(self):
         return self._pattern
 
@@ -265,14 +260,12 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.checkSquareScan.setEnabled(not fixed)
         self.buttonSettings.setEnabled(not fixed)
 
-    @property
     def a_repeats(self):
         if self.checkARepeat.isChecked():
             return self.spinARepeat.value()
         else:
             return 0
 
-    @property
     def b_repeats(self):
         if self.checkBRepeat.isChecked():
             return self.spinBRepeat.value()
@@ -408,7 +401,6 @@ class ControlGroupBox(QGroupBox, UiWidget):
         else:
             self.spinFramesToAcquire.setSuffix(' frame')
 
-    @property
     def frames_to_acquire(self):
         if self.checkNumberedAcquisition.isChecked():
             return self.spinFramesToAcquire.value()
@@ -474,37 +466,29 @@ class ScanGroupBox(QGroupBox, UiWidget):
         self.comboScanPattern.setEnabled(not scanning_mode)
         self.labelScanPatternType.setEnabled(not scanning_mode)
 
-    @property
     def x(self):
-        return self.pattern.x
+        return self.pattern.x()
 
-    @property
     def y(self):
-        return self.pattern.y
+        return self.pattern.y()
 
-    @property
     def line_trigger(self):
-        return self.pattern.line_trigger
+        return self.pattern.line_trigger()
 
-    @property
     def frame_trigger(self):
-        return self.pattern.frame_trigger
+        return self.pattern.frame_trigger()
 
-    @property
     def zroi(self):
         return self.spinZTop.value(), self.spinZBottom.value()
 
-    @property
     def pattern(self):
-        return self.ScanWidget.pattern
+        return self.ScanWidget.pattern()
 
-    @property
     def a_repeats(self):
-        return self.ScanWidget.a_repeats
+        return self.ScanWidget.a_repeats()
 
-    @property
     def b_repeats(self):
-        return self.ScanWidget.b_repeats
+        return self.ScanWidget.b_repeats()
 
 
 class ScanDisplayWindow(QFrame):
@@ -571,27 +555,21 @@ class FileGroupBox(QGroupBox, UiWidget):
         self._directory = str(QFileDialog.getExistingDirectory(self, "Select Experiment Directory", self._directory))
         self.lineDirectory.setText(self._directory)
 
-    @property
     def directory(self):
         return self._directory
 
-    @property
     def trial(self):
         return self._file_name
 
-    @property
     def filename(self):
         return os.path.join(self.directory, self.trial)
 
-    @property
     def save_metadata(self):
         return self.checkMetadata.isChecked()
 
-    @property
     def filetype(self):
         return self.comboFileType.currentIndex()
 
-    @property
     def max_bytes(self) -> int:
         txt = self.comboFileSize.currentText()
         units = {
@@ -644,23 +622,18 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.groupARepeatProcessing.setEnabled(not scanning)
         self.groupBRepeatProcessing.setEnabled(not scanning)
 
-    @property
     def enabled(self):
         return self.isChecked()
 
-    @property
     def background_subtraction(self):
         return self.checkMeanSpectrumSubtraction.isChecked()
 
-    @property
     def interpolation(self):
         return self.checkInterpolation.isChecked()
 
-    @property
     def interpdk(self):
         return self.spinInterpDk.value()
 
-    @property
     def apodization_window(self) -> callable:
         """Returns function which defines the apodization window. Takes A-line size as an argument."""
         if self.checkApodization.isChecked() and self.isChecked():
@@ -668,7 +641,6 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         else:
             return self._null_window
 
-    @property
     def a_repeat_processing(self):
         if self.radioARepeatNone.isChecked():
             return None
@@ -679,7 +651,6 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         else:
             return None
 
-    @property
     def b_repeat_processing(self):
         if self.radioBRepeatNone.isChecked():
             return None
@@ -690,7 +661,6 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         else:
             return None
 
-    @property
     def frame_averaging(self):
         if not self.radioFrameAverage.isChecked():
             return 0
@@ -1043,99 +1013,76 @@ class MainWindow(QMainWindow, UiWidget):
         self.menubar.setEnabled(True)
 
     def _showRepeatProcessing(self):
-        self.ProcessingGroupBox.setARepeatProcessingDisplay(self.ScanGroupBox.a_repeats)
-        self.ProcessingGroupBox.setBRepeatProcessingDisplay(self.ScanGroupBox.b_repeats)
+        self.ProcessingGroupBox.setARepeatProcessingDisplay(self.ScanGroupBox.a_repeats())
+        self.ProcessingGroupBox.setBRepeatProcessingDisplay(self.ScanGroupBox.b_repeats())
 
     # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
 
-    @property
     def processing_enabled(self) -> bool:
-        return self.ProcessingGroupBox.enabled
+        return self.ProcessingGroupBox.enabled()
 
-    @property
     def background_subtraction_enabled(self) -> bool:
-        return self.ProcessingGroupBox.background_subtraction
+        return self.ProcessingGroupBox.background_subtraction()
 
-    @property
     def interpolation_enabled(self) -> bool:
-        return self.ProcessingGroupBox.interpolation
+        return self.ProcessingGroupBox.interpolation()
 
-    @property
     def interpdk(self) -> float:
-        return self.ProcessingGroupBox.interpdk
+        return self.ProcessingGroupBox.interpdk()
 
-    @property
     def apodization_window(self) -> np.ndarray:
-        return self.ProcessingGroupBox.apodization_window(self.aline_size)
+        return self.ProcessingGroupBox.apodization_window()(self.aline_size())
 
-    @property
     def aline_repeat_processing(self) -> str:
-        return self.ProcessingGroupBox.a_repeat_processing
+        return self.ProcessingGroupBox.a_repeat_processing()
 
-    @property
     def bline_repeat_processing(self) -> str:
-        return self.ProcessingGroupBox.b_repeat_processing
+        return self.ProcessingGroupBox.b_repeat_processing()
 
-    @property
     def frame_averaging(self) -> int:
-        return self.ProcessingGroupBox.frame_averaging
+        return self.ProcessingGroupBox.frame_averaging()
 
-    @property
     def scan_pattern(self) -> LineScanPattern:
-        return self.ScanGroupBox.pattern
+        return self.ScanGroupBox.pattern()
 
-    @property
     def darkTheme(self) -> bool:
         return self._settings_dialog.radioDark.isChecked()
 
-    @property
     def camera_device_name(self) -> str:
         return self._settings_dialog.lineCameraName.text()
 
-    @property
     def max_line_rate(self) -> int:
         return int(1000 * self._settings_dialog.spinMaxLineRate.value() - 1)  # Convert from kHz float to Hz int
 
-    @property
     def zroi(self) -> (int, int):
-        return self.ScanGroupBox.zroi
+        return self.ScanGroupBox.zroi()
 
-    @property
     def aline_size(self) -> int:
         return self._settings_dialog.spinAlineSize.value()
 
-    @property
     def number_of_image_buffers(self) -> int:
         return int(self._settings_dialog.spinNumberOfBuffers.value())
 
-    @property
     def analog_output_galvo_x_ch_name(self) -> str:
         return self._settings_dialog.lineXChName.text()
 
-    @property
     def analog_output_galvo_y_ch_name(self) -> str:
         return self._settings_dialog.lineYChName.text()
 
-    @property
     def analog_output_line_trig_ch_name(self) -> str:
         return self._settings_dialog.lineLineTrigChName.text()
 
-    @property
     def analog_output_frame_trig_ch_name(self) -> str:
         return self._settings_dialog.lineFrameTrigChName.text()
 
-    @property
     def analog_output_start_trig_ch_name(self) -> str:
         return self._settings_dialog.lineStartTrigChName.text()
 
-    @property
     def frames_to_acquire(self) -> int:
-        return self.ControlGroupBox.frames_to_acquire
+        return self.ControlGroupBox.frames_to_acquire()
 
-    @property
     def file_max_bytes(self) -> np.longlong:
-        return self.FileGroupBox.max_bytes
+        return self.FileGroupBox.max_bytes()
 
-    @property
     def filename(self) -> str:
-        return self.FileGroupBox.filename
+        return self.FileGroupBox.filename()

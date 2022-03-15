@@ -77,51 +77,51 @@ class _AppContext(ApplicationContext):
         # Could switch between various backends here if you wanted
         self.controller = NIOCTController(os.path.join(self.lib_resource_location, 'fastnisdoct/fastnisdoct.dll'))
         self.controller.open(
-            self.window.camera_device_name,
-            self.window.analog_output_galvo_x_ch_name,
-            self.window.analog_output_galvo_y_ch_name,
-            self.window.analog_output_line_trig_ch_name,
-            self.window.analog_output_frame_trig_ch_name,
-            self.window.analog_output_start_trig_ch_name,
+            self.window.camera_device_name(),
+            self.window.analog_output_galvo_x_ch_name(),
+            self.window.analog_output_galvo_y_ch_name(),
+            self.window.analog_output_line_trig_ch_name(),
+            self.window.analog_output_frame_trig_ch_name(),
+            self.window.analog_output_start_trig_ch_name(),
         )
 
     def _close_controller(self):
         self.controller.close()
 
     def _configure_image(self):
-        (zstart, zstop) = self.window.zroi
+        (zstart, zstop) = self.window.zroi()
         self.controller.configure_image(
-            self.window.max_line_rate,
-            self.window.aline_size,
-            self.window.scan_pattern.total_number_of_alines,
-            self.window.scan_pattern.dimensions[0],
-            self.window.scan_pattern.aline_repeat,
-            self.window.scan_pattern.bline_repeat,
-            self.window.number_of_image_buffers,
+            self.window.max_line_rate(),
+            self.window.aline_size(),
+            self.window.scan_pattern().total_number_of_alines,
+            self.window.scan_pattern().dimensions[0],
+            self.window.scan_pattern().aline_repeat,
+            self.window.scan_pattern().bline_repeat,
+            self.window.number_of_image_buffers(),
             zstart,
             zstop
         )
 
     def _configure_processing(self):
         self.controller.configure_processing(
-            self.window.processing_enabled,
-            self.window.background_subtraction_enabled,
-            self.window.interpolation_enabled,
-            self.window.interpdk,
-            self.window.apodization_window,
-            aline_repeat_processing=self.window.aline_repeat_processing,
-            bline_repeat_processing=self.window.bline_repeat_processing,
-            n_frame_avg=self.window.frame_averaging
+            self.window.processing_enabled(),
+            self.window.background_subtraction_enabled(),
+            self.window.interpolation_enabled(),
+            self.window.interpdk(),
+            self.window.apodization_window(),
+            aline_repeat_processing=self.window.aline_repeat_processing(),
+            bline_repeat_processing=self.window.bline_repeat_processing(),
+            n_frame_avg=self.window.frame_averaging()
         )
 
     def _update_scan_pattern(self):
         # if self.controller.state != 'scanning' and self.controller.state != 'acquiring':
         #     self._configure_image()
         self.controller.set_scan(
-            self.window.scan_pattern.x,
-            self.window.scan_pattern.y,
-            self.window.scan_pattern.line_trigger,
-            self.window.scan_pattern.frame_trigger,
+            self.window.scan_pattern().x,
+            self.window.scan_pattern().y,
+            self.window.scan_pattern().line_trigger,
+            self.window.scan_pattern().frame_trigger,
         )
 
     def _start_scanning(self):
@@ -134,9 +134,9 @@ class _AppContext(ApplicationContext):
         if self.controller.state != 'scanning' and self.controller.state == 'ready':
             self.controller.start_scan()
         self.controller.start_acquisition(
-            self.window.filename,
-            self.window.file_max_bytes,
-            self.window.frames_to_acquire
+            self.window.filename(),
+            self.window.file_max_bytes(),
+            self.window.frames_to_acquire()
         )
 
     def _stop(self):
