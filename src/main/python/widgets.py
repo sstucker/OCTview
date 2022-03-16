@@ -251,12 +251,17 @@ class RasterScanWidget(ScanWidget, UiWidget):
         Args:
             fixed (bool): if True, widgets are disabled.
         """
+        if self.checkSquareScan.isChecked():
+            self.spinBCount.setEnabled(False)
+            self.labelBCount.setEnabled(False)
+        else:
+            self.spinBCount.setEnabled(not fixed)
+            self.labelBCount.setEnabled(not fixed)
         self.spinARepeat.setEnabled(not fixed)
         self.spinBRepeat.setEnabled(not fixed)
         self.checkARepeat.setEnabled(not fixed)
         self.checkBRepeat.setEnabled(not fixed)
         self.spinACount.setEnabled(not fixed)
-        self.spinBCount.setEnabled(not fixed)
         self.checkSquareScan.setEnabled(not fixed)
         self.buttonSettings.setEnabled(not fixed)
 
@@ -344,6 +349,90 @@ class CircleScanWidget(ScanWidget, UiWidget):
         super().__init__()
 
 
+
+class ScanGroupBox(QGroupBox, UiWidget):
+    changed = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+
+        self._subwidgets = {
+            'Raster': RasterScanWidget(),
+            'Figure-8': LineScanWidget(),
+            'Circle': CircleScanWidget()
+        }
+        self._selectSubwidget()
+        self.comboScanPattern.currentIndexChanged.connect(self._selectSubwidget)
+
+        # All widgets should emit the scan pattern changed signal
+        children = self.children()
+        for subwidget in list(self._subwidgets.values()):
+            children += subwidget.children()
+        for child in children:
+            if type(child) in [QSpinBox, QDoubleSpinBox]:
+                child.valueChanged.connect(self.changed.emit)
+            elif type(child) in [QCheckBox]:
+                child.stateChanged.connect(self.changed.emit)
+            elif type(child) in [QRadioButton]:
+                child.toggled.connect(self.changed.emit)
+
+        self.changed.connect(self.ScanWidget.generate_pattern)
+        self.ScanWidget.pattern_updated.connect(self._update_preview)
+
+        self.pushPreview.pressed.connect(self._preview)
+
+        self._preview_window = ScanDisplayWindow()
+        self._preview_window.setParent(self)
+        self._preview_window.setWindowFlag(True)
+
+        self.changed.emit()
+
+    def _selectSubwidget(self):
+        replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
+        self.ScanWidget.generate_pattern()
+
+    def _update_preview(self):
+        if self._preview_window.isVisible():
+            self._preview_window.previewPattern(self.pattern())
+
+    def _preview(self):
+        if not self._preview_window.isVisible():
+            self._preview_window.previewPattern(self.pattern())
+
+    def toggleScanningMode(self, scanning_mode: bool):
+        self.ScanWidget.fixSize(scanning_mode)
+        self.spinZTop.setEnabled(not scanning_mode)
+        self.labelZTop.setEnabled(not scanning_mode)
+        self.spinZBottom.setEnabled(not scanning_mode)
+        self.labelZBottom.setEnabled(not scanning_mode)
+        self.comboScanPattern.setEnabled(not scanning_mode)
+        self.labelScanPatternType.setEnabled(not scanning_mode)
+
+    def x(self):
+        return self.pattern().x
+
+    def y(self):
+        return self.pattern().y
+
+    def line_trigger(self):
+        return self.pattern().line_trigger
+
+    def frame_trigger(self):
+        return self.pattern().frame_trigger
+
+    def zroi(self):
+        return self.spinZTop.value(), self.spinZBottom.value()
+
+    def pattern(self):
+        return self.ScanWidget.pattern()
+
+    def a_repeats(self):
+        return self.ScanWidget.a_repeats()
+
+    def b_repeats(self):
+        return self.ScanWidget.b_repeats()
+
+
 class ControlGroupBox(QGroupBox, UiWidget):
     scan = pyqtSignal()
     acquire = pyqtSignal()
@@ -408,89 +497,6 @@ class ControlGroupBox(QGroupBox, UiWidget):
             return -1
 
 
-class ScanGroupBox(QGroupBox, UiWidget):
-    changed = pyqtSignal()
-
-    def __init__(self):
-        super().__init__()
-
-        self._subwidgets = {
-            'Raster': RasterScanWidget(),
-            'Figure-8': LineScanWidget(),
-            'Circle': CircleScanWidget()
-        }
-        self._selectSubwidget()
-        self.comboScanPattern.currentIndexChanged.connect(self._selectSubwidget)
-
-        # All widgets should emit the scan pattern changed signal
-        children = self.children()
-        for subwidget in list(self._subwidgets.values()):
-            children += subwidget.children()
-        for child in children:
-            if type(child) in [QSpinBox, QDoubleSpinBox]:
-                child.valueChanged.connect(self.changed.emit)
-            elif type(child) in [QCheckBox]:
-                child.stateChanged.connect(self.changed.emit)
-            elif type(child) in [QRadioButton]:
-                child.toggled.connect(self.changed.emit)
-
-        self.changed.connect(self.ScanWidget.generate_pattern)
-        self.ScanWidget.pattern_updated.connect(self._update_preview)
-
-        self.pushPreview.pressed.connect(self._preview)
-
-        self._preview_window = ScanDisplayWindow()
-        self._preview_window.setParent(self)
-        self._preview_window.setWindowFlag(True)
-
-        self.changed.emit()
-
-    def _selectSubwidget(self):
-        replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
-        self.ScanWidget.generate_pattern()
-
-    def _update_preview(self):
-        if self._preview_window.isVisible():
-            self._preview_window.previewPattern(self.pattern)
-
-    def _preview(self):
-        if not self._preview_window.isVisible():
-            self._preview_window.previewPattern(self.pattern)
-
-    def toggleScanningMode(self, scanning_mode: bool):
-        self.ScanWidget.fixSize(scanning_mode)
-        self.spinZTop.setEnabled(not scanning_mode)
-        self.labelZTop.setEnabled(not scanning_mode)
-        self.spinZBottom.setEnabled(not scanning_mode)
-        self.labelZBottom.setEnabled(not scanning_mode)
-        self.comboScanPattern.setEnabled(not scanning_mode)
-        self.labelScanPatternType.setEnabled(not scanning_mode)
-
-    def x(self):
-        return self.pattern.x()
-
-    def y(self):
-        return self.pattern.y()
-
-    def line_trigger(self):
-        return self.pattern.line_trigger()
-
-    def frame_trigger(self):
-        return self.pattern.frame_trigger()
-
-    def zroi(self):
-        return self.spinZTop.value(), self.spinZBottom.value()
-
-    def pattern(self):
-        return self.ScanWidget.pattern()
-
-    def a_repeats(self):
-        return self.ScanWidget.a_repeats()
-
-    def b_repeats(self):
-        return self.ScanWidget.b_repeats()
-
-
 class ScanDisplayWindow(QFrame):
 
     def __init__(self):
@@ -522,7 +528,6 @@ class ScanDisplayWindow(QFrame):
         self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
         self._x_item.setData(x=t, y=pattern.x, name='x')
         self._y_item.setData(x=t, y=pattern.y, name='y')
-        # self._scan_plot.xlim(0, t)
 
         exp = np.zeros(len(pattern.x)).astype(np.int32)
         exp[pattern.line_trigger.astype(bool)] = 1

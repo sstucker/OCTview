@@ -60,10 +60,8 @@ class _AppContext(ApplicationContext):
 
         return self.app.exec_()
 
-
     def _update(self):
         state = self.controller.state
-        # print('State', state)
         if state == 'scanning':
             self.window.set_mode_scanning()
         elif state == 'acquiring':
@@ -115,8 +113,6 @@ class _AppContext(ApplicationContext):
         )
 
     def _update_scan_pattern(self):
-        # if self.controller.state != 'scanning' and self.controller.state != 'acquiring':
-        #     self._configure_image()
         self.controller.set_scan(
             self.window.scan_pattern().x,
             self.window.scan_pattern().y,
