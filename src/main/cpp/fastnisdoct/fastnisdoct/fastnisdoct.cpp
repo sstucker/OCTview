@@ -128,8 +128,11 @@ bool scan_defined = false;
 std::atomic_int state = STATE_UNOPENED;
 state_msg state_data;
 
+int raw_frame_size = 0;  // Number of elements in the raw frame
+int processed_frame_size = 0;  // Number of elements in the processed frame
+
 CircAcqBuffer<uint16_t>* raw_frame_buffer = NULL;
-CircAcqBuffer<std::complex<float>>* processed_alines_buffer = NULL;
+CircAcqBuffer<std::complex<float>>* processed_frame_buffer = NULL;
 
 inline bool ready_to_scan()
 {
@@ -158,12 +161,16 @@ inline void recv_msg()
 			state_data.roi_offset = msg.roi_offset;
 			state_data.roi_size = msg.roi_size;
 
-			float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * msg.aline_size * msg.number_of_alines) + (sizeof(std::complex<float>) * msg.roi_size * msg.number_of_alines) + (sizeof(std::complex<float>) * msg.roi_size * (msg.number_of_alines / msg.aline_repeat)));
-
-			printf("Allocating 3 ring buffers, total size %f GB...\n", total_buffer_size / 1073741824.0);
 			// printf_state_data(state_data);
+			processed_frame_size = state_data.roi_size * ((state_data.number_of_alines / state_data.aline_repeat) / state_data.bline_repeat);
+			raw_frame_size = msg.aline_size * msg.number_of_alines;
+			printf("Raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
+
+			float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(std::complex<float>) * processed_frame_size));
+			printf("Allocating 3 ring buffers, total size %f GB...\n", total_buffer_size / 1073741824.0);
+			
 			raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
-			processed_alines_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, state_data.roi_size * state_data.number_of_alines);
+			processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
 			printf("Buffers allocated.\n");
 
 			image_configured = true;
@@ -175,7 +182,7 @@ inline void recv_msg()
 		else if (msg.flag & MSG_CONFIGURE_PROCESSING)
 		{
 			printf("MSG_CONFIGURE_PROCESSING received\n");
-			if (image_configured)  // Image must be configured before processing can be
+			if (image_configured)  // Image must be configured before processing can be configured
 			{
 				state_data.fft_enabled = msg.fft_enabled;
 				state_data.subtract_background = msg.subtract_background;
@@ -270,18 +277,26 @@ void _main()
 	while (main_running)
 	{
 		recv_msg();
-		if (state == STATE_UNOPENED || state == STATE_OPEN || state == STATE_READY)
+		if (state.load() == STATE_UNOPENED || state.load() == STATE_OPEN || state.load() == STATE_READY)
 		{
 			Sleep(IDLE_SLEEP_TIME);  // Block for awhile if not scanning
 		}
-		else if (state == STATE_ERROR)
+		else if (state.load() == STATE_ERROR)
 		{
 			printf("Error!\n");
 			return;
 		}
 		else  // if SCANNING or ACQUIRING
 		{
-
+			// Lock out frame with IMAQ function
+			// Send job to AlineProcessingPool
+			// Calculate background spectrum (to be used with next scan)
+			// Wait for job to finish
+			// Perform A-line averaging or differencing
+			// Perform B-line averaging or differencing
+			// Perform frame averaging
+			// if (state.load() == STATE_ACQUIRING)
+			//		enqueue the frame with the StreamWorker
 		}
 		fflush(stdout);
 	}
