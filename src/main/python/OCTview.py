@@ -45,23 +45,27 @@ class _AppContext(ApplicationContext):
         self.window.stop.connect(self._stop)
         self.window.closed.connect(self._close_controller)
         self.window.scan_changed.connect(self._update_scan_pattern)
+        self.window.processing_changed.connect(self._configure_processing)
 
         # Repeated update execution keeps GUI in step with controller
         self._update_timer = QTimer()
         self._update_timer.timeout.connect(self._update)
-        self._update_timer.start(100)  # 10 Hz
+        self._update_timer.start(1000)  # 10 Hz
 
-        self.load()
+        self.window.show()
         self._open_controller()
         self._configure_image()
-        self._configure_processing()
         self._update_scan_pattern()
-        self.window.show()
+        self._configure_processing()
 
+        self.load()
         return self.app.exec_()
 
     def _update(self):
         state = self.controller.state
+        print('state', state)
+        # print('processed frame size', self.window.processed_frame_size())
+        # print('raw frame size', self.window.scan_pattern().total_number_of_alines * self.window.aline_size())
         if state == 'scanning':
             self.window.set_mode_scanning()
         elif state == 'acquiring':
@@ -97,7 +101,7 @@ class _AppContext(ApplicationContext):
             self.window.scan_pattern().bline_repeat,
             self.window.number_of_image_buffers(),
             zstart,
-            zstop
+            zstop - zstart
         )
 
     def _configure_processing(self):
