@@ -1,11 +1,9 @@
 import json
-import os
-import warnings
-from threading import Thread
-
 import numpy as np
+import os
 import pyqtgraph
 import pyqtgraph.opengl
+import warnings
 from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal, QTimer
 from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, \
@@ -13,6 +11,7 @@ from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindo
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
 from scanpatterns import LineScanPattern, RasterScanPattern
+from threading import Thread
 
 import OCTview
 from controller import NIOCTController
@@ -588,6 +587,7 @@ class FileGroupBox(QGroupBox, UiWidget):
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
+    changed = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -601,6 +601,15 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.checkApodization.toggled.connect(self._apodToggled)
         self.checkInterpolation.toggled.connect(self._interpToggled)
         self.radioFrameNone.toggled.connect(self._frameProcessingToggled)
+
+        # All widgets should emit the changed signal
+        for child in self.children():
+            if type(child) in [QSpinBox, QDoubleSpinBox]:
+                child.valueChanged.connect(self.changed.emit)
+            elif type(child) in [QCheckBox]:
+                child.stateChanged.connect(self.changed.emit)
+            elif type(child) in [QRadioButton]:
+                child.toggled.connect(self.changed.emit)
 
     def _apodToggled(self):
         self.labelApodization.setEnabled(self.checkApodization.isChecked())
@@ -910,7 +919,6 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 
 
 class MainWindow(QMainWindow, UiWidget):
-
     reload_required = pyqtSignal()  # A significant change has been made to the backend configuration and it must be completely reloaded
     scan_changed = pyqtSignal()  # Scan pattern has been changed
     processing_changed = pyqtSignal()  # Processing parameters have been changed
@@ -954,6 +962,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.stop.connect(self._stop)
 
         self.ScanGroupBox.changed.connect(self.scan_changed.emit)
+        self.ProcessingGroupBox.changed.connect(self.processing_changed.emit)
 
         config_file = os.path.join(OCTview.config_resource_location, '.last')
         if os.path.exists(config_file):
@@ -1024,7 +1033,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.ProcessingGroupBox.setARepeatProcessingDisplay(self.ScanGroupBox.a_repeats())
         self.ProcessingGroupBox.setBRepeatProcessingDisplay(self.ScanGroupBox.b_repeats())
 
-    # -- MainWindow's properties are backend's interface on entire GUI -------------------------------------------------
+    # -- MainWindow's methods are backend's interface on entire GUI -------------------------------------------------
 
     def processing_enabled(self) -> bool:
         return self.ProcessingGroupBox.enabled()
@@ -1049,6 +1058,15 @@ class MainWindow(QMainWindow, UiWidget):
 
     def frame_averaging(self) -> int:
         return self.ProcessingGroupBox.frame_averaging()
+
+    def raw_frame_size(self) -> int:
+        return self.ScanGroupBox.pattern().total_number_of_alines * self.aline_size()
+
+    def processed_frame_size(self) -> int:
+        return int((self.ScanGroupBox.zroi()[1] - self.ScanGroupBox.zroi()[0]) * \
+               ((self.ScanGroupBox.pattern().total_number_of_alines
+                 / self.ScanGroupBox.pattern().aline_repeat)
+                / self.ScanGroupBox.pattern().bline_repeat))
 
     def scan_pattern(self) -> LineScanPattern:
         return self.ScanGroupBox.pattern()

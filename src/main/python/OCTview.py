@@ -8,7 +8,7 @@ from controller import NIOCTController
 import os
 
 
-CALLBACK_DEBOUNCE_MS = 300
+CALLBACK_DEBOUNCE_MS = 400
 
 
 class _AppContext(ApplicationContext):
@@ -59,6 +59,10 @@ class _AppContext(ApplicationContext):
         self._timer_update_scan_pattern = QTimer()
         self._ctr_update_scan_pattern = 0
 
+        # Record these sizes to optimize calls to interface
+        self._raw_frame_size = 0
+        self._processed_frame_size = 0
+
         # Repeated update execution keeps GUI in step with controller
         self._update_timer = QTimer()
         self._update_timer.timeout.connect(self._update)
@@ -75,8 +79,6 @@ class _AppContext(ApplicationContext):
 
     def _update(self):
         state = self.controller.state
-        # print('processed frame size', self.window.processed_frame_size())
-        # print('raw frame size', self.window.scan_pattern().total_number_of_alines * self.window.aline_size())
         if state == 'scanning':
             self.window.set_mode_scanning()
         elif state == 'acquiring':
@@ -109,6 +111,10 @@ class _AppContext(ApplicationContext):
         (zstart, zstop) = self.window.zroi()
         self._ctr_configure_image -= 1
         if not self._ctr_configure_image > 0:
+            self._processed_frame_size = self.window.processed_frame_size()
+            self._raw_frame_size = self.window.raw_frame_size()
+            print('Setting frame sizes...')
+            print(self._processed_frame_size, self._raw_frame_size)
             self.controller.configure_image(
                 self.window.max_line_rate(),
                 self.window.aline_size(),
@@ -146,6 +152,11 @@ class _AppContext(ApplicationContext):
     def _update_scan_pattern_cb(self):
         self._ctr_update_scan_pattern -= 1
         if not self._ctr_update_scan_pattern > 0:
+            if self._raw_frame_size != self.window.raw_frame_size() or self._processed_frame_size != self.window.processed_frame_size():
+                print('Frame sizes changed!')
+                print(self.window.raw_frame_size(), self.window.processed_frame_size())
+                self._configure_image()
+                self._configure_processing()
             self.controller.set_scan(
                 self.window.scan_pattern().x,
                 self.window.scan_pattern().y,
