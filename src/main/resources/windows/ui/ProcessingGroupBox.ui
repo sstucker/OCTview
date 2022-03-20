@@ -126,6 +126,12 @@
    </item>
    <item row="7" column="1" colspan="5">
     <widget class="QGroupBox" name="groupFrameProcessing">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="title">
       <string>Frame processing</string>
      </property>
@@ -177,6 +183,12 @@
    </item>
    <item row="5" column="1" colspan="5">
     <widget class="QGroupBox" name="groupARepeatProcessing">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="title">
       <string>A-line Repeat Processing</string>
      </property>
@@ -219,6 +231,12 @@
    </item>
    <item row="6" column="1" colspan="5">
     <widget class="QGroupBox" name="groupBRepeatProcessing">
+     <property name="sizePolicy">
+      <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
+       <horstretch>0</horstretch>
+       <verstretch>0</verstretch>
+      </sizepolicy>
+     </property>
      <property name="title">
       <string>B-line Repeat Processing</string>
      </property>

@@ -171,6 +171,10 @@ class ScanWidget(QWidget):
     def pattern(self):
         return self._pattern
 
+    def fixSize(self, fix: bool):
+        """Disable all controls that allow the size of the image to be changed."""
+        raise NotImplementedError()
+
 
 class RasterScanWidget(ScanWidget, UiWidget):
     _pattern_updated = pyqtSignal()  # Reports generation thread finished
@@ -347,7 +351,6 @@ class CircleScanWidget(ScanWidget, UiWidget):
 
     def __init__(self):
         super().__init__()
-
 
 
 class ScanGroupBox(QGroupBox, UiWidget):

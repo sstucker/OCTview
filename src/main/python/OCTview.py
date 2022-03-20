@@ -8,6 +8,9 @@ from controller import NIOCTController
 import os
 
 
+CALLBACK_DEBOUNCE_MS = 300
+
+
 class _AppContext(ApplicationContext):
 
     def __init__(self):
@@ -47,6 +50,15 @@ class _AppContext(ApplicationContext):
         self.window.scan_changed.connect(self._update_scan_pattern)
         self.window.processing_changed.connect(self._configure_processing)
 
+        self._timer_configure_image = QTimer()
+        self._ctr_configure_image = 0
+
+        self._timer_configure_processing = QTimer()
+        self._ctr_configure_processing = 0
+
+        self._timer_update_scan_pattern = QTimer()
+        self._ctr_update_scan_pattern = 0
+
         # Repeated update execution keeps GUI in step with controller
         self._update_timer = QTimer()
         self._update_timer.timeout.connect(self._update)
@@ -63,7 +75,6 @@ class _AppContext(ApplicationContext):
 
     def _update(self):
         state = self.controller.state
-        print('state', state)
         # print('processed frame size', self.window.processed_frame_size())
         # print('raw frame size', self.window.scan_pattern().total_number_of_alines * self.window.aline_size())
         if state == 'scanning':
@@ -91,38 +102,56 @@ class _AppContext(ApplicationContext):
         self.controller.close()
 
     def _configure_image(self):
+        self._ctr_configure_image += 1
+        self._timer_configure_image.singleShot(CALLBACK_DEBOUNCE_MS, self._configure_image_cb)
+
+    def _configure_image_cb(self):
         (zstart, zstop) = self.window.zroi()
-        self.controller.configure_image(
-            self.window.max_line_rate(),
-            self.window.aline_size(),
-            self.window.scan_pattern().total_number_of_alines,
-            self.window.scan_pattern().dimensions[0],
-            self.window.scan_pattern().aline_repeat,
-            self.window.scan_pattern().bline_repeat,
-            self.window.number_of_image_buffers(),
-            zstart,
-            zstop - zstart
-        )
+        self._ctr_configure_image -= 1
+        if not self._ctr_configure_image > 0:
+            self.controller.configure_image(
+                self.window.max_line_rate(),
+                self.window.aline_size(),
+                self.window.scan_pattern().total_number_of_alines,
+                self.window.scan_pattern().dimensions[0],
+                self.window.scan_pattern().aline_repeat,
+                self.window.scan_pattern().bline_repeat,
+                self.window.number_of_image_buffers(),
+                zstart,
+                zstop - zstart
+            )
 
     def _configure_processing(self):
-        self.controller.configure_processing(
-            self.window.processing_enabled(),
-            self.window.background_subtraction_enabled(),
-            self.window.interpolation_enabled(),
-            self.window.interpdk(),
-            self.window.apodization_window(),
-            aline_repeat_processing=self.window.aline_repeat_processing(),
-            bline_repeat_processing=self.window.bline_repeat_processing(),
-            n_frame_avg=self.window.frame_averaging()
-        )
+        self._ctr_configure_processing += 1
+        self._timer_configure_processing.singleShot(CALLBACK_DEBOUNCE_MS, self._configure_processing_cb)
+
+    def _configure_processing_cb(self):
+        self._ctr_configure_processing -= 1
+        if not self._ctr_configure_processing > 0:
+            self.controller.configure_processing(
+                self.window.processing_enabled(),
+                self.window.background_subtraction_enabled(),
+                self.window.interpolation_enabled(),
+                self.window.interpdk(),
+                self.window.apodization_window(),
+                aline_repeat_processing=self.window.aline_repeat_processing(),
+                bline_repeat_processing=self.window.bline_repeat_processing(),
+                n_frame_avg=self.window.frame_averaging()
+            )
 
     def _update_scan_pattern(self):
-        self.controller.set_scan(
-            self.window.scan_pattern().x,
-            self.window.scan_pattern().y,
-            self.window.scan_pattern().line_trigger,
-            self.window.scan_pattern().frame_trigger,
-        )
+        self._ctr_update_scan_pattern += 1
+        self._timer_update_scan_pattern.singleShot(CALLBACK_DEBOUNCE_MS, self._update_scan_pattern_cb)
+
+    def _update_scan_pattern_cb(self):
+        self._ctr_update_scan_pattern -= 1
+        if not self._ctr_update_scan_pattern > 0:
+            self.controller.set_scan(
+                self.window.scan_pattern().x,
+                self.window.scan_pattern().y,
+                self.window.scan_pattern().line_trigger,
+                self.window.scan_pattern().frame_trigger,
+            )
 
     def _start_scanning(self):
         if self.controller.state == 'acquiring':
