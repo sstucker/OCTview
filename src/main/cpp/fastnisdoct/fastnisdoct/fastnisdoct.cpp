@@ -73,7 +73,7 @@ struct state_msg {
 	bool subtract_background;
 	bool interp;
 	double intpdk;
-	float* apod_window;
+	const float* apod_window;
 	int a_rpt_proc_flag;
 	int b_rpt_proc_flag;
 	int n_frame_avg;
@@ -83,7 +83,7 @@ struct state_msg {
 	double* line_trigger;
 	double* frame_trigger;
 	const char* file;
-	int max_bytes;
+	long long max_bytes;
 	int n_frames_to_acquire;
 };
 
@@ -151,7 +151,8 @@ inline void recv_msg()
 			if (state.load() == STATE_READY || state.load() == STATE_OPEN)
 			{
 				image_configured = false;
-				state.store(STATE_OPEN);  // Always exit the READY state if configuring
+				processing_configured = false;
+				state.store(STATE_OPEN);
 
 				state_data.dac_output_rate = msg.dac_output_rate;
 				state_data.aline_size = msg.aline_size;
@@ -166,13 +167,17 @@ inline void recv_msg()
 				// printf_state_data(state_data);
 				processed_frame_size = state_data.roi_size * ((state_data.number_of_alines / state_data.aline_repeat) / state_data.bline_repeat);
 				raw_frame_size = msg.aline_size * msg.number_of_alines;
-				printf("Raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
+				printf("Image configured: Number of A-lines: %i\n", state_data.number_of_alines);
+				printf("Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(std::complex<float>) * processed_frame_size));
 				printf("Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
 
+				if (raw_frame_buffer != NULL) { delete raw_frame_buffer; }
 				raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
+				if (processed_frame_buffer != NULL) { delete processed_frame_buffer; }
 				processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
+				
 				printf("Buffers allocated.\n");
 
 				image_configured = true;
@@ -208,17 +213,7 @@ inline void recv_msg()
 					state_data.n_frame_avg = msg.n_frame_avg;
 
 					// Initialize the AlineProcessingPool. This creates an FFTW plan and may take a long time.
-					aline_processing_pool = new AlineProcessingPool(
-						state_data.aline_size,
-						state_data.number_of_alines,
-						state_data.roi_offset,
-						state_data.roi_size,
-						state_data.subtract_background,
-						state_data.interp,
-						state_data.fft_enabled,
-						state_data.intpdk,
-						state_data.apod_window
-					);
+					aline_processing_pool = new AlineProcessingPool(state_data.aline_size, state_data.number_of_alines, state_data.roi_offset, state_data.roi_size, state_data.fft_enabled);
 
 					processing_configured = true;
 
@@ -265,6 +260,7 @@ inline void recv_msg()
 			if (state.load() == STATE_SCANNING)
 			{
 				aline_processing_pool->terminate();
+				delete aline_processing_pool;
 				state.store(STATE_READY);
 			}
 		}
@@ -384,7 +380,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		bool subtract_background,
 		bool interp,
 		double intpdk,
-		float* apod_window,
+		const float* apod_window,
 		int a_rpt_proc_flag,
 		int b_rpt_proc_flag,
 		int n_frame_avg

@@ -372,22 +372,20 @@ class ScanGroupBox(QGroupBox, UiWidget):
             children += subwidget.children()
         for child in children:
             if type(child) in [QSpinBox, QDoubleSpinBox]:
-                child.valueChanged.connect(self.changed.emit)
+                child.valueChanged.connect(self.ScanWidget.generate_pattern)
             elif type(child) in [QCheckBox]:
-                child.stateChanged.connect(self.changed.emit)
+                child.stateChanged.connect(self.ScanWidget.generate_pattern)
             elif type(child) in [QRadioButton]:
-                child.toggled.connect(self.changed.emit)
+                child.toggled.connect(self.ScanWidget.generate_pattern)
 
-        self.changed.connect(self.ScanWidget.generate_pattern)
         self.ScanWidget.pattern_updated.connect(self._update_preview)
+        self.ScanWidget.pattern_updated.connect(self.changed.emit)
 
         self.pushPreview.pressed.connect(self._preview)
 
         self._preview_window = ScanDisplayWindow()
         self._preview_window.setParent(self)
         self._preview_window.setWindowFlag(True)
-
-        self.changed.emit()
 
     def _selectSubwidget(self):
         replaceWidget(self.ScanWidget, self._subwidgets[self.comboScanPattern.currentText()])
@@ -922,7 +920,7 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 
 class MainWindow(QMainWindow, UiWidget):
     reload_required = pyqtSignal()  # A significant change has been made to the backend configuration and it must be completely reloaded
-    scan_changed = pyqtSignal()  # Scan pattern has been changed
+    scan_changed = pyqtSignal(int, int)  # Scan pattern has been changed
     processing_changed = pyqtSignal()  # Processing parameters have been changed
     closed = pyqtSignal()  # MainWindow has been closed
     scan = pyqtSignal()  # Scan command
@@ -963,7 +961,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.acquire.connect(self._acquire)
         self.ControlGroupBox.stop.connect(self._stop)
 
-        self.ScanGroupBox.changed.connect(self.scan_changed.emit)
+        self.ScanGroupBox.changed.connect(lambda: self.scan_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
         self.ProcessingGroupBox.changed.connect(self.processing_changed.emit)
 
         config_file = os.path.join(OCTview.config_resource_location, '.last')

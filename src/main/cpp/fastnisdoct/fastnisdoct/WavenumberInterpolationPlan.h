@@ -38,7 +38,12 @@ public:
 	std::vector<float> linear_in_k;  // Linear wavenumber space points to interpolate
 	float d_lam;
 
-	WavenumberInterpolationPlan() {}
+	WavenumberInterpolationPlan()
+	{
+		aline_size = 0;
+		interpdk = 0.0;
+		d_lam = 0.0;
+	}
 
 	WavenumberInterpolationPlan(int aline_size, double interpdk)
 	{
@@ -121,3 +126,4 @@ void interpdk_execute(WavenumberInterpolationPlan plan, int number_of_alines, ui
 		}
 	}
 }
+

@@ -6,7 +6,7 @@ import sys
 import qdarkstyle
 from controller import NIOCTController
 import os
-
+import time
 
 CALLBACK_DEBOUNCE_MS = 400
 
@@ -66,13 +66,10 @@ class _AppContext(ApplicationContext):
         # Repeated update execution keeps GUI in step with controller
         self._update_timer = QTimer()
         self._update_timer.timeout.connect(self._update)
-        self._update_timer.start(1000)  # 10 Hz
+        self._update_timer.start(100)  # 10 Hz
 
         self.window.show()
         self._open_controller()
-        self._configure_image()
-        self._update_scan_pattern()
-        self._configure_processing()
 
         self.load()
         return self.app.exec_()
@@ -80,16 +77,16 @@ class _AppContext(ApplicationContext):
     def _update(self):
         state = self.controller.state
         if state == 'scanning':
-            print('GUI in scanning state')
+            # print('GUI in scanning state')
             self.window.set_mode_scanning()
         elif state == 'acquiring':
-            print('GUI in acquiring state')
+            # print('GUI in acquiring state')
             self.window.set_mode_acquiring()
         elif state == 'ready':
-            print('GUI in ready state')
+            # print('GUI in ready state')
             self.window.set_mode_ready()
         elif state == 'open' or state == 'error' or state == 'unopened':
-            print('GUI in unready state:', state)
+            # print('GUI in unready state:', state)
             self.window.set_mode_not_ready()
 
     # -- Backend interface ------------------------------------------------
@@ -117,10 +114,6 @@ class _AppContext(ApplicationContext):
         (zstart, zstop) = self.window.zroi()
         self._ctr_configure_image -= 1
         if not self._ctr_configure_image > 0:
-            self._processed_frame_size = self.window.processed_frame_size()
-            self._raw_frame_size = self.window.raw_frame_size()
-            print('Setting frame sizes...')
-            print(self._processed_frame_size, self._raw_frame_size)
             self.controller.configure_image(
                 self.window.max_line_rate(),
                 self.window.aline_size(),
@@ -132,6 +125,9 @@ class _AppContext(ApplicationContext):
                 zstart,
                 zstop - zstart
             )
+            self._processed_frame_size = self.window.processed_frame_size()
+            self._raw_frame_size = self.window.raw_frame_size()
+            print('...Frame sizes updated:', self._raw_frame_size, self._processed_frame_size)
 
     def _configure_processing(self):
         self._ctr_configure_processing += 1
@@ -151,18 +147,20 @@ class _AppContext(ApplicationContext):
                 n_frame_avg=self.window.frame_averaging()
             )
 
-    def _update_scan_pattern(self):
+    def _update_scan_pattern(self, raw_frame_size: int, processed_frame_size: int):
+        # If frame sizes are changing with this pattern update, reconfigure
+        if self._raw_frame_size != raw_frame_size or self._processed_frame_size != processed_frame_size:
+            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._raw_frame_size, raw_frame_size, self._processed_frame_size, processed_frame_size))
+            self._configure_image()
+            self._configure_processing()
+        else:
+            print('Updating scan pattern with pattern of the same size.')
         self._ctr_update_scan_pattern += 1
         self._timer_update_scan_pattern.singleShot(CALLBACK_DEBOUNCE_MS, self._update_scan_pattern_cb)
 
     def _update_scan_pattern_cb(self):
         self._ctr_update_scan_pattern -= 1
         if not self._ctr_update_scan_pattern > 0:
-            if self._raw_frame_size != self.window.raw_frame_size() or self._processed_frame_size != self.window.processed_frame_size():
-                print('Frame sizes changed!')
-                print(self.window.raw_frame_size(), self.window.processed_frame_size())
-                self._configure_image()
-                self._configure_processing()
             self.controller.set_scan(
                 self.window.scan_pattern().x,
                 self.window.scan_pattern().y,
