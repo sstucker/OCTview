@@ -169,7 +169,7 @@ inline void recv_msg()
 				printf("Raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(std::complex<float>) * processed_frame_size));
-				printf("Allocating 3 ring buffers, total size %f GB...\n", total_buffer_size / 1073741824.0);
+				printf("Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
 
 				raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
 				processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
@@ -233,7 +233,10 @@ inline void recv_msg()
 				}
 				else  // If SCANNING, make real-time adjustments to apod window, background subtraction option, interpolation
 				{
-
+					state_data.subtract_background = msg.subtract_background;
+					state_data.interp = msg.interp;
+					state_data.intpdk = msg.intpdk;
+					state_data.apod_window = msg.apod_window;
 				}
 			}
 		}
