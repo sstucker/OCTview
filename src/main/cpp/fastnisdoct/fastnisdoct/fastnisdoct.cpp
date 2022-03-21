@@ -148,35 +148,43 @@ inline void recv_msg()
 		if (msg.flag & MSG_CONFIGURE_IMAGE)
 		{
 			printf("MSG_CONFIGURE_IMAGE received\n");
-			image_configured = false;
-			state = STATE_OPEN;
-
-			state_data.dac_output_rate = msg.dac_output_rate;
-			state_data.aline_size = msg.aline_size;
-			state_data.number_of_alines = msg.number_of_alines;
-			state_data.alines_per_b = msg.alines_per_b;
-			state_data.aline_repeat = msg.aline_repeat;
-			state_data.bline_repeat = msg.bline_repeat;
-			state_data.number_of_buffers = msg.number_of_buffers;
-			state_data.roi_offset = msg.roi_offset;
-			state_data.roi_size = msg.roi_size;
-
-			// printf_state_data(state_data);
-			processed_frame_size = state_data.roi_size * ((state_data.number_of_alines / state_data.aline_repeat) / state_data.bline_repeat);
-			raw_frame_size = msg.aline_size * msg.number_of_alines;
-			printf("Raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
-
-			float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(std::complex<float>) * processed_frame_size));
-			printf("Allocating 3 ring buffers, total size %f GB...\n", total_buffer_size / 1073741824.0);
-			
-			raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
-			processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
-			printf("Buffers allocated.\n");
-
-			image_configured = true;
-			if (ready_to_scan() && state != STATE_SCANNING)
+			if (state.load() == STATE_READY || state.load() == STATE_OPEN)
 			{
-				state = STATE_READY;
+				image_configured = false;
+				state.store(STATE_OPEN);  // Always exit the READY state if configuring
+
+				state_data.dac_output_rate = msg.dac_output_rate;
+				state_data.aline_size = msg.aline_size;
+				state_data.number_of_alines = msg.number_of_alines;
+				state_data.alines_per_b = msg.alines_per_b;
+				state_data.aline_repeat = msg.aline_repeat;
+				state_data.bline_repeat = msg.bline_repeat;
+				state_data.number_of_buffers = msg.number_of_buffers;
+				state_data.roi_offset = msg.roi_offset;
+				state_data.roi_size = msg.roi_size;
+
+				// printf_state_data(state_data);
+				processed_frame_size = state_data.roi_size * ((state_data.number_of_alines / state_data.aline_repeat) / state_data.bline_repeat);
+				raw_frame_size = msg.aline_size * msg.number_of_alines;
+				printf("Raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
+
+				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(std::complex<float>) * processed_frame_size));
+				printf("Allocating 3 ring buffers, total size %f GB...\n", total_buffer_size / 1073741824.0);
+
+				raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
+				processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
+				printf("Buffers allocated.\n");
+
+				image_configured = true;
+
+				if (ready_to_scan() && state == STATE_OPEN)
+				{
+					state.store(STATE_READY);
+				}
+			}
+			else
+			{
+				printf("Cannot configure image! Not OPEN or READY.\n");
 			}
 		}
 		else if (msg.flag & MSG_CONFIGURE_PROCESSING)
@@ -184,43 +192,59 @@ inline void recv_msg()
 			printf("MSG_CONFIGURE_PROCESSING received\n");
 			if (image_configured)  // Image must be configured before processing can be configured
 			{
-				state_data.fft_enabled = msg.fft_enabled;
-				state_data.subtract_background = msg.subtract_background;
-				state_data.interp = msg.interp;
-				state_data.intpdk = msg.intpdk;
-				state_data.apod_window = msg.apod_window;
-				state_data.a_rpt_proc_flag = msg.a_rpt_proc_flag;
-				state_data.b_rpt_proc_flag = msg.b_rpt_proc_flag;
-				state_data.n_frame_avg = msg.n_frame_avg;
 
-				// Initialize the AlineProcessingPool. This creates an FFTW plan and may take a long time.
-				aline_processing_pool = new AlineProcessingPool(
-					state_data.aline_size,
-					state_data.number_of_alines,
-					state_data.roi_offset,
-					state_data.roi_size,
-					msg.subtract_background,
-					msg.interp,
-					msg.fft_enabled,
-					msg.intpdk,
-					msg.apod_window
-				);
-
-				processing_configured = true;
-
-				if (ready_to_scan() && state != STATE_SCANNING)
+				if (state.load() != STATE_SCANNING)  // If not scanning, update everything and reinitialize the A-line ThreadPool and processing buffers
 				{
-					state = STATE_READY;
+					processing_configured = false;
+					state.store(STATE_OPEN);
+
+					state_data.fft_enabled = msg.fft_enabled;
+					state_data.subtract_background = msg.subtract_background;
+					state_data.interp = msg.interp;
+					state_data.intpdk = msg.intpdk;
+					state_data.apod_window = msg.apod_window;
+					state_data.a_rpt_proc_flag = msg.a_rpt_proc_flag;
+					state_data.b_rpt_proc_flag = msg.b_rpt_proc_flag;
+					state_data.n_frame_avg = msg.n_frame_avg;
+
+					// Initialize the AlineProcessingPool. This creates an FFTW plan and may take a long time.
+					aline_processing_pool = new AlineProcessingPool(
+						state_data.aline_size,
+						state_data.number_of_alines,
+						state_data.roi_offset,
+						state_data.roi_size,
+						state_data.subtract_background,
+						state_data.interp,
+						state_data.fft_enabled,
+						state_data.intpdk,
+						state_data.apod_window
+					);
+
+					processing_configured = true;
+
+					if (ready_to_scan() && state == STATE_OPEN)
+					{
+						state.store(STATE_READY);
+					}
+				}
+				else if (state.load() == STATE_ACQUIRIING)
+				{
+					printf("Cannot configure processing duration acquisition.\n");
+				}
+				else  // If SCANNING, make real-time adjustments to apod window, background subtraction option, interpolation
+				{
+
 				}
 			}
 		}
 		else if (msg.flag & MSG_SET_PATTERN)
 		{
 			printf("MSG_SET_PATTERN received\n");
+			scan_defined = false;
 			scan_defined = true;
-			if (ready_to_scan() && state != STATE_SCANNING)
+			if (ready_to_scan() && state == STATE_OPEN)
 			{
-				state = STATE_READY;
+				state.store(STATE_READY);
 			}
 		}
 		else if (msg.flag & MSG_START_SCAN)
@@ -273,7 +297,7 @@ std::atomic_bool main_running = false;
 std::thread main_t;
 void _main()
 {
-	state = STATE_OPEN;
+	state.store(STATE_OPEN);
 	while (main_running)
 	{
 		recv_msg();

@@ -80,11 +80,17 @@ class _AppContext(ApplicationContext):
     def _update(self):
         state = self.controller.state
         if state == 'scanning':
+            print('GUI in scanning state')
             self.window.set_mode_scanning()
         elif state == 'acquiring':
+            print('GUI in acquiring state')
             self.window.set_mode_acquiring()
         elif state == 'ready':
+            print('GUI in ready state')
             self.window.set_mode_ready()
+        elif state == 'open' or state == 'error' or state == 'unopened':
+            print('GUI in unready state:', state)
+            self.window.set_mode_not_ready()
 
     # -- Backend interface ------------------------------------------------
 

@@ -466,7 +466,7 @@ class ControlGroupBox(QGroupBox, UiWidget):
         self.pushScan.setEnabled(False)
         self.pushAcquire.setEnabled(True)
         self.pushStop.setEnabled(True)
-        self.spinFramesToAcquire.setEnabled(True)
+        self._numbered_check_changed()
         self.checkNumberedAcquisition.setEnabled(True)
 
     def set_mode_acquiring(self):
@@ -480,7 +480,7 @@ class ControlGroupBox(QGroupBox, UiWidget):
         self.pushScan.setEnabled(True)
         self.pushAcquire.setEnabled(True)
         self.pushStop.setEnabled(False)
-        self.spinFramesToAcquire.setEnabled(True)
+        self._numbered_check_changed()
         self.checkNumberedAcquisition.setEnabled(True)
 
     def _numbered_check_changed(self):
@@ -562,14 +562,14 @@ class FileGroupBox(QGroupBox, UiWidget):
         self._directory = str(QFileDialog.getExistingDirectory(self, "Select Experiment Directory", self._directory))
         self.lineDirectory.setText(self._directory)
 
-    def directory(self):
+    def directory(self) -> str:
         return self._directory
 
-    def trial(self):
+    def trial(self) -> str:
         return self._file_name
 
     def filename(self):
-        return os.path.join(self.directory, self.trial)
+        return os.path.join(self.directory(), self.trial())
 
     def save_metadata(self):
         return self.checkMetadata.isChecked()
@@ -587,6 +587,7 @@ class FileGroupBox(QGroupBox, UiWidget):
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
+
     changed = pyqtSignal()
 
     def __init__(self):
@@ -638,6 +639,7 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.groupFrameProcessing.setEnabled(not scanning)
         self.groupARepeatProcessing.setEnabled(not scanning)
         self.groupBRepeatProcessing.setEnabled(not scanning)
+        self.checkFFT.setEnabled(not scanning)
 
     def enabled(self):
         return self.isChecked()
@@ -1022,6 +1024,15 @@ class MainWindow(QMainWindow, UiWidget):
 
     def set_mode_ready(self):
         self.ControlGroupBox.set_mode_ready()
+        self.ScanGroupBox.toggleScanningMode(False)
+        self.ProcessingGroupBox.toggleScanningMode(False)
+        self.FileGroupBox.setEnabled(True)
+        self.ScanGroupBox.setEnabled(True)
+        self.ProcessingGroupBox.setEnabled(True)
+        self.menubar.setEnabled(True)
+
+    def set_mode_not_ready(self):
+        self.ControlGroupBox.set_mode_not_ready()
         self.ScanGroupBox.toggleScanningMode(False)
         self.ProcessingGroupBox.toggleScanningMode(False)
         self.FileGroupBox.setEnabled(True)
