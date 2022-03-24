@@ -1,3 +1,5 @@
+import ctypes
+
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 from PyQt5.QtCore import QTimer, Qt
 from controller import NIOCTController
@@ -86,13 +88,14 @@ class _AppContext(ApplicationContext):
             # print('GUI in ready state')
             self.window.set_mode_ready()
         elif state == 'open' or state == 'error' or state == 'unopened':
-            # print('GUI in unready state:', state)
+            print('GUI in unready state:', state)
             self.window.set_mode_not_ready()
 
     # -- Backend interface ------------------------------------------------
 
     def _open_controller(self):
         # Could switch between various backends here if you wanted
+        ctypes.cdll.LoadLibrary(os.path.join(self.lib_resource_location, 'fastnisdoct/libfftw3f-3.dll'))
         self.controller = NIOCTController(os.path.join(self.lib_resource_location, 'fastnisdoct/fastnisdoct.dll'))
         self.controller.open(
             self.window.camera_device_name(),

@@ -19,7 +19,7 @@
 #include "ni.h"
 #include <complex>
 
-#define IDLE_SLEEP_TIME 1000
+#define IDLE_SLEEP_MS 1000
 
 // msgs are passed into the main thread
 
@@ -72,7 +72,7 @@ struct state_msg {
 	bool fft_enabled;
 	bool subtract_background;
 	bool interp;
-	double intpdk;
+	double interpdk;
 	const float* apod_window;
 	int a_rpt_proc_flag;
 	int b_rpt_proc_flag;
@@ -107,7 +107,7 @@ inline void printf_state_data(state_msg s)
 	printf("fft_enabled: %i\n", s.fft_enabled);
 	printf("subtract_background: %i\n", s.subtract_background);
 	printf("interp: %i\n", s.interp);
-	printf("intpdk: %f\n", s.intpdk);
+	printf("interpdk: %f\n", s.interpdk);
 	printf("apod_window: <%p>\n", s.apod_window);
 	printf("a_rpt_proc_flag: %i\n", s.a_rpt_proc_flag);
 	printf("b_rpt_proc_flag: %i\n", s.b_rpt_proc_flag);
@@ -158,7 +158,7 @@ inline void recv_msg()
 				state_data.aline_size = msg.aline_size;
 				state_data.number_of_alines = msg.number_of_alines;
 				state_data.alines_per_b = msg.alines_per_b;
-				state_data.aline_repeat = msg.aline_repeat;
+				state_data.aline_repeat = msg.aline_repeat; 
 				state_data.bline_repeat = msg.bline_repeat;
 				state_data.number_of_buffers = msg.number_of_buffers;
 				state_data.roi_offset = msg.roi_offset;
@@ -178,6 +178,7 @@ inline void recv_msg()
 				if (processed_frame_buffer != NULL) { delete processed_frame_buffer; }
 				processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
 				
+				ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers);
 				printf("Buffers allocated.\n");
 
 				image_configured = true;
@@ -206,7 +207,7 @@ inline void recv_msg()
 					state_data.fft_enabled = msg.fft_enabled;
 					state_data.subtract_background = msg.subtract_background;
 					state_data.interp = msg.interp;
-					state_data.intpdk = msg.intpdk;
+					state_data.interpdk = msg.interpdk;
 					state_data.apod_window = msg.apod_window;
 					state_data.a_rpt_proc_flag = msg.a_rpt_proc_flag;
 					state_data.b_rpt_proc_flag = msg.b_rpt_proc_flag;
@@ -230,7 +231,7 @@ inline void recv_msg()
 				{
 					state_data.subtract_background = msg.subtract_background;
 					state_data.interp = msg.interp;
-					state_data.intpdk = msg.intpdk;
+					state_data.interpdk = msg.interpdk;
 					state_data.apod_window = msg.apod_window;
 				}
 			}
@@ -260,7 +261,6 @@ inline void recv_msg()
 			if (state.load() == STATE_SCANNING)
 			{
 				aline_processing_pool->terminate();
-				delete aline_processing_pool;
 				state.store(STATE_READY);
 			}
 		}
@@ -296,13 +296,19 @@ std::atomic_bool main_running = false;
 std::thread main_t;
 void _main()
 {
+
+	uint16_t* raw_frame_addr = NULL;
+	std::complex<float>* processed_alines_addr = NULL;
+
+	int cumulative_buffer_number = 0;
+
 	state.store(STATE_OPEN);
 	while (main_running)
 	{
 		recv_msg();
 		if (state.load() == STATE_UNOPENED || state.load() == STATE_OPEN || state.load() == STATE_READY)
 		{
-			Sleep(IDLE_SLEEP_TIME);  // Block for awhile if not scanning
+			Sleep(IDLE_SLEEP_MS);  // Block for awhile if not scanning
 		}
 		else if (state.load() == STATE_ERROR)
 		{
@@ -312,15 +318,30 @@ void _main()
 		else  // if SCANNING or ACQUIRING
 		{
 			// Lock out frame with IMAQ function
+			ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
+
+			processed_alines_addr = processed_frame_buffer->lock_out_head();
 			// Send job to AlineProcessingPool
+			aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window);
 			// Calculate background spectrum (to be used with next scan)
 			// Wait for job to finish
+			int spins = 0;
+			while (!aline_processing_pool->is_finished())
+			{
+				Sleep(10);
+				spins += 1;
+			}
+			printf("A-line processing pool finished. Spun %i times.\n", spins);
+			ni::release_buffer();
+			processed_frame_buffer->release_head();
+			cumulative_buffer_number += 1;
 			// Perform A-line averaging or differencing
 			// Perform B-line averaging or differencing
 			// Perform frame averaging
 			// if (state.load() == STATE_ACQUIRING)
 			//		enqueue the frame with the StreamWorker
 		}
+		printf("Main loop running. State %i\n", state.load());
 		fflush(stdout);
 	}
 }
@@ -347,6 +368,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		main_running = false;
 		main_t.join();
 		delete aline_processing_pool;
+		ni::daq_close();
+		ni::imaq_close();
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(
@@ -379,7 +402,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		bool fft_enabled,
 		bool subtract_background,
 		bool interp,
-		double intpdk,
+		double interpdk,
 		const float* apod_window,
 		int a_rpt_proc_flag,
 		int b_rpt_proc_flag,
@@ -390,7 +413,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.fft_enabled = fft_enabled;
 		msg.subtract_background = subtract_background;
 		msg.interp = interp;
-		msg.intpdk = intpdk;
+		msg.interpdk = interpdk;
 		msg.apod_window = apod_window;
 		msg.a_rpt_proc_flag = a_rpt_proc_flag;
 		msg.b_rpt_proc_flag = b_rpt_proc_flag;

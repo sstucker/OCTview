@@ -47,6 +47,7 @@ public:
 
 	WavenumberInterpolationPlan(int aline_size, double interpdk)
 	{
+		this->interpdk = interpdk;
 		linear_in_lambda = linspace(1 - (interpdk / 2), 1 + (interpdk / 2), aline_size);
 		for (int i = 0; i < aline_size; i++)
 		{
