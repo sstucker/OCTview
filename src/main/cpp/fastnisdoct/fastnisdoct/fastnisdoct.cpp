@@ -73,7 +73,8 @@ struct state_msg {
 	bool subtract_background;
 	bool interp;
 	double interpdk;
-	const float* apod_window;
+	float* apod_window;
+	float* background_spectrum;
 	int a_rpt_proc_flag;
 	int b_rpt_proc_flag;
 	int n_frame_avg;
@@ -134,6 +135,9 @@ int processed_frame_size = 0;  // Number of elements in the processed frame
 CircAcqBuffer<uint16_t>* raw_frame_buffer = NULL;
 CircAcqBuffer<std::complex<float>>* processed_frame_buffer = NULL;
 
+float* background_spectrum = NULL;
+
+
 inline bool ready_to_scan()
 {
 	return (image_configured && processing_configured && scan_defined);
@@ -172,12 +176,24 @@ inline void recv_msg()
 
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(std::complex<float>) * processed_frame_size));
 				printf("Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
-
+				
+				// Allocate or reallocate rings
 				if (raw_frame_buffer != NULL) { delete raw_frame_buffer; }
 				raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
 				if (processed_frame_buffer != NULL) { delete processed_frame_buffer; }
 				processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
 				
+				// Allocate processing buffers
+				delete[] state_data.apod_window;
+				delete[] background_spectrum;
+				
+				state_data.apod_window = new float[msg.aline_size];
+				memset(state_data.apod_window, 1, state_data.aline_size * sizeof(float));
+				
+				background_spectrum = new float[msg.aline_size];
+				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
+
+				// Set up NI image buffers
 				ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers);
 				printf("Buffers allocated.\n");
 
@@ -208,7 +224,10 @@ inline void recv_msg()
 					state_data.subtract_background = msg.subtract_background;
 					state_data.interp = msg.interp;
 					state_data.interpdk = msg.interpdk;
-					state_data.apod_window = msg.apod_window;
+					
+					// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
+					memcpy(state_data.apod_window, msg.apod_window, state_data.aline_size * sizeof(float));
+
 					state_data.a_rpt_proc_flag = msg.a_rpt_proc_flag;
 					state_data.b_rpt_proc_flag = msg.b_rpt_proc_flag;
 					state_data.n_frame_avg = msg.n_frame_avg;
@@ -232,7 +251,9 @@ inline void recv_msg()
 					state_data.subtract_background = msg.subtract_background;
 					state_data.interp = msg.interp;
 					state_data.interpdk = msg.interpdk;
-					state_data.apod_window = msg.apod_window;
+
+					// Apod window signal gets copied for safety(?)
+					memcpy(state_data.apod_window, msg.apod_window, state_data.aline_size * sizeof(float));
 				}
 			}
 		}
@@ -319,27 +340,33 @@ void _main()
 		{
 			// Lock out frame with IMAQ function
 			ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
-
-			processed_alines_addr = processed_frame_buffer->lock_out_head();
-			// Send job to AlineProcessingPool
-			aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window);
-			// Calculate background spectrum (to be used with next scan)
-			// Wait for job to finish
-			int spins = 0;
-			while (!aline_processing_pool->is_finished())
+			if (raw_frame_addr != NULL)
 			{
-				Sleep(10);
-				spins += 1;
-			}
-			printf("A-line processing pool finished. Spun %i times.\n", spins);
-			ni::release_buffer();
-			processed_frame_buffer->release_head();
-			cumulative_buffer_number += 1;
-			// Perform A-line averaging or differencing
-			// Perform B-line averaging or differencing
-			// Perform frame averaging
-			// if (state.load() == STATE_ACQUIRING)
-			//		enqueue the frame with the StreamWorker
+				processed_alines_addr = processed_frame_buffer->lock_out_head();
+
+				// Send job to AlineProcessingPool
+				aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window, background_spectrum);
+				
+				// Calculate background spectrum (to be used with next scan)
+				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
+				
+				// Wait for job to finish
+				int spins = 0;
+				while (!aline_processing_pool->is_finished())
+				{
+					Sleep(10);
+					spins += 1;
+				}
+				printf("A-line processing pool finished. Spun %i times.\n", spins);
+				ni::release_buffer();
+				processed_frame_buffer->release_head();
+				cumulative_buffer_number += 1;
+				// Perform A-line averaging or differencing
+				// Perform B-line averaging or differencing
+				// Perform frame averaging
+				// if (state.load() == STATE_ACQUIRING)
+				//		enqueue the frame with the StreamWorker
+			}  // if raw frame grabbed properly
 		}
 		printf("Main loop running. State %i\n", state.load());
 		fflush(stdout);
@@ -370,6 +397,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		delete aline_processing_pool;
 		ni::daq_close();
 		ni::imaq_close();
+		delete[] background_spectrum;
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(
@@ -403,7 +431,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		bool subtract_background,
 		bool interp,
 		double interpdk,
-		const float* apod_window,
+		float* apod_window,
 		int a_rpt_proc_flag,
 		int b_rpt_proc_flag,
 		int n_frame_avg

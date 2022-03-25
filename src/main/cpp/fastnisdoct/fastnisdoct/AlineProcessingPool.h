@@ -15,6 +15,7 @@ struct aline_processing_job_msg {
 	std::atomic_int* barrier;
 	WavenumberInterpolationPlan* interp_plan;  // if NULL, no interp
 	const float* apod_window;
+	float* background_spectrum;
 	fftwf_plan* fft_plan;  // if NULL, no FFT
 };
 
@@ -32,12 +33,55 @@ void aline_processing_worker(
 	fftwf_plan* fft_plan  // If NULL, no FFT and no axial cropping is performed.
 )
 {
+
+	float* spectral_buffer = new float[aline_size * number_of_alines];
+	float* intermediate_buffer = new float[aline_size * number_of_alines];
+	fftwf_complex* spatial_buffer = fftwf_alloc_complex(aline_size * number_of_alines);
+
+	int spatial_aline_size = aline_size / 2 + 1;  // Size of the A-line after R2C FFT
+
 	printf("Worker %i launched. Params: A-line size %i, Number of A-lines %i, Z ROI [%i %i]\n", std::this_thread::get_id(), aline_size, number_of_alines, roi_offset, roi_size);
+
 	while (running->load() == true)
 	{
 		aline_processing_job_msg msg;
 		if (queue->dequeue(msg))
 		{
+			// Subtract background spectrum
+			for (int i = 0; i < number_of_alines; i++)
+			{
+				for (int j = 0; j < aline_size; j++)
+				{
+					spectral_buffer[i * aline_size + j] = (float)msg.src_frame[i * aline_size + j] - msg.background_spectrum[j];
+				}
+			}
+			// Apply wavenumber-linearization interpolation
+			if (msg.interp_plan != NULL)
+			{
+				for (int i = 0; i < number_of_alines; i++)
+				{
+					interpdk_execute(*msg.interp_plan, spectral_buffer + i * aline_size, intermediate_buffer + i * aline_size);
+				}
+			}
+			// Multiply by apodization window
+			for (int i = 0; i < number_of_alines; i++)
+			{
+				for (int j = 0; j < aline_size; j++)
+				{
+					intermediate_buffer[i * aline_size + j] *= msg.apod_window[j];
+				}
+			}
+			// FFT
+			if (msg.fft_plan != NULL)
+			{
+				fftwf_execute_dft_r2c(*(msg.fft_plan), intermediate_buffer, spatial_buffer);
+			}
+			// Cropping ROI and copying to output address
+			for (int i = 0; i < number_of_alines; i++)
+			{
+				memcpy(msg.dst_frame + i * roi_size, (fftwf_complex*)spatial_buffer + i * spatial_aline_size + roi_offset, roi_size * sizeof(fftwf_complex));
+			}
+
 			printf("Worker %i finished, about to increment barrier which is currently %i\n", std::this_thread::get_id(), msg.barrier->load());
 			*msg.barrier += 1;
 		}
@@ -47,6 +91,11 @@ void aline_processing_worker(
 			 // printf("Worker %i polled an empty queue.\n", std::this_thread::get_id());
 		}
 	}
+
+	delete[] spectral_buffer;
+	delete[] intermediate_buffer;
+	fftwf_free(spatial_buffer);
+
 	printf("Worker %i terminated.\n", std::this_thread::get_id());
 }
 
@@ -70,6 +119,7 @@ private:
 public:
 
 	int aline_size;
+	int spatial_aline_size;  // A-line size after real-to-complex FFT
 	int total_alines;
 	int number_of_workers;
 	int alines_per_worker;
@@ -95,6 +145,7 @@ public:
 
 		// Need these for second constructor phase
 		this->aline_size = aline_size;
+		this->spatial_aline_size = aline_size / 2 + 1;
 		this->roi_offset = roi_offset;
 		this->roi_size = roi_size;
 
@@ -136,7 +187,8 @@ public:
 		uint16_t* src_frame, // Pointer to raw frame
 		bool interpolation_enabled, // Whether or not to perform wavenumber-linearization interpolation.
 		double interpdk, // Wavenumber-linearization interpolation parameter.
-		const float* apodization_window  // Window function to multiply spectral A-line by prior to FFT.
+		const float* apodization_window,  // Window function to multiply spectral A-line by prior to FFT.
+		float* background_spectrum  // Spectrum to subtract from each raw spectrum prior to multiplication by the apod window
 	)
 	{
 		if (is_finished())
@@ -159,17 +211,18 @@ public:
 			{
 				WavenumberInterpolationPlan* interpdk_plan_p = NULL;
 			}
-			for (JobQueue *q : queues)
+			for (int i = 0; i < queues.size(); i++)
 			{
-				printf("Enqueuing job in JobQueue at %p\n", q);
+				printf("Enqueuing job in JobQueue at %p\n", queues[i]);
 				aline_processing_job_msg job;
-				job.dst_frame = dst_frame;
-				job.src_frame = src_frame;
+				job.dst_frame = dst_frame + i * this->spatial_aline_size;
+				job.src_frame = src_frame + i * this->aline_size;
 				job.barrier = &_barrier;
 				job.interp_plan = &interpdk_plan;
 				job.apod_window = apodization_window;
+				job.background_spectrum = background_spectrum;
 				job.fft_plan = &fft_plan;
-				q->enqueue(job);
+				queues[i]->enqueue(job);
 			}
 			return 0;
 		}
@@ -226,6 +279,7 @@ public:
 		for (JobQueue* p : queues)
 			delete p;
 		queues.clear();
+		fftwf_cleanup();
 	}
 
 	~AlineProcessingPool()

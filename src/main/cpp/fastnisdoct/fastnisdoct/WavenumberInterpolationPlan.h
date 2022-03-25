@@ -47,7 +47,10 @@ public:
 
 	WavenumberInterpolationPlan(int aline_size, double interpdk)
 	{
+
 		this->interpdk = interpdk;
+		this->aline_size = aline_size;
+
 		linear_in_lambda = linspace(1 - (interpdk / 2), 1 + (interpdk / 2), aline_size);
 		for (int i = 0; i < aline_size; i++)
 		{
@@ -58,6 +61,7 @@ public:
 		linear_in_k = linspace(min_lam, max_lam, aline_size);
 
 		d_lam = linear_in_lambda[1] - linear_in_lambda[0];
+		this->d_lam = d_lam;
 
 		interp_map = std::vector<std::vector<int>>(2);
 		interp_map[0] = std::vector<int>(aline_size);  // Left nearest-neighbor
@@ -99,32 +103,25 @@ public:
 };
 
 
-void interpdk_execute(WavenumberInterpolationPlan plan, int number_of_alines, uint16_t* raw_src, float* interpolated)
+void interpdk_execute(WavenumberInterpolationPlan plan, float* raw_src, float* interpolated)
 {
 	float interp_y0;
 	float interp_y1;
 	float interp_dy;
 	float interp_dx;
-
-	// k-linearization and DC subtraction
-	for (int i = 0; i < number_of_alines; i++)
+	for (int j = 0; j < plan.aline_size; j++)  // For each element of each A-line
 	{
-		raw_src[plan.aline_size * i] = 0;
-		for (int j = 0; j < plan.aline_size; j++)  // For each element of each A-line
+		interp_y0 = raw_src[plan.interp_map[0][j]];
+		interp_y1 = raw_src[plan.interp_map[1][j]];
+		if (plan.interp_map[0][j] == plan.interp_map[1][j])
 		{
-			interp_y0 = raw_src[plan.aline_size * i + plan.interp_map[0][j]];
-			interp_y1 = raw_src[plan.aline_size * i + plan.interp_map[1][j]];
-			if (plan.interp_map[0][i] == plan.interp_map[1][i])
-			{
-				interpolated[plan.aline_size * i + j] = interp_y0;
-			}
-			else
-			{
-				interp_dy = interp_y1 - interp_y0;
-				interp_dx = plan.linear_in_k[j] - plan.linear_in_lambda[plan.interp_map[0][j]];
-				interpolated[plan.aline_size * i + j] = interp_y0 + interp_dx * (interp_dy / plan.d_lam);
-			}
+			interpolated[j] = interp_y0;
+		}
+		else
+		{
+			interp_dy = interp_y1 - interp_y0;
+			interp_dx = plan.linear_in_k[j] - plan.linear_in_lambda[plan.interp_map[0][j]];
+			interpolated[j] = interp_y0 + interp_dx * (interp_dy / plan.d_lam);
 		}
 	}
 }
-

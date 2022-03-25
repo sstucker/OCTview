@@ -108,7 +108,7 @@
         <number>2400</number>
        </property>
        <property name="value">
-        <number>128</number>
+        <number>10</number>
        </property>
       </widget>
      </item>
@@ -248,7 +248,7 @@
         <number>3600</number>
        </property>
        <property name="value">
-        <number>128</number>
+        <number>10</number>
        </property>
       </widget>
      </item>

@@ -105,10 +105,10 @@ namespace ni
 		// TEST
 		for (int i = 0; i < acqWinWidth * acqWinHeight; i++)
 		{
-			test_buffer[i] = (uint16_t)std::rand() % 4099;
-			// test_buffer[i] = 0;
+			// test_buffer[i] = (uint16_t)std::rand() % 4099;
+			test_buffer[i] = 0;
 		}
-		raw_frame_addr = &test_buffer;
+		*raw_frame_addr = test_buffer;
 		printf("Test buffer generated!\n");
 		return 0;
 	}
