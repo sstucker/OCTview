@@ -653,7 +653,7 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
 
     def apodization_window(self) -> callable:
         """Returns function which defines the apodization window. Takes A-line size as an argument."""
-        if self.checkApodization.isChecked() and self.isChecked():
+        if self.checkApodization.isChecked():
             return self._windows[self.comboApodization.currentText()]
         else:
             return self._null_window

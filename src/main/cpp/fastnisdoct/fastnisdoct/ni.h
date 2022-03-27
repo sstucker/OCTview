@@ -50,6 +50,12 @@ namespace ni
 		acqWinHeight = number_of_alines;
 		// Test code
 		test_buffer = new uint16_t[acqWinWidth * acqWinHeight];
+		for (int i = 0; i < acqWinWidth * acqWinHeight; i++)
+		{
+			// test_buffer[i] = (uint16_t)std::rand() % 4099;
+			// test_buffer[i] = 0;
+			test_buffer[i] = i % 2048;
+		}
 		printf("NI IMAQ buffers set up.\n");
 		return 0;
 	}
@@ -103,11 +109,6 @@ namespace ni
 	{
 		printf("Attempting to lock out NI IMAQ buffer %i.\n", frame_index);
 		// TEST
-		for (int i = 0; i < acqWinWidth * acqWinHeight; i++)
-		{
-			// test_buffer[i] = (uint16_t)std::rand() % 4099;
-			test_buffer[i] = 0;
-		}
 		*raw_frame_addr = test_buffer;
 		printf("Test buffer generated!\n");
 		return 0;

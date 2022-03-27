@@ -10,7 +10,7 @@
 # define IDLE_SLEEP_MS 50
 
 struct aline_processing_job_msg {
-	std::complex<float>* dst_frame;
+	fftwf_complex* dst_frame;
 	uint16_t* src_frame;
 	std::atomic_int* barrier;
 	WavenumberInterpolationPlan* interp_plan;  // if NULL, no interp
@@ -20,7 +20,7 @@ struct aline_processing_job_msg {
 };
 
 
-typedef spsc_bounded_queue_t<aline_processing_job_msg> JobQueue;
+typedef spsc_bounded_queue_t<aline_processing_job_msg> JobQueue; 
 
 
 void aline_processing_worker(
@@ -33,12 +33,10 @@ void aline_processing_worker(
 	fftwf_plan* fft_plan  // If NULL, no FFT and no axial cropping is performed.
 )
 {
-
+	int spatial_aline_size = aline_size / 2 + 1;
 	float* spectral_buffer = new float[aline_size * number_of_alines];
 	float* intermediate_buffer = new float[aline_size * number_of_alines];
-	fftwf_complex* spatial_buffer = fftwf_alloc_complex(aline_size * number_of_alines);
-
-	int spatial_aline_size = aline_size / 2 + 1;  // Size of the A-line after R2C FFT
+	fftwf_complex* spatial_buffer = fftwf_alloc_complex(spatial_aline_size * number_of_alines);
 
 	printf("Worker %i launched. Params: A-line size %i, Number of A-lines %i, Z ROI [%i %i]\n", std::this_thread::get_id(), aline_size, number_of_alines, roi_offset, roi_size);
 
@@ -60,7 +58,7 @@ void aline_processing_worker(
 			{
 				for (int i = 0; i < number_of_alines; i++)
 				{
-					interpdk_execute(*msg.interp_plan, spectral_buffer + i * aline_size, intermediate_buffer + i * aline_size);
+					interpdk_execute(msg.interp_plan, spectral_buffer + i * aline_size, intermediate_buffer + i * aline_size);
 				}
 			}
 			// Multiply by apodization window
@@ -79,10 +77,10 @@ void aline_processing_worker(
 			// Cropping ROI and copying to output address
 			for (int i = 0; i < number_of_alines; i++)
 			{
-				memcpy(msg.dst_frame + i * roi_size, (fftwf_complex*)spatial_buffer + i * spatial_aline_size + roi_offset, roi_size * sizeof(fftwf_complex));
+				memcpy(msg.dst_frame + i * roi_size, spatial_buffer + i * spatial_aline_size + roi_offset, roi_size * sizeof(fftwf_complex));
 			}
 
-			printf("Worker %i finished, about to increment barrier which is currently %i\n", std::this_thread::get_id(), msg.barrier->load());
+			// printf("Worker %i finished writing to %p, about to increment barrier which is currently %i\n", std::this_thread::get_id(), msg.dst_frame, msg.barrier->load());
 			*msg.barrier += 1;
 		}
 		else
@@ -123,7 +121,6 @@ public:
 	int total_alines;
 	int number_of_workers;
 	int alines_per_worker;
-	double interpdk;
 
 	AlineProcessingPool()
 	{
@@ -164,17 +161,21 @@ public:
 		// FFTW "many" plan
 		int n[] = { aline_size };
 		int idist = aline_size;
-		int odist = roi_size;
+		int odist = spatial_aline_size;
 		int istride = 1;
 		int ostride = 1;
 		int* inembed = n;
 		int* onembed = &odist;
 		float* dummy_in = fftwf_alloc_real(aline_size * alines_per_worker + 8 * alines_per_worker);
-		fftwf_complex* dummy_out = fftwf_alloc_complex(roi_size * total_alines);
+		fftwf_complex* dummy_out = fftwf_alloc_complex(spatial_aline_size * total_alines);
 
 		// fftwf_import_wisdom_from_filename("C:/Users/OCT/Dev/RealtimeOCT/octcontroller_fftw_wisdom.txt");
 
 		fft_plan = fftwf_plan_many_dft_r2c(1, n, alines_per_worker, dummy_in, inembed, istride, idist, dummy_out, onembed, ostride, odist, FFTW_MEASURE);
+		if (fft_plan == NULL)
+		{
+			printf("Failed to generate FFTWF plan!\n");
+		}
 		printf("Generated FFTWF plan.\n");
 
 		fftwf_free(dummy_in);
@@ -183,7 +184,7 @@ public:
 
 	// Submit a job to the pool. As only one job can be parallelized at one time by this pool, returns -1 if a job is already underway.
 	int submit(
-		std::complex<float>* dst_frame, // Pointer to destination buffer
+		fftwf_complex* dst_frame, // Pointer to destination buffer
 		uint16_t* src_frame, // Pointer to raw frame
 		bool interpolation_enabled, // Whether or not to perform wavenumber-linearization interpolation.
 		double interpdk, // Wavenumber-linearization interpolation parameter.
@@ -194,6 +195,7 @@ public:
 		if (is_finished())
 		{
 			_barrier.store(0);
+			WavenumberInterpolationPlan* interpdk_plan_p = NULL;
 			if (interpolation_enabled)
 			{
 				if (interpdk == this->interpdk_plan.interpdk)  // If there has been no change to the interpolation parameter.
@@ -203,22 +205,19 @@ public:
 				else
 				{
 					printf("Planning lambda->k interpolation... ");
-					interpdk_plan = WavenumberInterpolationPlan(this->aline_size, interpdk);
+					this->interpdk_plan = WavenumberInterpolationPlan(this->aline_size, interpdk);
+					interpdk_plan_p = &this->interpdk_plan;
 					printf(" Finished.\n");
 				}
 			}
-			else
-			{
-				WavenumberInterpolationPlan* interpdk_plan_p = NULL;
-			}
 			for (int i = 0; i < queues.size(); i++)
 			{
-				printf("Enqueuing job in JobQueue at %p\n", queues[i]);
+				// printf("Enqueuing job in JobQueue at %p\n", queues[i]);
 				aline_processing_job_msg job;
-				job.dst_frame = dst_frame + i * this->spatial_aline_size;
-				job.src_frame = src_frame + i * this->aline_size;
+				job.dst_frame = dst_frame + i * this->roi_size * this->alines_per_worker;
+				job.src_frame = src_frame + i * this->aline_size * this->alines_per_worker;
 				job.barrier = &_barrier;
-				job.interp_plan = &interpdk_plan;
+				job.interp_plan = interpdk_plan_p;
 				job.apod_window = apodization_window;
 				job.background_spectrum = background_spectrum;
 				job.fft_plan = &fft_plan;
@@ -276,15 +275,14 @@ public:
 			}
 		}
 		pool.clear();
-		for (JobQueue* p : queues)
-			delete p;
+		for (int i = 0; i < number_of_workers; i++)
+		{
+			delete queues[i];
+		}
 		queues.clear();
 		fftwf_cleanup();
 	}
 
-	~AlineProcessingPool()
-	{
-		// terminate();
-	}
-
 };
+
+

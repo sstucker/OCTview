@@ -103,25 +103,25 @@ public:
 };
 
 
-void interpdk_execute(WavenumberInterpolationPlan plan, float* raw_src, float* interpolated)
+void interpdk_execute(WavenumberInterpolationPlan* plan, float* raw_src, float* interpolated)
 {
 	float interp_y0;
 	float interp_y1;
 	float interp_dy;
 	float interp_dx;
-	for (int j = 0; j < plan.aline_size; j++)  // For each element of each A-line
+	for (int j = 0; j < plan->aline_size; j++)  // For each element of each A-line
 	{
-		interp_y0 = raw_src[plan.interp_map[0][j]];
-		interp_y1 = raw_src[plan.interp_map[1][j]];
-		if (plan.interp_map[0][j] == plan.interp_map[1][j])
+		interp_y0 = raw_src[plan->interp_map[0][j]];
+		interp_y1 = raw_src[plan->interp_map[1][j]];
+		if (plan->interp_map[0][j] == plan->interp_map[1][j])
 		{
 			interpolated[j] = interp_y0;
 		}
 		else
 		{
 			interp_dy = interp_y1 - interp_y0;
-			interp_dx = plan.linear_in_k[j] - plan.linear_in_lambda[plan.interp_map[0][j]];
-			interpolated[j] = interp_y0 + interp_dx * (interp_dy / plan.d_lam);
+			interp_dx = plan->linear_in_k[j] - plan->linear_in_lambda[plan->interp_map[0][j]];
+			interpolated[j] = interp_y0 + interp_dx * (interp_dy / plan->d_lam);
 		}
 	}
 }

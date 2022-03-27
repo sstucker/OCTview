@@ -38,17 +38,6 @@
 #define STATE_ACQUIRIING		  static_cast<int>( 5 )
 #define STATE_ERROR				  static_cast<int>( 6 )
 
-struct raw_frame {
-	const uint16_t* buffer;
-	int aline_size;
-	int number_of_alines;
-};
-
-struct processed_frame {
-	const std::complex<float>* buffer;
-	int aline_size;
-	int number_of_alines;
-};
 
 struct state_msg {
 	
@@ -74,7 +63,6 @@ struct state_msg {
 	bool interp;
 	double interpdk;
 	float* apod_window;
-	float* background_spectrum;
 	int a_rpt_proc_flag;
 	int b_rpt_proc_flag;
 	int n_frame_avg;
@@ -132,8 +120,8 @@ state_msg state_data;
 int raw_frame_size = 0;  // Number of elements in the raw frame
 int processed_frame_size = 0;  // Number of elements in the processed frame
 
-CircAcqBuffer<uint16_t>* raw_frame_buffer = NULL;
-CircAcqBuffer<std::complex<float>>* processed_frame_buffer = NULL;
+CircAcqBuffer<uint16_t>* raw_frame_buffer;
+CircAcqBuffer<fftwf_complex>* processed_frame_buffer;
 
 float* background_spectrum = NULL;
 
@@ -154,9 +142,9 @@ inline void recv_msg()
 			printf("MSG_CONFIGURE_IMAGE received\n");
 			if (state.load() == STATE_READY || state.load() == STATE_OPEN)
 			{
+				state.store(STATE_OPEN);
 				image_configured = false;
 				processing_configured = false;
-				state.store(STATE_OPEN);
 
 				state_data.dac_output_rate = msg.dac_output_rate;
 				state_data.aline_size = msg.aline_size;
@@ -174,14 +162,15 @@ inline void recv_msg()
 				printf("Image configured: Number of A-lines: %i\n", state_data.number_of_alines);
 				printf("Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 
-				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(std::complex<float>) * processed_frame_size));
+				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(fftwf_complex) * processed_frame_size));
 				printf("Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
 				
+				// delete raw_frame_buffer;
+				// delete processed_frame_buffer;
+
 				// Allocate or reallocate rings
-				if (raw_frame_buffer != NULL) { delete raw_frame_buffer; }
 				raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
-				if (processed_frame_buffer != NULL) { delete processed_frame_buffer; }
-				processed_frame_buffer = new CircAcqBuffer<std::complex<float>>(state_data.number_of_buffers, processed_frame_size);
+				processed_frame_buffer = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_frame_size);
 				
 				// Allocate processing buffers
 				delete[] state_data.apod_window;
@@ -217,8 +206,8 @@ inline void recv_msg()
 
 				if (state.load() != STATE_SCANNING)  // If not scanning, update everything and reinitialize the A-line ThreadPool and processing buffers
 				{
-					processing_configured = false;
 					state.store(STATE_OPEN);
+					processing_configured = false;
 
 					state_data.fft_enabled = msg.fft_enabled;
 					state_data.subtract_background = msg.subtract_background;
@@ -319,7 +308,7 @@ void _main()
 {
 
 	uint16_t* raw_frame_addr = NULL;
-	std::complex<float>* processed_alines_addr = NULL;
+	fftwf_complex* processed_alines_addr = NULL;
 
 	int cumulative_buffer_number = 0;
 
