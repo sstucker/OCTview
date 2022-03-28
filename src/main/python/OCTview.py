@@ -10,6 +10,8 @@ from controller import NIOCTController
 import os
 import time
 
+import numpy as np
+
 CALLBACK_DEBOUNCE_MS = 400
 
 
@@ -70,6 +72,11 @@ class _AppContext(ApplicationContext):
         self._update_timer.timeout.connect(self._update)
         self._update_timer.start(100)  # 10 Hz
 
+        # Periodic display of grabbed frame
+        self._display_update_timer = QTimer()
+        self._display_update_timer.timeout.connect(self._display_update)
+        self._display_buffer = None
+
         self.window.show()
         self._open_controller()
 
@@ -90,6 +97,11 @@ class _AppContext(ApplicationContext):
         elif state == 'open' or state == 'error' or state == 'unopened':
             print('GUI in unready state:', state)
             self.window.set_mode_not_ready()
+
+    def _display_update(self):
+        print("Updating the display...")
+        self.controller.grab_frame(self._display_buffer)
+        self.window.display_frame(self._display_buffer)
 
     # -- Backend interface ------------------------------------------------
 
@@ -130,6 +142,7 @@ class _AppContext(ApplicationContext):
             )
             self._processed_frame_size = self.window.processed_frame_size()
             self._raw_frame_size = self.window.raw_frame_size()
+            self._display_buffer = np.empty([self.window.aline_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1]], dtype=np.complex64)
             print('...Frame sizes updated:', self._raw_frame_size, self._processed_frame_size)
 
     def _configure_processing(self):
@@ -176,6 +189,7 @@ class _AppContext(ApplicationContext):
             self.controller.stop_acquisition()
         else:
             self.controller.start_scan()
+            self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate) * 1000)
 
     def _start_acquisition(self):
         if self.controller.state != 'scanning' and self.controller.state == 'ready':
@@ -189,6 +203,7 @@ class _AppContext(ApplicationContext):
     def _stop(self):
         self.controller.stop_acquisition()
         self.controller.stop_scan()
+        self._display_update_timer.stop()
 
 
 # Module interface

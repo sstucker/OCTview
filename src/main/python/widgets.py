@@ -693,6 +693,7 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
         super().__init__()
 
         self.resize(200, 100)
+        self.setFixedSize(self.minimumSize())
 
         self._wavelengths = wavelengths
         self._n = len(self._wavelengths)
@@ -760,10 +761,12 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
     def __init__(self, title=None, hslider=False, vslider=False):
         super().__init__()
 
-        self.setFixedSize(self.minimumSize())
-        # self.resize(100, 100)
+        # self.setFixedSize(self.minimumSize())
+        self.resize(100, 100)
 
         self._plot = self.addPlot()
+        self.setFixedSize(100, 100)
+
         self._plot.setAspectLocked(True)
         self._plot.showGrid(x=True, y=True)
         self._plot.invertY()
@@ -856,9 +859,9 @@ class DisplayWidget(QWidget, UiWidget):
         self.checkBScanMIP.toggled.connect(self._updateEnfaceSliders)
         self.radioViewX.toggled.connect(self._updateEnfaceSliders)
 
-        self._timer = QTimer()
-        self._timer.timeout.connect(self._update)
-        self._timer.start(1000)
+        # self._timer = QTimer()
+        # self._timer.timeout.connect(self._update)
+        # self._timer.start(1000)
 
     def _enfaceMIPCheckChanged(self):
         self._bscan.setHSliderHidden(self.checkEnfaceMIP.isChecked())
@@ -873,8 +876,14 @@ class DisplayWidget(QWidget, UiWidget):
             self._enface.setVSliderHidden(self.checkBScanMIP.isChecked())
             self._enface.setHSliderHidden(True)
 
-    def _update(self):
+    def display_frame(self, frame: np.ndarray):
+        if self.tabDisplay.currentIndex() == 0:
+            self._enface.updateData(frame[0, :, :], fov=[1 * 10 ** -6, 1 * 10 ** -6])
+            self._bscan.updateData(frame[:, :, 0], fov=[1 * 10 ** -6, 1 * 10 ** -6])
+        elif self.tabDisplay.currentIndex() == 1:
+            self._volume.updateData(frame)
 
+    def _update(self):
         img = np.random.random([128, 128, 200])
         if self.tabDisplay.currentIndex() == 0:
             self._enface.updateData(img, fov=[1 * 10 ** -6, 1 * 10 ** -6])
@@ -1121,3 +1130,11 @@ class MainWindow(QMainWindow, UiWidget):
 
     def filename(self) -> str:
         return self.FileGroupBox.filename()
+
+    def display_frame(self, frame: np.ndarray):
+        # self.DisplayWidget.display_frame(
+        #     np.reshape(
+        #         frame, [self.aline_size(), self.scan_pattern().dimensions[0], self.scan_pattern().dimensions[1]]
+        #     )
+        # )
+        self.DisplayWidget.display_frame(frame)

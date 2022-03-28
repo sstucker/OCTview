@@ -12,6 +12,7 @@ c_uint32_p = ndpointer(dtype=np.uint32, ndim=1, flags='C_CONTIGUOUS')
 c_float_p = ndpointer(dtype=np.float32, ndim=1, flags='C_CONTIGUOUS')
 c_double_p = ndpointer(dtype=np.float64, ndim=1, flags='C_CONTIGUOUS')
 c_complex64_p = ndpointer(dtype=np.complex64, ndim=1, flags='C_CONTIGUOUS')
+c_complex64_p_3d = ndpointer(dtype=np.complex64, ndim=3, flags='C_CONTIGUOUS')
 
 
 class NIOCTController:
@@ -32,6 +33,7 @@ class NIOCTController:
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int]
         self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
+        self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p_3d]
 
         self._lib.nisdoct_get_state.restype = c.c_int
         self._lib.nisdoct_ready.restype = c.c_bool
@@ -228,8 +230,8 @@ class NIOCTController:
         """Returns True if controller is in the ACQUIRING state."""
         return self._lib.nisdoct_acquiring()
 
-    # def grab_frame(self, output):
-    #     return self._lib.NIOCT_grabFrame(self._handle, output)
-    #
+    def grab_frame(self, output):
+        return self._lib.nisdoct_grab_frame(output)
+
     # def grab_spectrum(self, output):
     #     return self._lib.NIOCT_grabSpectrum(self._handle, output)

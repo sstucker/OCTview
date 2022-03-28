@@ -118,9 +118,10 @@ std::atomic_int state = STATE_UNOPENED;
 state_msg state_data;
 
 int raw_frame_size = 0;  // Number of elements in the raw frame
-int processed_frame_size = 0;  // Number of elements in the processed frame
+int processed_alines_size;  // Number of elements in the frame after A-line processing has been carried out
+int processed_frame_size = 0;  // Number of elements in the frame after inter A-line processing (frame processed) has been carried out
 
-CircAcqBuffer<uint16_t>* raw_frame_buffer;
+CircAcqBuffer<fftwf_complex>* processed_alines_buffer;
 CircAcqBuffer<fftwf_complex>* processed_frame_buffer;
 
 float* background_spectrum = NULL;
@@ -157,19 +158,20 @@ inline void recv_msg()
 				state_data.roi_size = msg.roi_size;
 
 				// printf_state_data(state_data);
-				processed_frame_size = state_data.roi_size * ((state_data.number_of_alines / state_data.aline_repeat) / state_data.bline_repeat);
 				raw_frame_size = msg.aline_size * msg.number_of_alines;
+				processed_alines_size = msg.roi_size * msg.number_of_alines;
+				processed_frame_size = state_data.roi_size * ((state_data.number_of_alines / state_data.aline_repeat) / state_data.bline_repeat);
 				printf("Image configured: Number of A-lines: %i\n", state_data.number_of_alines);
 				printf("Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(fftwf_complex) * processed_frame_size));
 				printf("Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
 				
-				// delete raw_frame_buffer;
-				// delete processed_frame_buffer;
+				delete processed_alines_buffer;
+				delete processed_frame_buffer;
 
 				// Allocate or reallocate rings
-				raw_frame_buffer = new CircAcqBuffer<uint16_t>(state_data.number_of_buffers, state_data.aline_size * state_data.number_of_alines);
+				processed_alines_buffer = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_alines_size);
 				processed_frame_buffer = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_frame_size);
 				
 				// Allocate processing buffers
@@ -331,14 +333,31 @@ void _main()
 			ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
 			if (raw_frame_addr != NULL)
 			{
-				processed_alines_addr = processed_frame_buffer->lock_out_head();
+				processed_alines_addr = processed_alines_buffer->lock_out_head();
 
 				// Send job to AlineProcessingPool
 				aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window, background_spectrum);
 				
-				// Calculate background spectrum (to be used with next scan)
+				// Calculate average background spectrum (to be used with next scan)
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
-				
+				if (state_data.subtract_background)
+				{
+					for (int i = 0; i < state_data.number_of_alines; i++)
+					{
+						for (int j = 0; j < state_data.aline_size; j++)
+						{
+							background_spectrum[j] += (float)raw_frame_addr[state_data.aline_size * i + j];
+						}
+					}
+					for (int i = 0; i < state_data.number_of_alines; i++)
+					{
+						for (int j = 0; j < state_data.aline_size; j++)
+						{
+							background_spectrum[j] /= (float)state_data.number_of_alines;
+						}
+					}
+				}
+
 				// Wait for job to finish
 				int spins = 0;
 				while (!aline_processing_pool->is_finished())
@@ -348,7 +367,7 @@ void _main()
 				}
 				printf("A-line processing pool finished. Spun %i times.\n", spins);
 				ni::release_buffer();
-				processed_frame_buffer->release_head();
+				processed_alines_buffer->release_head();
 				cumulative_buffer_number += 1;
 				// Perform A-line averaging or differencing
 				// Perform B-line averaging or differencing
@@ -517,6 +536,21 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	{
 		return (state.load() == STATE_ACQUIRIING);
 	}
+
+	__declspec(dllexport) int nisdoct_grab_frame(std::complex<float>* dst)
+	{
+		if (processed_alines_buffer != NULL)
+		{
+			int i = processed_alines_buffer->get_count();
+			memcpy(dst, (*processed_alines_buffer)[i], processed_alines_size * sizeof(fftw_complex));
+			return i;
+		}
+		else
+		{
+			return -1;
+		}
+	}
+
 
 }
 

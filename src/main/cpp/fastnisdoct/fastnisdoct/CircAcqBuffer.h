@@ -134,7 +134,7 @@ public:
 
 	int push(T* src)
 	{
-		while (!locks[head].try_lock());  // prone to deadlock
+		while (!locks[head].try_lock());
 		memcpy(ring[head]->arr, src, sizeof(T) * element_size);
 		ring[head]->count.store(count);
 		int oldhead = head;
@@ -144,7 +144,8 @@ public:
 		return oldhead;
 	}
 
-	// Interface for caller to copy into buffer head directly
+	// Interface to copy into buffer head directly if a push is too expensive.
+
 	T* lock_out_head()
 	{
 		while (!locks[head].try_lock());
@@ -170,7 +171,6 @@ public:
 
 	void clear()
 	{
-		// Reset the buffer to its initial state with a count of 0. Not thread safe
 		for (int i = 0; i < ring_size; i++)
 		{
 			while (!locks[i].try_lock());
