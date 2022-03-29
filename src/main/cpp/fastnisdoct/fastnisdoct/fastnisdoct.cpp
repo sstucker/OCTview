@@ -118,14 +118,15 @@ std::atomic_int state = STATE_UNOPENED;
 state_msg state_data;
 
 int raw_frame_size = 0;  // Number of elements in the raw frame
-int processed_alines_size;  // Number of elements in the frame after A-line processing has been carried out
+int processed_alines_size = 0;  // Number of elements in the frame after A-line processing has been carried out
 int processed_frame_size = 0;  // Number of elements in the frame after inter A-line processing (frame processed) has been carried out
 
-CircAcqBuffer<fftwf_complex>* processed_alines_buffer;
-CircAcqBuffer<fftwf_complex>* processed_frame_buffer;
+CircAcqBuffer<fftwf_complex>* processed_alines_ring;
+CircAcqBuffer<fftwf_complex>* processed_frame_ring;
+
+spsc_bounded_queue_t<fftwf_complex*> display_queue(32);
 
 float* background_spectrum = NULL;
-
 
 inline bool ready_to_scan()
 {
@@ -167,20 +168,22 @@ inline void recv_msg()
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(fftwf_complex) * processed_frame_size));
 				printf("Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
 				
-				delete processed_alines_buffer;
-				delete processed_frame_buffer;
+				delete processed_alines_ring;
+				delete processed_frame_ring;
 
 				// Allocate or reallocate rings
-				processed_alines_buffer = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_alines_size);
-				processed_frame_buffer = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_frame_size);
-				
+				processed_alines_ring = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_alines_size);
+				processed_frame_ring = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_frame_size);
+
 				// Allocate processing buffers
 				delete[] state_data.apod_window;
 				delete[] background_spectrum;
 				
+				// Allocate apodization window
 				state_data.apod_window = new float[msg.aline_size];
 				memset(state_data.apod_window, 1, state_data.aline_size * sizeof(float));
 				
+				// Allocate background spectrum
 				background_spectrum = new float[msg.aline_size];
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 
@@ -333,7 +336,7 @@ void _main()
 			ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
 			if (raw_frame_addr != NULL)
 			{
-				processed_alines_addr = processed_alines_buffer->lock_out_head();
+				processed_alines_addr = processed_alines_ring->lock_out_head();
 
 				// Send job to AlineProcessingPool
 				aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window, background_spectrum);
@@ -342,36 +345,38 @@ void _main()
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 				if (state_data.subtract_background)
 				{
+					float norm = 1.0 / state_data.aline_size;
 					for (int i = 0; i < state_data.number_of_alines; i++)
 					{
 						for (int j = 0; j < state_data.aline_size; j++)
 						{
-							background_spectrum[j] += (float)raw_frame_addr[state_data.aline_size * i + j];
+							background_spectrum[j] += raw_frame_addr[state_data.aline_size * i + j];
 						}
 					}
-					for (int i = 0; i < state_data.number_of_alines; i++)
+					for (int j = 0; j < state_data.aline_size; j++)
 					{
-						for (int j = 0; j < state_data.aline_size; j++)
-						{
-							background_spectrum[j] /= (float)state_data.number_of_alines;
-						}
+						background_spectrum[j] *= norm;
 					}
 				}
-
 				// Wait for job to finish
 				int spins = 0;
 				while (!aline_processing_pool->is_finished())
 				{
-					Sleep(10);
 					spins += 1;
 				}
 				printf("A-line processing pool finished. Spun %i times.\n", spins);
 				ni::release_buffer();
-				processed_alines_buffer->release_head();
+
+				fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
+				memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
+				display_queue.enqueue(display_buffer);
+
+				processed_alines_ring->release_head();
 				cumulative_buffer_number += 1;
 				// Perform A-line averaging or differencing
 				// Perform B-line averaging or differencing
 				// Perform frame averaging
+
 				// if (state.load() == STATE_ACQUIRING)
 				//		enqueue the frame with the StreamWorker
 			}  // if raw frame grabbed properly
@@ -406,6 +411,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		ni::daq_close();
 		ni::imaq_close();
 		delete[] background_spectrum;
+		delete processed_alines_ring;
+		delete processed_frame_ring;
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(
@@ -537,20 +544,27 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		return (state.load() == STATE_ACQUIRIING);
 	}
 
-	__declspec(dllexport) int nisdoct_grab_frame(std::complex<float>* dst)
+	__declspec(dllexport) int nisdoct_grab_frame(fftwf_complex* dst)
 	{
-		if (processed_alines_buffer != NULL)
+		auto current_state = state.load();
+		if ((processed_alines_ring != NULL) && (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING))
 		{
-			int i = processed_alines_buffer->get_count();
-			memcpy(dst, (*processed_alines_buffer)[i], processed_alines_size * sizeof(fftw_complex));
-			return i;
+			fftwf_complex* f;
+			if (display_queue.dequeue(f))
+			{
+				memcpy(dst, f, processed_frame_size * sizeof(fftwf_complex));
+				fftwf_free(f);
+			}
+			else
+			{
+				return -1;
+			}
 		}
 		else
 		{
 			return -1;
 		}
 	}
-
 
 }
 

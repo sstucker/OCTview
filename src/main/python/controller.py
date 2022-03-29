@@ -33,7 +33,7 @@ class NIOCTController:
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int]
         self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
-        self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p_3d]
+        self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
 
         self._lib.nisdoct_get_state.restype = c.c_int
         self._lib.nisdoct_ready.restype = c.c_bool

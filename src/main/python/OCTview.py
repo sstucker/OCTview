@@ -1,16 +1,14 @@
 import ctypes
-
-from fbs_runtime.application_context.PyQt5 import ApplicationContext
-from PyQt5.QtCore import QTimer, Qt
-from controller import NIOCTController
-from widgets import MainWindow
-import sys
-import qdarkstyle
-from controller import NIOCTController
 import os
-import time
+import sys
 
 import numpy as np
+import qdarkstyle
+from PyQt5.QtCore import QTimer, Qt
+from fbs_runtime.application_context.PyQt5 import ApplicationContext
+
+from controller import NIOCTController
+from widgets import MainWindow
 
 CALLBACK_DEBOUNCE_MS = 400
 
@@ -99,9 +97,17 @@ class _AppContext(ApplicationContext):
             self.window.set_mode_not_ready()
 
     def _display_update(self):
-        print("Updating the display...")
-        self.controller.grab_frame(self._display_buffer)
-        self.window.display_frame(self._display_buffer)
+        if self.controller.grab_frame(self._grab_buffer) > -1:
+            print('Copying to display buffer with shape', np.shape(self._display_buffer))
+            i = 0
+            for x in range(self.window.scan_pattern().dimensions[0]):
+                for y in range(self.window.scan_pattern().dimensions[1]):
+                    self._display_buffer[:, x, y] = self._grab_buffer[self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()]
+                    i += 1
+            self.window.display_frame(self._display_buffer)
+            print("Grabbed a frame size", self._processed_frame_size, 'max', np.max(self._display_buffer))
+        else:
+            print("Failed to grab frame. Maybe one wasnt available yet")
 
     # -- Backend interface ------------------------------------------------
 
@@ -137,12 +143,14 @@ class _AppContext(ApplicationContext):
                 self.window.scan_pattern().aline_repeat,
                 self.window.scan_pattern().bline_repeat,
                 self.window.number_of_image_buffers(),
-                zstart,
-                zstop - zstart
+                self.window.roi_offset(),
+                self.window.roi_size()
             )
             self._processed_frame_size = self.window.processed_frame_size()
             self._raw_frame_size = self.window.raw_frame_size()
-            self._display_buffer = np.empty([self.window.aline_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1]], dtype=np.complex64)
+            self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
+            processed_shape = (self.window.roi_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1])
+            self._display_buffer = np.zeros(processed_shape, dtype=np.complex64)
             print('...Frame sizes updated:', self._raw_frame_size, self._processed_frame_size)
 
     def _configure_processing(self):
@@ -166,7 +174,8 @@ class _AppContext(ApplicationContext):
     def _update_scan_pattern(self, raw_frame_size: int, processed_frame_size: int):
         # If frame sizes are changing with this pattern update, reconfigure
         if self._raw_frame_size != raw_frame_size or self._processed_frame_size != processed_frame_size:
-            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._raw_frame_size, raw_frame_size, self._processed_frame_size, processed_frame_size))
+            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._raw_frame_size, raw_frame_size,
+                                                                   self._processed_frame_size, processed_frame_size))
             self._configure_image()
             self._configure_processing()
         else:
@@ -189,11 +198,12 @@ class _AppContext(ApplicationContext):
             self.controller.stop_acquisition()
         else:
             self.controller.start_scan()
-            self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate) * 1000)
+            self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate * 1000))
 
     def _start_acquisition(self):
         if self.controller.state != 'scanning' and self.controller.state == 'ready':
             self.controller.start_scan()
+            self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate * 1000))
         self.controller.start_acquisition(
             self.window.filename(),
             self.window.file_max_bytes(),

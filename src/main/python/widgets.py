@@ -8,7 +8,7 @@ from PyQt5 import uic
 from PyQt5.QtCore import pyqtSignal, QTimer
 from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindow, QSpinBox, QDoubleSpinBox, QCheckBox, \
     QRadioButton, \
-    QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame
+    QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame, QApplication
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
 from scanpatterns import LineScanPattern, RasterScanPattern
 from threading import Thread
@@ -765,7 +765,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self.resize(100, 100)
 
         self._plot = self.addPlot()
-        self.setFixedSize(100, 100)
+        self.setFixedSize(200, 200)
 
         self._plot.setAspectLocked(True)
         self._plot.showGrid(x=True, y=True)
@@ -828,11 +828,17 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
             self._hslider.setBounds([0, self._sf[1] * self._data_shape[1]])
         self._image.scale(sfx, sfy)
 
-    def updateData(self, volume, fov=None):
-        self._data_shape = volume.shape
+    # def updateData(self, volume, fov=None):
+    #     self._data_shape = volume.shape
+    #     if fov is not None:
+    #         self.setAspect(fov[0], fov[1])
+    #     self._image.setImage(volume[..., 0])
+
+    def updateData(self, image, fov=None):
+        self._data_shape = image.shape
         if fov is not None:
             self.setAspect(fov[0], fov[1])
-        self._image.setImage(volume[..., 0])
+        self._image.setImage(image)
 
     def _setSlice(self):
         if self._hslider is not None:
@@ -878,10 +884,12 @@ class DisplayWidget(QWidget, UiWidget):
 
     def display_frame(self, frame: np.ndarray):
         if self.tabDisplay.currentIndex() == 0:
-            self._enface.updateData(frame[0, :, :], fov=[1 * 10 ** -6, 1 * 10 ** -6])
-            self._bscan.updateData(frame[:, :, 0], fov=[1 * 10 ** -6, 1 * 10 ** -6])
-        elif self.tabDisplay.currentIndex() == 1:
-            self._volume.updateData(frame)
+            self._enface.updateData(np.real(frame)[0, :, :], fov=[1 * 10 ** -6, 1 * 10 ** -6])
+            self._bscan.updateData(np.real(frame)[:, :, 0], fov=[1 * 10 ** -6, 1 * 10 ** -6])
+        # elif self.tabDisplay.currentIndex() == 1:
+        #     self._volume.updateData(np.abs(frame))
+        # pyqtgraph.QtGui.QApplication.processEvents()
+        QApplication.processEvents()
 
     def _update(self):
         img = np.random.random([128, 128, 200])
@@ -1100,6 +1108,12 @@ class MainWindow(QMainWindow, UiWidget):
 
     def zroi(self) -> (int, int):
         return self.ScanGroupBox.zroi()
+
+    def roi_size(self) -> int:
+        return self.zroi()[1] - self.zroi()[0]
+
+    def roi_offset(self) -> int:
+        return self.zroi()[0]
 
     def aline_size(self) -> int:
         return self._settings_dialog.spinAlineSize.value()

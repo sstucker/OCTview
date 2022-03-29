@@ -45,12 +45,18 @@ void aline_processing_worker(
 		aline_processing_job_msg msg;
 		if (queue->dequeue(msg))
 		{
+
+			// memset(spectral_buffer, 0, aline_size * number_of_alines * sizeof(float));
+			// memset(intermediate_buffer, 0, aline_size * number_of_alines * sizeof(float));
+			// memset(spatial_buffer, 0, spatial_aline_size * number_of_alines * sizeof(fftwf_complex));
+
 			// Subtract background spectrum
 			for (int i = 0; i < number_of_alines; i++)
 			{
 				for (int j = 0; j < aline_size; j++)
 				{
-					spectral_buffer[i * aline_size + j] = (float)msg.src_frame[i * aline_size + j] - msg.background_spectrum[j];
+					spectral_buffer[i * aline_size + j] = msg.src_frame[i * aline_size + j];
+					spectral_buffer[i * aline_size + j] -= -msg.background_spectrum[j];
 				}
 			}
 			// Apply wavenumber-linearization interpolation
@@ -60,6 +66,10 @@ void aline_processing_worker(
 				{
 					interpdk_execute(msg.interp_plan, spectral_buffer + i * aline_size, intermediate_buffer + i * aline_size);
 				}
+			}
+			else
+			{
+				memcpy(intermediate_buffer, spectral_buffer, aline_size * number_of_alines * sizeof(float));
 			}
 			// Multiply by apodization window
 			for (int i = 0; i < number_of_alines; i++)
@@ -79,9 +89,14 @@ void aline_processing_worker(
 			{
 				memcpy(msg.dst_frame + i * roi_size, spatial_buffer + i * spatial_aline_size + roi_offset, roi_size * sizeof(fftwf_complex));
 			}
-
+			// Normalize FFT result
+			for (int i = 0; i < number_of_alines * roi_size; i++)
+			{
+				msg.dst_frame[i][0] /= aline_size;
+				msg.dst_frame[i][1] /= aline_size;
+			}
 			// printf("Worker %i finished writing to %p, about to increment barrier which is currently %i\n", std::this_thread::get_id(), msg.dst_frame, msg.barrier->load());
-			*msg.barrier += 1;
+			++*msg.barrier;
 		}
 		else
 		{
@@ -182,6 +197,12 @@ public:
 		fftwf_free(dummy_out);
 	}
 
+	~AlineProcessingPool()
+	{
+		fftwf_destroy_plan(fft_plan);
+		fftwf_cleanup();
+	}
+
 	// Submit a job to the pool. As only one job can be parallelized at one time by this pool, returns -1 if a job is already underway.
 	int submit(
 		fftwf_complex* dst_frame, // Pointer to destination buffer
@@ -200,7 +221,7 @@ public:
 			{
 				if (interpdk == this->interpdk_plan.interpdk)  // If there has been no change to the interpolation parameter.
 				{
-					WavenumberInterpolationPlan* interpdk_plan_p = &this->interpdk_plan;
+					interpdk_plan_p = &this->interpdk_plan;
 				}
 				else
 				{
@@ -280,7 +301,6 @@ public:
 			delete queues[i];
 		}
 		queues.clear();
-		fftwf_cleanup();
 	}
 
 };
