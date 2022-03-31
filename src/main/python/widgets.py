@@ -236,7 +236,8 @@ class RasterScanWidget(ScanWidget, UiWidget):
             'alines': self.spinACount.value(),
             'blines': self.spinBCount.value(),
             'max_trigger_rate': 76000,
-            'fov': [self.spinROIWidth.value(), self.spinROIHeight.value()],
+            # Pattern gen in millimeters
+            'fov': [self.spinROIWidth.value() * 0.001, self.spinROIHeight.value() * 0.001],
             'flyback_duty': self.spinFlybackDuty.value() / 100,
             'exposure_fraction': self.spinExposureFraction.value() / 100,
             'fast_axis_step': self.radioXStep.isChecked(),
@@ -762,10 +763,10 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         super().__init__()
 
         # self.setFixedSize(self.minimumSize())
-        self.resize(100, 100)
+        # self.resize(100, 100)
 
         self._plot = self.addPlot()
-        self.setFixedSize(200, 200)
+        self.setFixedSize(300, 300)
 
         self._plot.setAspectLocked(True)
         self._plot.showGrid(x=True, y=True)
@@ -1146,9 +1147,14 @@ class MainWindow(QMainWindow, UiWidget):
         return self.FileGroupBox.filename()
 
     def display_frame(self, frame: np.ndarray):
-        # self.DisplayWidget.display_frame(
-        #     np.reshape(
-        #         frame, [self.aline_size(), self.scan_pattern().dimensions[0], self.scan_pattern().dimensions[1]]
-        #     )
-        # )
         self.DisplayWidget.display_frame(frame)
+
+    def trigger_gain(self) -> float:
+        return self._settings_dialog.spinTriggerGain.value()
+
+    def trigger_gain(self) -> float:
+        return self._settings_dialog.spinTriggerGain.value()
+
+    def scan_scale_factors(self) -> (float, float):
+        return (self._settings_dialog.spinXScaleFactor.value(),
+                self._settings_dialog.spinYScaleFactor.value())

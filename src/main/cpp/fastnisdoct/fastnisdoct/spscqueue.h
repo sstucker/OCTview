@@ -60,6 +60,13 @@ public:
 	}
 
 	bool
+		full()
+	{
+		const size_t head = _head.load(std::memory_order_relaxed);
+		return !(((_tail.load(std::memory_order_acquire) - (head + 1)) & _mask) >= 1);
+	}
+		
+	bool
 		enqueue(
 			T& input)
 	{

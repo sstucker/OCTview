@@ -31,7 +31,7 @@ class NIOCTController:
         self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
         self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int, c.c_int]
-        self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int]
+        self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int, c.c_int]
         self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
 
@@ -161,7 +161,7 @@ class NIOCTController:
             int(n_frame_avg)
         )
 
-    def set_scan(self, x, y, lt, ft):
+    def set_scan(self, x, y, lt, ft, rate):
         """Sets the signals used to drive the galvos and trigger camera and frame grabber. Can be called during a scan.
 
         Args:
@@ -169,13 +169,15 @@ class NIOCTController:
             y (np.ndarray): Y galvo drive signal
             lt (np.ndarray): Camera A-line exposure trigger signal
             ft (np.ndarray): Frame grabber trigger signal
+            rate (int): Sample generation rate
         """
         self._lib.nisdoct_set_pattern(
             np.array(x).astype(np.float64),
             np.array(y).astype(np.float64),
             np.array(lt).astype(np.float64),
             np.array(ft).astype(np.float64),
-            len(x)
+            len(x),
+            int(rate)
         )
 
     def start_scan(self):

@@ -131,19 +131,22 @@
         <enum>QAbstractSpinBox::PlusMinus</enum>
        </property>
        <property name="suffix">
-        <string> mm</string>
+        <string> μm</string>
        </property>
        <property name="decimals">
-        <number>4</number>
+        <number>0</number>
        </property>
        <property name="minimum">
-        <double>0.000100000000000</double>
+        <double>0.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>4000.000000000000000</double>
        </property>
        <property name="singleStep">
-        <double>0.001000000000000</double>
+        <double>1.000000000000000</double>
        </property>
        <property name="value">
-        <double>0.069600000000000</double>
+        <double>500.000000000000000</double>
        </property>
       </widget>
      </item>
@@ -277,19 +280,22 @@
         <enum>QAbstractSpinBox::PlusMinus</enum>
        </property>
        <property name="suffix">
-        <string> mm</string>
+        <string> μm</string>
        </property>
        <property name="decimals">
-        <number>4</number>
+        <number>0</number>
        </property>
        <property name="minimum">
-        <double>0.000100000000000</double>
+        <double>0.000000000000000</double>
+       </property>
+       <property name="maximum">
+        <double>4000.000000000000000</double>
        </property>
        <property name="singleStep">
-        <double>0.001000000000000</double>
+        <double>1.000000000000000</double>
        </property>
        <property name="value">
-        <double>0.069600000000000</double>
+        <double>500.000000000000000</double>
        </property>
       </widget>
      </item>

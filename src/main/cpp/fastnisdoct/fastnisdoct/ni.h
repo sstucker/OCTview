@@ -1,5 +1,8 @@
 #pragma once
 
+#include "niimaq.h"
+#include "NIDAQmx.h"
+
 // TODO remove. For testing
 #include <stdlib.h>
 #include <time.h>
@@ -8,123 +11,333 @@
 
 int err;  // Error state of hardware interface
 
-bool opened;  // If configured and connected to hardware
-bool scanning;  // If actively scanning and grabbing frames
-
 // IMAQ
 
-/*
 SESSION_ID session_id;  // IMAQ session ID
 BUFLIST_ID buflist_id;  // IMAQ buflist ID
 INTERFACE_ID interface_id;  // IMAQ interface ID
 TaskHandle scan_task;  // NI-DAQ task handle
-*/
 
-int halfwidth; // A-line size / 2 + 1
 int acqWinWidth;  // A-line size
 int acqWinHeight;  // Number of A-lines per buffer
 int bytesPerPixel;
 int bufferSize;  // Equivalent to acqWinWidth * acqWinHeight * bytesPerPixel
-int numberOfBuffers;  // Number of IMAQ ring buffer elements
+int numberOfBuffers = 0;  // Number of IMAQ ring buffer elements
 int bufferNumber;  // Cumulative acquired IMAQ ring buffer element
 
-unsigned int examined_number;  // Cumulative number of the currently examined IMAQ ring buffer element
+uInt32 examined_number;  // Cumulative number of the currently examined IMAQ ring buffer element
 
-// Int8** imaq_buffers;  // Ring buffer elements managed by IMAQ
+Int8** imaq_buffers;  // Ring buffer elements managed by IMAQ
 
 // NI-DAQ
 
-int dacRate;  // The output rate of the DAC used to drive the scan pattern
+int dac_rate;  // The output rate of the DAC used to drive the scan pattern
 double* concatenated_scansig;  // Pointer to buffer of scansignals appended end to end
 int scansig_n; // Number of samples in each of the 4 scan signals
-int* samples_written;  // Returned by NI DAQ after samples are written
-
-
-uint16_t* test_buffer = NULL;
+int32* samples_written;  // Returned by NI DAQ after samples are written
 
 
 namespace ni
 {
+
+	inline void print_error_msg()
+	{
+		if (err != 0)
+		{
+			char* buf = new char[512];
+			DAQmxGetErrorString(err, buf, 512);
+			printf(buf);
+			printf("\n");
+			delete[] buf;
+		}
+		else
+		{
+			printf("No error.\n");
+		}
+	}
+
+	int imaq_buffer_cleanup()
+	{
+		err = imgMemUnlock(buflist_id);
+		for (int i = 0; i < numberOfBuffers; i++)
+		{
+			if (imaq_buffers[i] != NULL)
+			{
+				err = imgDisposeBuffer(imaq_buffers[i]);
+			}
+		}
+		err = imgDisposeBufList(buflist_id, FALSE);
+		return err;
+	}
+
 	int setup_buffers(int aline_size, int number_of_alines, int number_of_buffers)
 	{
-		acqWinWidth = aline_size;
-		acqWinHeight = number_of_alines;
-		// Test code
-		test_buffer = new uint16_t[acqWinWidth * acqWinHeight];
-		memset(test_buffer, 0, acqWinWidth * acqWinHeight * sizeof(uint16_t));
-		printf("NI IMAQ buffers set up.\n");
-		return 0;
+		if (numberOfBuffers > 0)  // Clean up previous buffers
+		{
+			err = imaq_buffer_cleanup();
+		}
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_TOP, 0);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_LEFT, 0);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_HEIGHT, number_of_alines);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_WIDTH, aline_size);
+		if (err != 0)
+		{
+			return err;
+		}
+		// Confirm the change by getting the attributes
+		err = imgGetAttribute(session_id, IMG_ATTR_ROI_WIDTH, &acqWinWidth);
+		err = imgGetAttribute(session_id, IMG_ATTR_ROI_HEIGHT, &acqWinHeight);
+		err = imgGetAttribute(session_id, IMG_ATTR_BYTESPERPIXEL, &bytesPerPixel);
+		if (err != 0)
+		{
+			return err;
+		}
+
+		bufferSize = acqWinWidth * acqWinHeight * bytesPerPixel;
+
+		numberOfBuffers = number_of_buffers;
+
+		err = imgCreateBufList(number_of_buffers, &buflist_id);
+		imaq_buffers = new Int8 *[number_of_buffers];
+
+		int bufCmd;
+		for (int i = 0; i < numberOfBuffers; i++)
+		{
+			err = imgCreateBuffer(session_id, FALSE, bufferSize, (void**)&imaq_buffers[i]);
+			if (err != 0)
+			{
+				return err;
+			}
+			err = imgSetBufferElement2(buflist_id, i, IMG_BUFF_ADDRESS, imaq_buffers[i]);
+			if (err != 0)
+			{
+				return err;
+			}
+			err = imgSetBufferElement2(buflist_id, i, IMG_BUFF_SIZE, bufferSize);
+			if (err != 0)
+			{
+				return err;
+			}
+			bufCmd = (i == (number_of_buffers - 1)) ? IMG_CMD_LOOP : IMG_CMD_NEXT;
+			if (err != 0)
+			{
+				return err;
+			}
+			err = imgSetBufferElement2(buflist_id, i, IMG_BUFF_COMMAND, bufCmd);
+			if (err != 0)
+			{
+				return err;
+			}
+		}
+		err = imgMemLock(buflist_id);
+		if (err != 0)
+		{
+			return err;
+		}
+		err = imgSessionConfigure(session_id, buflist_id);
+		if (err != 0)
+		{
+			return err;
+		}
+		return err;
 	}
 
 	int imaq_open(const char* camera_name)
 	{
-		printf("NI IMAQ interface opened.\n");
-		return 0;
+		err = imgInterfaceOpen(camera_name, &interface_id);
+		if (err != 0)
+		{
+			return err;
+		}
+		err = imgSessionOpen(interface_id, &session_id);
+		if (err != 0)
+		{
+			return err;
+		}
+		// Configure the frame acquisition to be triggered by the TTL1 line
+		err = imgSetAttribute2(session_id, IMG_ATTR_EXT_TRIG_LINE_FILTER, true);
+		// Frame trigger TTL1
+		err = imgSessionTriggerConfigure2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG1, IMG_TRIG_POLAR_ACTIVEH, 1000, IMG_TRIG_ACTION_BUFFER);
+		// Frame trigger output TTL2
+		err = imgSessionTriggerDrive2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG2, IMG_TRIG_POLAR_ACTIVEH, IMG_TRIG_DRIVE_FRAME_START);
+		return err;
 	}
 
 	int imaq_close()
 	{
-		delete[] test_buffer;  // TODO remove
+		imaq_buffer_cleanup();
+		err = imgClose(session_id, TRUE);
+		err = imgClose(interface_id, TRUE);
 		printf("NI IMAQ interface closed.\n");
-		return 0;
+		return err;
 	}
 
-	int daq_open(const char* aoScanX,
+	int daq_open(
+		const char* aoScanX,
 		const char* aoScanY,
 		const char* aoLineTrigger,
 		const char* aoFrameTrigger,
-		const char* aoStartTrigger,
-		int dac_rate
+		const char* aoStartTrigger
 	)
 	{
-		printf("NI DAQ interface opened.\n");
-		return 0;
+		err = DAQmxCreateTask("scan", &scan_task);
+		err = DAQmxCreateAOVoltageChan(scan_task, aoScanX, "", -10, 10, DAQmx_Val_Volts, NULL);
+		err = DAQmxCreateAOVoltageChan(scan_task, aoScanY, "", -10, 10, DAQmx_Val_Volts, NULL);
+		err = DAQmxCreateAOVoltageChan(scan_task, aoLineTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
+		err = DAQmxCreateAOVoltageChan(scan_task, aoFrameTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
+
+		if (err != 0)
+		{
+			printf("DAQmx failed to create task with channels %s, %s, %s, %s:\n", aoScanX, aoScanY, aoLineTrigger, aoFrameTrigger);
+			char* buf = new char[512];
+			DAQmxGetErrorString(err, buf, 512);
+			printf(buf);
+			printf("\n");
+			delete[] buf;
+			return err;
+		}
+		else
+		{
+			err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
+			err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
+			err = DAQmxCfgSampClkTiming(scan_task, NULL, 40000, DAQmx_Val_Rising, DAQmx_Val_ContSamps, NULL);
+			if (err != 0)
+			{
+				printf("DAQmx failed to program the task:\n");
+				char* buf = new char[512];
+				DAQmxGetErrorString(err, buf, 512);
+				printf(buf);
+				printf("\n");
+				delete[] buf;
+				return err;
+			}
+			dac_rate = 40000;
+		}
+		return err;
 	}
 
 	int daq_close()
 	{
+		err = DAQmxClearTask(scan_task);
+		delete[] concatenated_scansig;
+		delete[] samples_written;
 		printf("NI DAQ interface closed.\n");
-		return 0;
+		return err;
 	}
 
 	// These interact with both NI-IMAQ and NI-DAQmx APIs
 
 	int start_scan()
 	{
-		printf("NI IMAQ scan started.\n");
-		return 0;
+			err = DAQmxStartTask(scan_task);
+			if (err == 0)
+			{
+				err = imgSessionStartAcquisition(session_id);
+				if (err == 0)
+				{
+					printf("Started scan!\n");
+					return 0;
+				}
+			}
+			return err;
 	}
 
 	int stop_scan()
 	{
-		printf("NI IMAQ scan stopped.\n");
-		return 0;
+		err = imgSessionStopAcquisition(session_id);
+		err = DAQmxStopTask(scan_task);
+		if (err == 0)
+		{
+			return 0;
+		}
+		else
+		{
+			return err;
+		}
 	}
 
 	int examine_buffer(uint16_t** raw_frame_addr, int frame_index)
 	{
-		printf("Attempting to lock out NI IMAQ buffer %i.\n", frame_index);
-		// TEST
-		unsigned int seed = time(NULL);
-		std::srand(seed);
-		for (int i = 0; i < acqWinWidth * acqWinHeight; i++)
+		err = imgSessionExamineBuffer2(session_id, frame_index, &examined_number, (void**)raw_frame_addr);
+		if (err == 0)
 		{
-			test_buffer[i] = std::rand() % 4099;
+			for (int i = 0; i < acqWinWidth * acqWinHeight; i++)
+			{
+				if (*raw_frame_addr[i] > 0)
+				{
+					return examined_number;
+				}
+			}
+			return -1;
+			printf("Grabbed a null frame!\n");
 		}
-		*raw_frame_addr = test_buffer;
-		printf("Test buffer generated!\n");
-		return 0;
+		else if (err == IMG_ERR_TIMO || err == IMG_ERR_TIMEOUT)
+		{
+			printf("IMAQ examine buffer timed out trying to get %i\n", frame_index);
+			return -1;
+		}
+		else
+		{
+			char* buf = new char[512];
+			imgShowError(err, buf);
+			printf(buf);
+			printf("\n");
+			delete[] buf;
+			return -1;
+		}
 	}
 
 	int release_buffer()
 	{
-		printf("NI IMAQ buffer released.\n");
-		return 0;
+		return imgSessionReleaseBuffer(session_id);
 	}
 
-	int set_scan_pattern(double* x, double* y, double* linetrigger, double* frametrigger, int n)
+	int set_scan_pattern(double* x, double* y, double* linetrigger, double* frametrigger, int n, int pattern_sample_rate)
 	{
-		printf("NI IMAQ scan signals buffered.\n");
-		return 0;
+		// Assign buffers for scan pattern
+		delete[] samples_written;
+		delete[] concatenated_scansig;
+		samples_written = new int32[4];
+		concatenated_scansig = new double[4 * n];
+		memcpy(concatenated_scansig + 0, x, sizeof(double) * n);
+		memcpy(concatenated_scansig + n, y, sizeof(double) * n);
+		memcpy(concatenated_scansig + 2 * n, linetrigger, sizeof(double) * n);
+		memcpy(concatenated_scansig + 3 * n, frametrigger, sizeof(double) * n);
+
+		if (n != scansig_n)  // If buffer size needs to change
+		{
+			bool32 is_it;
+			DAQmxIsTaskDone(scan_task, &is_it);
+			if (!is_it)  // If task is running, need to stop, change buffer size, and restart it
+			{
+				err = DAQmxStopTask(scan_task);
+				err = DAQmxCfgOutputBuffer(scan_task, n);
+				err = DAQmxWriteAnalogF64(scan_task, n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, samples_written, NULL);
+				err = DAQmxStartTask(scan_task);
+
+			}
+			else  // If task isn't running, just buffer new samples without starting
+			{
+				err = DAQmxCfgOutputBuffer(scan_task, n);
+				err = DAQmxWriteAnalogF64(scan_task, n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, samples_written, NULL);
+			}
+		}
+		else
+		{
+			err = DAQmxWriteAnalogF64(scan_task, n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, samples_written, NULL);
+		}
+
+		if (err != 0)
+		{
+			printf("DAQmx failed to set scan signals:\n");
+			char* buf = new char[512];
+			DAQmxGetErrorString(err, buf, 512);
+			printf(buf);
+			printf("\n");
+			delete[] buf;
+		}
+
+		scansig_n = n;  // Set property to new n
+		return err;
 	}
 }

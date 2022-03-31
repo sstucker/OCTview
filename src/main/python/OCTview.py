@@ -11,7 +11,7 @@ from controller import NIOCTController
 from widgets import MainWindow
 
 CALLBACK_DEBOUNCE_MS = 400
-
+MAX_DISPLAY_UPDATE_RATE = 20
 
 class _AppContext(ApplicationContext):
 
@@ -93,7 +93,7 @@ class _AppContext(ApplicationContext):
             # print('GUI in ready state')
             self.window.set_mode_ready()
         elif state == 'open' or state == 'error' or state == 'unopened':
-            print('GUI in unready state:', state)
+            # print('GUI in unready state:', state)
             self.window.set_mode_not_ready()
 
     def _display_update(self):
@@ -186,11 +186,14 @@ class _AppContext(ApplicationContext):
     def _update_scan_pattern_cb(self):
         self._ctr_update_scan_pattern -= 1
         if not self._ctr_update_scan_pattern > 0:
+            all_samples = np.concatenate([self.window.scan_pattern().x * self.window.scan_scale_factors()[0], self.window.scan_pattern().y * self.window.scan_scale_factors()[1]])
+            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples))
             self.controller.set_scan(
-                self.window.scan_pattern().x,
-                self.window.scan_pattern().y,
-                self.window.scan_pattern().line_trigger,
-                self.window.scan_pattern().frame_trigger,
+                self.window.scan_pattern().x * self.window.scan_scale_factors()[0],
+                self.window.scan_pattern().y * self.window.scan_scale_factors()[1],
+                self.window.scan_pattern().line_trigger * self.window.trigger_gain(),
+                self.window.scan_pattern().frame_trigger * self.window.trigger_gain(),
+                self.window.scan_pattern().sample_rate,
             )
 
     def _start_scanning(self):
@@ -198,7 +201,9 @@ class _AppContext(ApplicationContext):
             self.controller.stop_acquisition()
         else:
             self.controller.start_scan()
-            self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate * 1000))
+            t = max(int(1 / self.window.scan_pattern().pattern_rate * 1000), int(1 / MAX_DISPLAY_UPDATE_RATE * 1000))
+            print('Polling display buffer every', t, 'ms,', 1 / (t / 1000), 'Hz')
+            self._display_update_timer.start(t)
 
     def _start_acquisition(self):
         if self.controller.state != 'scanning' and self.controller.state == 'ready':

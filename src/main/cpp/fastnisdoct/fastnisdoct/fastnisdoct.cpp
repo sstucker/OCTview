@@ -19,7 +19,7 @@
 #include "ni.h"
 #include <complex>
 
-#define IDLE_SLEEP_MS 1000
+#define IDLE_SLEEP_MS 10
 
 // msgs are passed into the main thread
 
@@ -189,6 +189,7 @@ inline void recv_msg()
 
 				// Set up NI image buffers
 				ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers);
+				ni::print_error_msg();
 				printf("Buffers allocated.\n");
 
 				image_configured = true;
@@ -255,6 +256,8 @@ inline void recv_msg()
 		{
 			printf("MSG_SET_PATTERN received\n");
 			scan_defined = false;
+			ni::set_scan_pattern(msg.x, msg.y, msg.line_trigger, msg.frame_trigger, msg.n_samples, msg.dac_output_rate);
+			ni::print_error_msg();
 			scan_defined = true;
 			if (ready_to_scan() && state == STATE_OPEN)
 			{
@@ -269,15 +272,27 @@ inline void recv_msg()
 				state.store(STATE_SCANNING);
 				aline_processing_pool->start();
 			}
+			ni::start_scan();
+			ni::print_error_msg();
 		}
 		else if (msg.flag & MSG_STOP_SCAN)
 		{
 			printf("MSG_STOP_SCAN received\n");
-			if (state.load() == STATE_SCANNING)
+			if (ni::stop_scan() == 0)
 			{
-				aline_processing_pool->terminate();
-				state.store(STATE_READY);
+				if (state.load() == STATE_SCANNING)
+				{
+					aline_processing_pool->terminate();
+					// Empty out the display queue
+					fftwf_complex* p;
+					while (display_queue.dequeue(p))
+					{
+						fftwf_free(p);
+					}
+					state.store(STATE_READY);
+				}
 			}
+			ni::print_error_msg();
 		}
 		else if (msg.flag & MSG_START_ACQUISITION)
 		{
@@ -367,9 +382,12 @@ void _main()
 				printf("A-line processing pool finished. Spun %i times.\n", spins);
 				ni::release_buffer();
 
-				fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
-				memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
-				display_queue.enqueue(display_buffer);
+				if (!display_queue.full())
+				{
+					fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
+					memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
+					display_queue.enqueue(display_buffer);
+				}
 
 				processed_alines_ring->release_head();
 				cumulative_buffer_number += 1;
@@ -380,8 +398,13 @@ void _main()
 				// if (state.load() == STATE_ACQUIRING)
 				//		enqueue the frame with the StreamWorker
 			}  // if raw frame grabbed properly
+			else
+			{
+				printf("Grabbed a NULL frame.\n");
+				ni::release_buffer();
+			}
 		}
-		printf("Main loop running. State %i\n", state.load());
+		// printf("Main loop running. State %i\n", state.load());
 		fflush(stdout);
 	}
 }
@@ -399,6 +422,18 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		const char* ao_st_ch
 	)
 	{
+		printf("Opening NI hardware interface:\n");
+		printf("Camera ID: %s\n", cam_name);
+		printf("X channel ID: %s\n", ao_x_ch);
+		printf("Y channel ID: %s\n", ao_y_ch);
+		printf("Line trig channel ID: %s\n", ao_lt_ch);
+		printf("Frame trig channel ID: %s\n", ao_ft_ch);
+		printf("Start trig channel ID: %s\n", ao_st_ch);
+
+		ni::imaq_open(cam_name);
+		ni::print_error_msg();
+		ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch, ao_ft_ch, ao_st_ch);
+		ni::print_error_msg();
 		main_running = true;
 		main_t = std::thread(&_main);
 	}
@@ -470,7 +505,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		double* y,
 		double* line_trigger,
 		double* frame_trigger,
-		int n_samples
+		int n_samples,
+		int rate
 	)
 	{
 		state_msg msg;
@@ -479,6 +515,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.line_trigger = line_trigger;
 		msg.frame_trigger = frame_trigger;
 		msg.n_samples = n_samples;
+		msg.dac_output_rate = rate;
 		msg.flag = MSG_SET_PATTERN;
 		msg_queue.enqueue(msg);
 	}
@@ -554,6 +591,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 			{
 				memcpy(dst, f, processed_frame_size * sizeof(fftwf_complex));
 				fftwf_free(f);
+				return 0;
 			}
 			else
 			{

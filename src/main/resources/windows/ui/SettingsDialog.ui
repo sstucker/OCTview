@@ -39,7 +39,7 @@
          <string>The name of the line camera device</string>
         </property>
         <property name="text">
-         <string>cam1</string>
+         <string>img1</string>
         </property>
        </widget>
       </item>
@@ -118,14 +118,14 @@
          <string/>
         </property>
         <property name="text">
-         <string>X Galvo</string>
+         <string>X galvo</string>
         </property>
        </widget>
       </item>
       <item row="1" column="0">
        <widget class="QLabel" name="labelYChName">
         <property name="text">
-         <string>Y Galvo</string>
+         <string>Y galvo</string>
         </property>
        </widget>
       </item>
@@ -146,21 +146,21 @@
       <item row="2" column="0">
        <widget class="QLabel" name="labelLineTrigChName">
         <property name="text">
-         <string>Line Trigger</string>
+         <string>Line trigger</string>
         </property>
        </widget>
       </item>
       <item row="4" column="0">
        <widget class="QLabel" name="labelStartTrigChName">
         <property name="text">
-         <string>Start Trigger</string>
+         <string>Start trigger</string>
         </property>
        </widget>
       </item>
       <item row="3" column="0">
        <widget class="QLabel" name="labelFrameTrigChName">
         <property name="text">
-         <string>Frame Trigger</string>
+         <string>Frame trigger</string>
         </property>
        </widget>
       </item>
@@ -235,6 +235,84 @@
      <property name="standardButtons">
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
+    </widget>
+   </item>
+   <item row="1" column="0" colspan="2">
+    <widget class="QGroupBox" name="groupBox">
+     <property name="title">
+      <string>Scan settings</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout_4">
+      <item row="0" column="0">
+       <widget class="QLabel" name="labelTriggerGain">
+        <property name="text">
+         <string>Trigger gain</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QDoubleSpinBox" name="spinTriggerGain">
+        <property name="suffix">
+         <string> V</string>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
+        <property name="value">
+         <double>5.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="labelXScaleFactor">
+        <property name="text">
+         <string>X scan scale factor</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QDoubleSpinBox" name="spinXScaleFactor">
+        <property name="suffix">
+         <string> V/mm</string>
+        </property>
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="singleStep">
+         <double>0.010000000000000</double>
+        </property>
+        <property name="value">
+         <double>14.060000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="labelYScaleFactor">
+        <property name="text">
+         <string>Y scan scale factor</string>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QDoubleSpinBox" name="spinYScaleFactor">
+        <property name="suffix">
+         <string> V/mm</string>
+        </property>
+        <property name="decimals">
+         <number>2</number>
+        </property>
+        <property name="singleStep">
+         <double>0.010000000000000</double>
+        </property>
+        <property name="value">
+         <double>14.060000000000000</double>
+        </property>
+       </widget>
+      </item>
+     </layout>
     </widget>
    </item>
   </layout>
