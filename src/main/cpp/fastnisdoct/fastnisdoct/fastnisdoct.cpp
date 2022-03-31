@@ -108,7 +108,7 @@ inline void printf_state_data(state_msg s)
 
 spsc_bounded_queue_t<state_msg> msg_queue(32);
 
-AlineProcessingPool* aline_processing_pool;
+AlineProcessingPool* aline_processing_pool = NULL;
 
 bool image_configured = false;
 bool processing_configured = false;
@@ -121,8 +121,8 @@ int raw_frame_size = 0;  // Number of elements in the raw frame
 int processed_alines_size = 0;  // Number of elements in the frame after A-line processing has been carried out
 int processed_frame_size = 0;  // Number of elements in the frame after inter A-line processing (frame processed) has been carried out
 
-CircAcqBuffer<fftwf_complex>* processed_alines_ring;
-CircAcqBuffer<fftwf_complex>* processed_frame_ring;
+CircAcqBuffer<fftwf_complex>* processed_alines_ring = NULL;
+CircAcqBuffer<fftwf_complex>* processed_frame_ring = NULL;
 
 spsc_bounded_queue_t<fftwf_complex*> display_queue(32);
 
@@ -177,13 +177,10 @@ inline void recv_msg()
 
 				// Allocate processing buffers
 				delete[] state_data.apod_window;
-				delete[] background_spectrum;
-				
-				// Allocate apodization window
 				state_data.apod_window = new float[msg.aline_size];
 				memset(state_data.apod_window, 1, state_data.aline_size * sizeof(float));
 				
-				// Allocate background spectrum
+				delete[] background_spectrum;
 				background_spectrum = new float[msg.aline_size];
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 
@@ -326,6 +323,9 @@ std::atomic_bool main_running = false;
 std::thread main_t;
 void _main()
 {
+	// Initializations
+
+	state_data.apod_window = NULL;
 
 	uint16_t* raw_frame_addr = NULL;
 	fftwf_complex* processed_alines_addr = NULL;
@@ -443,11 +443,17 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		main_running = false;
 		main_t.join();
 		delete aline_processing_pool;
+		aline_processing_pool = NULL;
 		ni::daq_close();
 		ni::imaq_close();
 		delete[] background_spectrum;
+		background_spectrum = NULL;
 		delete processed_alines_ring;
+		processed_alines_ring = NULL;
 		delete processed_frame_ring;
+		processed_frame_ring = NULL;
+		delete state_data.apod_window;
+		state_data.apod_window = NULL;
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(

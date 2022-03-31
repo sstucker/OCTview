@@ -7,7 +7,7 @@
 #include "fftw3.h"
 #include "WavenumberInterpolationPlan.h"
 
-# define IDLE_SLEEP_MS 50
+# define IDLE_SLEEP_MS 10
 
 struct aline_processing_job_msg {
 	fftwf_complex* dst_frame;
@@ -30,15 +30,15 @@ void aline_processing_worker(
 	int number_of_alines,  // The total number of A-lines
 	int roi_offset,  // The offset from the start of the spatial A-line to begin the axial ROI
 	int roi_size,  // The number of voxels in the axial ROI
-	fftwf_plan* fft_plan  // If NULL, no FFT and no axial cropping is performed.
+	fftwf_plan* fft_plan,  // If NULL, no FFT and no axial cropping is performed.
+	void* fft_buffer  // Buffer used for in-place FFT prior to cropping to the destination buffer
 )
 {
 	int spatial_aline_size = aline_size / 2 + 1;
-	float* spectral_buffer = new float[aline_size * number_of_alines];
-	float* intermediate_buffer = new float[aline_size * number_of_alines];
-	fftwf_complex* spatial_buffer = fftwf_alloc_complex(spatial_aline_size * number_of_alines);
 
 	printf("Worker %i launched. Params: A-line size %i, Number of A-lines %i, Z ROI [%i %i]\n", std::this_thread::get_id(), aline_size, number_of_alines, roi_offset, roi_size);
+
+	float* interp_buffer = new float[aline_size];  // Single A-line sized buffer
 
 	while (running->load() == true)
 	{
@@ -46,48 +46,39 @@ void aline_processing_worker(
 		if (queue->dequeue(msg))
 		{
 
-			// memset(spectral_buffer, 0, aline_size * number_of_alines * sizeof(float));
-			// memset(intermediate_buffer, 0, aline_size * number_of_alines * sizeof(float));
-			// memset(spatial_buffer, 0, spatial_aline_size * number_of_alines * sizeof(fftwf_complex));
-
 			// Subtract background spectrum
 			for (int i = 0; i < number_of_alines; i++)
 			{
 				for (int j = 0; j < aline_size; j++)
 				{
-					spectral_buffer[i * aline_size + j] = msg.src_frame[i * aline_size + j];
-					spectral_buffer[i * aline_size + j] -= -msg.background_spectrum[j];
+					interp_buffer[j] = msg.src_frame[i * aline_size + j];  // Convert raw spectral data to float
+					interp_buffer[j] -= -msg.background_spectrum[j];  // Subtract background/DC spectrum (will be zero if disabled)
 				}
-			}
-			// Apply wavenumber-linearization interpolation
-			if (msg.interp_plan != NULL)
-			{
-				for (int i = 0; i < number_of_alines; i++)
+				// Apply wavenumber-linearization interpolation
+				if (msg.interp_plan != NULL)
 				{
-					interpdk_execute(msg.interp_plan, spectral_buffer + i * aline_size, intermediate_buffer + i * aline_size);
+					interpdk_execute(msg.interp_plan, interp_buffer, (float*)fft_buffer + i * aline_size);
 				}
-			}
-			else
-			{
-				memcpy(intermediate_buffer, spectral_buffer, aline_size * number_of_alines * sizeof(float));
-			}
-			// Multiply by apodization window
-			for (int i = 0; i < number_of_alines; i++)
-			{
+				else
+				{
+					memcpy(interp_buffer + i * aline_size, (float*)fft_buffer + i * aline_size, aline_size * number_of_alines * sizeof(float));
+				}
+				// Multiply by apodization window
 				for (int j = 0; j < aline_size; j++)
 				{
-					intermediate_buffer[i * aline_size + j] *= msg.apod_window[j];
+					((float*)fft_buffer)[i * aline_size + j] *= msg.apod_window[j];  // Will be 1 if disabled
 				}
 			}
+
 			// FFT
 			if (msg.fft_plan != NULL)
 			{
-				fftwf_execute_dft_r2c(*(msg.fft_plan), intermediate_buffer, spatial_buffer);
+				fftwf_execute_dft_r2c(*(msg.fft_plan), (float*)fft_buffer, (fftwf_complex*)fft_buffer);
 			}
 			// Cropping ROI and copying to output address
 			for (int i = 0; i < number_of_alines; i++)
 			{
-				memcpy(msg.dst_frame + i * roi_size, spatial_buffer + i * spatial_aline_size + roi_offset, roi_size * sizeof(fftwf_complex));
+				memcpy(msg.dst_frame + i * roi_size, (fftwf_complex*)fft_buffer + i * spatial_aline_size + roi_offset, roi_size * sizeof(fftwf_complex));
 			}
 			// Normalize FFT result
 			for (int i = 0; i < number_of_alines * roi_size; i++)
@@ -105,9 +96,7 @@ void aline_processing_worker(
 		}
 	}
 
-	delete[] spectral_buffer;
-	delete[] intermediate_buffer;
-	fftwf_free(spatial_buffer);
+	delete[] interp_buffer;
 
 	printf("Worker %i terminated.\n", std::this_thread::get_id());
 }
@@ -125,6 +114,8 @@ private:
 
 	WavenumberInterpolationPlan interpdk_plan;  // Wavenumber-linearization interpolation plan.
 	fftwf_plan fft_plan;  // 32-bit FFTW DFT plan. NULL if disabled.
+
+	void* fft_buffer;  // Buffer for the real-to-complex FFT before cropping
 
 	int roi_offset;
 	int roi_size;
@@ -181,24 +172,22 @@ public:
 		int ostride = 1;
 		int* inembed = n;
 		int* onembed = &odist;
-		float* dummy_in = fftwf_alloc_real(aline_size * alines_per_worker + 8 * alines_per_worker);
-		fftwf_complex* dummy_out = fftwf_alloc_complex(spatial_aline_size * total_alines);
+		fft_buffer = fftwf_alloc_real((aline_size * alines_per_worker + 8 * alines_per_worker) * number_of_workers);
+		printf("Allocated FFTW transform buffer.\n");
 
 		// fftwf_import_wisdom_from_filename("C:/Users/OCT/Dev/RealtimeOCT/octcontroller_fftw_wisdom.txt");
 
-		fft_plan = fftwf_plan_many_dft_r2c(1, n, alines_per_worker, dummy_in, inembed, istride, idist, dummy_out, onembed, ostride, odist, FFTW_MEASURE);
+		fft_plan = fftwf_plan_many_dft_r2c(1, n, alines_per_worker, (float*)fft_buffer, inembed, istride, idist, (fftwf_complex*)fft_buffer, onembed, ostride, odist, FFTW_MEASURE);
 		if (fft_plan == NULL)
 		{
 			printf("Failed to generate FFTWF plan!\n");
 		}
 		printf("Generated FFTWF plan.\n");
-
-		fftwf_free(dummy_in);
-		fftwf_free(dummy_out);
 	}
 
 	~AlineProcessingPool()
 	{
+		fftwf_free(fft_buffer);
 		fftwf_destroy_plan(fft_plan);
 		fftwf_cleanup();
 	}
@@ -279,7 +268,7 @@ public:
 		for (int i = 0; i < number_of_workers; i++)
 		{
 			queues.push_back(new JobQueue(32));
-			pool.push_back(std::thread(aline_processing_worker, &_running, queues.back(), aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan));
+			pool.push_back(std::thread(aline_processing_worker, &_running, queues.back(), aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, (float*)fft_buffer + (aline_size * alines_per_worker + 8 * alines_per_worker) * i));
 		}
 		_barrier.store(number_of_workers);  // Set barrier to "finished" state.
 	}
