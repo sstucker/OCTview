@@ -36,9 +36,9 @@ void aline_processing_worker(
 {
 	int spatial_aline_size = aline_size / 2 + 1;
 
-	printf("Worker %i launched. Params: A-line size %i, Number of A-lines %i, Z ROI [%i %i]\n", std::this_thread::get_id(), aline_size, number_of_alines, roi_offset, roi_size);
-
 	float* interp_buffer = new float[aline_size];  // Single A-line sized buffer
+
+	printf("Worker %i launched. Params: A-line size %i, Number of A-lines %i, Z ROI [%i %i]\n", std::this_thread::get_id(), aline_size, number_of_alines, roi_offset, roi_size);
 
 	while (running->load() == true)
 	{
@@ -92,7 +92,7 @@ void aline_processing_worker(
 		else
 		{
 			Sleep(IDLE_SLEEP_MS);
-			 // printf("Worker %i polled an empty queue.\n", std::this_thread::get_id());
+			// printf("Worker %i polled an empty queue.\n", std::this_thread::get_id());
 		}
 	}
 
@@ -282,6 +282,10 @@ public:
 			if (th.joinable())
 			{
 				th.join();
+			}
+			else
+			{
+				printf("Worker thread wasn't joinable!!\n");
 			}
 		}
 		pool.clear();

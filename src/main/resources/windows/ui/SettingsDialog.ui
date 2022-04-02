@@ -132,14 +132,14 @@
       <item row="0" column="1">
        <widget class="QLineEdit" name="lineXChName">
         <property name="text">
-         <string>Dev1/ao0</string>
+         <string>Dev1/ao1</string>
         </property>
        </widget>
       </item>
       <item row="1" column="1">
        <widget class="QLineEdit" name="lineYChName">
         <property name="text">
-         <string>Dev1/ao1</string>
+         <string>Dev1/ao2</string>
         </property>
        </widget>
       </item>
@@ -167,21 +167,21 @@
       <item row="2" column="1">
        <widget class="QLineEdit" name="lineLineTrigChName">
         <property name="text">
-         <string>Dev1/ao3</string>
+         <string>Dev1/ao0</string>
         </property>
        </widget>
       </item>
       <item row="3" column="1">
        <widget class="QLineEdit" name="lineFrameTrigChName">
         <property name="text">
-         <string>Dev1/ao2</string>
+         <string>Dev1/ao3</string>
         </property>
        </widget>
       </item>
       <item row="4" column="1">
        <widget class="QLineEdit" name="lineStartTrigChName">
         <property name="text">
-         <string>Dev1/ao5</string>
+         <string>Dev1/ao4</string>
         </property>
        </widget>
       </item>

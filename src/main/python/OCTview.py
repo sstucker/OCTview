@@ -106,8 +106,8 @@ class _AppContext(ApplicationContext):
                     i += 1
             self.window.display_frame(self._display_buffer)
             print("Grabbed a frame size", self._processed_frame_size, 'max', np.max(self._display_buffer))
-        else:
-            print("Failed to grab frame. Maybe one wasnt available yet")
+        # else:
+        #     print("Failed to grab frame. Maybe one wasnt available yet")
 
     # -- Backend interface ------------------------------------------------
 
@@ -187,12 +187,14 @@ class _AppContext(ApplicationContext):
         self._ctr_update_scan_pattern -= 1
         if not self._ctr_update_scan_pattern > 0:
             all_samples = np.concatenate([self.window.scan_pattern().x * self.window.scan_scale_factors()[0], self.window.scan_pattern().y * self.window.scan_scale_factors()[1]])
-            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples))
+            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:', self.window.scan_pattern().sample_rate)
+            ft_temp = np.zeros(len(self.window.scan_pattern().x))
+            ft_temp[0:10] = 1
             self.controller.set_scan(
                 self.window.scan_pattern().x * self.window.scan_scale_factors()[0],
                 self.window.scan_pattern().y * self.window.scan_scale_factors()[1],
                 self.window.scan_pattern().line_trigger * self.window.trigger_gain(),
-                self.window.scan_pattern().frame_trigger * self.window.trigger_gain(),
+                ft_temp * self.window.trigger_gain(),
                 self.window.scan_pattern().sample_rate,
             )
 

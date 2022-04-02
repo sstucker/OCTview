@@ -185,9 +185,14 @@ inline void recv_msg()
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 
 				// Set up NI image buffers
-				ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers);
-				ni::print_error_msg();
-				printf("Buffers allocated.\n");
+				if (ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers) == 0)
+				{
+					printf("Buffers allocated.\n");
+				}
+				else
+				{
+					ni::print_error_msg();
+				}
 
 				image_configured = true;
 
@@ -314,7 +319,8 @@ inline void recv_msg()
 	}
 	else
 	{
-		// printf("Queue was empty.\n");
+		printf("Queue was empty.\n");
+		ni::print_error_msg();
 	}
 }
 
@@ -348,7 +354,7 @@ void _main()
 		else  // if SCANNING or ACQUIRING
 		{
 			// Lock out frame with IMAQ function
-			ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
+			int examined = ni::examine_buffer(raw_frame_addr, cumulative_buffer_number);
 			if (raw_frame_addr != NULL)
 			{
 				processed_alines_addr = processed_alines_ring->lock_out_head();
@@ -401,6 +407,7 @@ void _main()
 			else
 			{
 				printf("Grabbed a NULL frame.\n");
+				ni::print_error_msg();
 				ni::release_buffer();
 			}
 		}
