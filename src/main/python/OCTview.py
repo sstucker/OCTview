@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 import qdarkstyle
+from PyQt5.QtWidgets import QSplashScreen
 from PyQt5.QtCore import QTimer, Qt
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 
@@ -30,28 +31,35 @@ class _AppContext(ApplicationContext):
         self.window = None  # Qt window
         self.controller = None  # Backend. This AppContext instance mediates their communication
 
-    def load(self):
+    def _launch(self):
+        # Configure/reconfigure GUI, load backend
+
         if self.window is None:
             sys.exit('Failed to load GUI.')
+
         if self.window.darkTheme:
             self.app.setStyleSheet(qdarkstyle.load_stylesheet())
         else:
             self.app.setStyleSheet('')
 
-    def run(self):
-        self.window = MainWindow()
-        self.window.setWindowTitle(self.name + ' v' + self.version)
-        self.window.resize(250, 150)
-
-        # Connect MainWindow signals to backend interface
-        self.window.reload_required.connect(self.load)
+        # Connect MainWindow interaction signals to backend interface
         self.window.scan.connect(self._start_scanning)
         self.window.acquire.connect(self._start_acquisition)
         self.window.stop.connect(self._stop)
         self.window.closed.connect(self._close_controller)
         self.window.scan_changed.connect(self._update_scan_pattern)
         self.window.processing_changed.connect(self._configure_processing)
+        self.window.launch.connect(self._launch)
 
+        # Open controller
+        self._open_controller()
+        self._update_timer.start(100)  # 10 Hz
+
+        self.window.show()
+
+    def run(self):
+
+        # Debounce timers
         self._timer_configure_image = QTimer()
         self._ctr_configure_image = 0
 
@@ -68,17 +76,24 @@ class _AppContext(ApplicationContext):
         # Repeated update execution keeps GUI in step with controller
         self._update_timer = QTimer()
         self._update_timer.timeout.connect(self._update)
-        self._update_timer.start(100)  # 10 Hz
 
         # Periodic display of grabbed frame
         self._display_update_timer = QTimer()
         self._display_update_timer.timeout.connect(self._display_update)
         self._display_buffer = None
 
-        self.window.show()
-        self._open_controller()
+        self.window = MainWindow()
+        self.window.setWindowTitle(self.name + ' v' + self.version)
+        self.window.resize(250, 150)
 
-        self.load()
+        # Load the window's state from .last JSON
+        # Will emit all the signals but we have not connected them yet
+        self.window.loadConfiguration(file=os.path.join(self.config_resource_location, '.last'))
+
+        # ... Do anything else before backend setup
+
+        self._launch()
+
         return self.app.exec_()
 
     def _update(self):
@@ -190,7 +205,8 @@ class _AppContext(ApplicationContext):
             scan_y = self.window.scan_pattern().y * self.window.scan_scale_factors()[1]
             scan_line_trig = self.window.scan_pattern().line_trigger * self.window.trigger_gain()
             scan_frame_trig = self.window.scan_pattern().frame_trigger * self.window.trigger_gain()
-            scan_frame_trig[0:4] = self.window.trigger_gain()
+            scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
+            scan_frame_trig[-10::] = self.window.trigger_gain()
             all_samples = np.concatenate([scan_y, scan_x])
             print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:', self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
             self.controller.set_scan(

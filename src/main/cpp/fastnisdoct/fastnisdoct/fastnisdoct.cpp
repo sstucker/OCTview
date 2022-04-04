@@ -124,7 +124,7 @@ int processed_frame_size = 0;  // Number of elements in the frame after inter A-
 CircAcqBuffer<fftwf_complex>* processed_alines_ring = NULL;
 CircAcqBuffer<fftwf_complex>* processed_frame_ring = NULL;
 
-spsc_bounded_queue_t<fftwf_complex*> display_queue(32);
+spsc_bounded_queue_t<fftwf_complex*> display_queue(4); // Small queue, main loop should only spend time copying to the queue buffers if the GUI is ready 
 
 float* background_spectrum = NULL;
 float* background_spectrum_new = NULL;
@@ -142,7 +142,7 @@ inline void recv_msg()
 	{
 		if (msg.flag & MSG_CONFIGURE_IMAGE)
 		{
-			printf("MSG_CONFIGURE_IMAGE received\n");
+			printf("fastnisdoct: MSG_CONFIGURE_IMAGE received\n");
 			if (state.load() == STATE_READY || state.load() == STATE_OPEN)
 			{
 				state.store(STATE_OPEN);
@@ -163,11 +163,11 @@ inline void recv_msg()
 				raw_frame_size = msg.aline_size * msg.number_of_alines;
 				processed_alines_size = msg.roi_size * msg.number_of_alines;
 				processed_frame_size = state_data.roi_size * ((state_data.number_of_alines / state_data.aline_repeat) / state_data.bline_repeat);
-				printf("Image configured: Number of A-lines: %i\n", state_data.number_of_alines);
-				printf("Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
+				printf("fastnisdoct: Image configured: Number of A-lines: %i\n", state_data.number_of_alines);
+				printf("fastnisdoct: Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(fftwf_complex) * processed_frame_size));
-				printf("Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
+				printf("fastnisdoct: Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
 				
 				delete processed_alines_ring;
 				delete processed_frame_ring;
@@ -191,28 +191,27 @@ inline void recv_msg()
 				// Set up NI image buffers
 				if (ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers) == 0)
 				{
-					printf("Buffers allocated.\n");
+					printf("fastnisdoct: Buffers allocated.\n");
+					image_configured = true;
+					if (ready_to_scan() && state == STATE_OPEN)
+					{
+						state.store(STATE_READY);
+					}
 				}
 				else
 				{
+					printf("fastnisdoct: Failed to allocate buffers.\n");
 					ni::print_error_msg();
-				}
-
-				image_configured = true;
-
-				if (ready_to_scan() && state == STATE_OPEN)
-				{
-					state.store(STATE_READY);
 				}
 			}
 			else
 			{
-				printf("Cannot configure image! Not OPEN or READY.\n");
+				printf("fastnisdoct: Cannot configure image! Not OPEN or READY.\n");
 			}
 		}
 		else if (msg.flag & MSG_CONFIGURE_PROCESSING)
 		{
-			printf("MSG_CONFIGURE_PROCESSING received\n");
+			printf("fastnisdoct: MSG_CONFIGURE_PROCESSING received\n");
 			if (image_configured)  // Image must be configured before processing can be configured
 			{
 
@@ -245,7 +244,7 @@ inline void recv_msg()
 				}
 				else if (state.load() == STATE_ACQUIRIING)
 				{
-					printf("Cannot configure processing duration acquisition.\n");
+					printf("fastnisdoct: Cannot configure processing duration acquisition.\n");
 				}
 				else  // If SCANNING, make real-time adjustments to apod window, background subtraction option, interpolation
 				{
@@ -260,7 +259,7 @@ inline void recv_msg()
 		}
 		else if (msg.flag & MSG_SET_PATTERN)
 		{
-			printf("MSG_SET_PATTERN received\n");
+			printf("fastnisdoct: MSG_SET_PATTERN received\n");
 			scan_defined = false;
 			if (ni::set_scan_pattern(msg.x, msg.y, msg.line_trigger, msg.frame_trigger, msg.n_samples, msg.dac_output_rate) == 0)
 			{
@@ -272,25 +271,32 @@ inline void recv_msg()
 			}
 			else
 			{
-				printf("Error updating scan.\n");
+				printf("fastnisdoct: Error updating scan.\n");
 				ni::print_error_msg();
 			}
 		}
 		else if (msg.flag & MSG_START_SCAN)
 		{
-			printf("MSG_START_SCAN received\n");
+			printf("fastnisdoct: MSG_START_SCAN received\n");
 			if (state.load() == STATE_READY)
 			{
-				state.store(STATE_SCANNING);
 				aline_processing_pool->start();
-				// WAIT FOR POOL TO BE READY while aline_processing_pool.is
-				ni::start_scan();
-				ni::print_error_msg();
+				if (ni::start_scan() == 0)
+				{
+					printf("fastnisdoct: Scanning!\n");
+					state.store(STATE_SCANNING);
+				}
+				else
+				{
+					aline_processing_pool->terminate();
+					printf("fastnisdoct: Failed to start scanning.");
+					ni::print_error_msg();
+				}
 			}
 		}
 		else if (msg.flag & MSG_STOP_SCAN)
 		{
-			printf("MSG_STOP_SCAN received\n");
+			printf("fastnisdoct: MSG_STOP_SCAN received\n");
 			if (ni::stop_scan() == 0)
 			{
 				if (state.load() == STATE_SCANNING)
@@ -305,11 +311,15 @@ inline void recv_msg()
 					state.store(STATE_READY);
 				}
 			}
-			ni::print_error_msg();
+			else
+			{
+				printf("fastnisdoct: Failed to stop scanning.\n");
+				ni::print_error_msg();
+			}
 		}
 		else if (msg.flag & MSG_START_ACQUISITION)
 		{
-			printf("MSG_START_ACQUISITION received\n");
+			printf("fastnisdoct: MSG_START_ACQUISITION received\n");
 			if (state.load() == STATE_SCANNING)
 			{
 				state.store(STATE_ACQUIRIING);
@@ -317,20 +327,16 @@ inline void recv_msg()
 		}
 		else if (msg.flag & MSG_STOP_ACQUISITION)
 		{
-			printf("MSG_STOP_ACQUISITION received\n");
+			printf("fastnisdoct: MSG_STOP_ACQUISITION received\n");
 			if (state.load() == STATE_ACQUIRIING)
 			{
 				state.store(STATE_SCANNING);
 			}
 		}
-		else
-		{
-			printf("Message flag %i not understood.\n", msg.flag);
-		}
 	}
 	else
 	{
-		// printf("Queue was empty.\n");
+		// printf("fastnisdoct: Queue was empty.\n");
 		// ni::print_error_msg();
 	}
 }
@@ -359,19 +365,19 @@ void _main()
 		}
 		else if (state.load() == STATE_ERROR)
 		{
-			printf("Error!\n");
+			// printf("fastnisdoct: Error!\n");
 			return;
 		}
 		else  // if SCANNING or ACQUIRING
 		{
 			// Lock out frame with IMAQ function
 			int examined = ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
-			printf("Examined buffer %i\n", examined);
-			if (raw_frame_addr != NULL)
+			printf("fastnisdoct: Examined buffer %i\n", examined);
+			if (examined > -1 && raw_frame_addr != NULL)
 			{
-				if (raw_frame_addr[0] > 0)  // Sometimes NI interface returns a bad frame
+				//if (raw_frame_addr[1] > 0)  // Sometimes NI interface returns a bad frame
 				{
-					printf("A-line stamp = %i\n", raw_frame_addr[0]);
+					printf("fastnisdoct: A-line stamp = %i\n", raw_frame_addr[0]);
 					processed_alines_addr = processed_alines_ring->lock_out_head();
 
 					// Send job to AlineProcessingPool
@@ -400,7 +406,7 @@ void _main()
 					{
 						spins += 1;
 					}
-					printf("A-line processing pool finished. Spun %i times.\n", spins);
+					printf("fastnisdoct: A-line processing pool finished. Spun %i times.\n", spins);
 
 					// Pointer swap new background buffer in
 					float* tmp = background_spectrum;
@@ -423,16 +429,23 @@ void _main()
 					// if (state.load() == STATE_ACQUIRING)
 					//		enqueue the frame with the StreamWorker
 				}  // if raw frame grabbed properly
-				else
-				{
-					// 	printf("Grabbed a NULL frame.\n");
-					ni::print_error_msg();
-				}
 			}
-			ni::release_buffer();
+			else if (examined == IMG_ERR_BAD_ACQWINDOW_RECT)
+			{
+				ni::print_error_msg();
+			}
+			else
+			{
+				printf("fastnisdoct: Error examining buffer %i.\n", cumulative_buffer_number);
+				ni::print_error_msg();
+			}
+			if (ni::release_buffer() != 0)
+			{
+				printf("fastnisdoct: Failed to release buffer!\n");
+				ni::print_error_msg();
+			}
 		}
-		// printf("Main loop running. State %i\n", state.load());
-		// ni::print_camera_serial_msg();
+		// printf("fastnisdoct: Main loop running. State %i\n", state.load());
 		fflush(stdout);
 	}
 }
@@ -450,20 +463,31 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		const char* ao_st_ch
 	)
 	{
-		printf("Opening NI hardware interface:\n");
-		printf("Camera ID: %s\n", cam_name);
-		printf("X channel ID: %s\n", ao_x_ch);
-		printf("Y channel ID: %s\n", ao_y_ch);
-		printf("Line trig channel ID: %s\n", ao_lt_ch);
-		printf("Frame trig channel ID: %s\n", ao_ft_ch);
-		printf("Start trig channel ID: %s\n", ao_st_ch);
+		printf("fastnisdoct: Opening NI hardware interface:\n");
+		printf("fastnisdoct: Camera ID: %s\n", cam_name);
+		printf("fastnisdoct: X channel ID: %s\n", ao_x_ch);
+		printf("fastnisdoct: Y channel ID: %s\n", ao_y_ch);
+		printf("fastnisdoct: Line trig channel ID: %s\n", ao_lt_ch);
+		printf("fastnisdoct: Frame trig channel ID: %s\n", ao_ft_ch);
+		printf("fastnisdoct: Start trig channel ID: %s\n", ao_st_ch);
 
-		ni::imaq_open(cam_name);
-		ni::print_error_msg();
-		ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch, ao_ft_ch, ao_st_ch);
-		ni::print_error_msg();
-		main_running = true;
-		main_t = std::thread(&_main);
+		if (ni::imaq_open(cam_name) == 0)
+		{
+			printf("fastnisdoct: NI IMAQ interface opened.\n");
+			if (ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch, ao_ft_ch, ao_st_ch) == 0)
+			{
+				printf("fastnisdoct: NI DAQmx interface opened.\n");
+				main_running = true;
+				main_t = std::thread(&_main);
+				return;
+			}
+			ni::print_error_msg();
+		}
+		else
+		{
+			printf("fastnisdoct: Failed to open IMAQ interface.\n");
+			ni::print_error_msg();
+		}
 	}
 
 	__declspec(dllexport) void nisdoct_close()
@@ -472,8 +496,15 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		main_t.join();
 		delete aline_processing_pool;
 		aline_processing_pool = NULL;
-		ni::daq_close();
-		ni::imaq_close();
+		if (ni::daq_close() == 0 && ni::imaq_close() == 0)
+		{
+			printf("NI IMAQ and NI DAQmx interfaces closed.\n");
+		}
+		else
+		{
+			printf("Failed to close NI IMAQ and NI DAQmx interfaces.\n");
+			ni::print_error_msg();
+		}
 		delete[] background_spectrum;
 		background_spectrum = NULL;
 		delete[] background_spectrum_new;
@@ -558,8 +589,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_start_scan()
 	{
-		printf("nisdoct_start_scan\n");
-
 		state_msg msg;
 		msg.flag = MSG_START_SCAN;
 		msg_queue.enqueue(msg);
@@ -567,8 +596,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_stop_scan()
 	{
-		printf("nisdoct_stop_scan\n");
-
 		state_msg msg;
 		msg.flag = MSG_STOP_SCAN;
 		msg_queue.enqueue(msg);
@@ -590,8 +617,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_stop_acquisition()
 	{
-		printf("nisdoct_stop_acquisition\n");
-
 		state_msg msg;
 		msg.flag = MSG_STOP_ACQUISITION;
 		msg_queue.enqueue(msg);

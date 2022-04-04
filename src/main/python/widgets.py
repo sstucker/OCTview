@@ -11,13 +11,10 @@ from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindo
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame, QApplication
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
 from scanpatterns import LineScanPattern, RasterScanPattern
-from threading import Thread
+from threading import Thread, Lock
+import copy
 
 import OCTview
-from controller import NIOCTController
-
-# TODO make parametric
-ALINE_SIZE = 2048
 
 
 def replaceWidget(old_widget: QWidget, new_widget: QWidget):
@@ -176,7 +173,7 @@ class ScanWidget(QWidget):
 
 
 class RasterScanWidget(ScanWidget, UiWidget):
-    _pattern_updated = pyqtSignal()  # Reports generation thread finished
+
     pattern_updated = pyqtSignal()  # Reports new pattern assigned to clients
 
     def __init__(self):
@@ -200,54 +197,37 @@ class RasterScanWidget(ScanWidget, UiWidget):
 
         self.buttonSettings.pressed.connect(self._settings_dialog.showDialog)
 
-        # Pattern generation takes place in this thread
-        self._pattern_gen_thread = Thread()
-        self._pattern_updated.connect(self._pattern_generated)
-        # _pattern_generated assigns _new_pattern to _pattern
-        self._new_pattern = RasterScanPattern()
         self._pattern = RasterScanPattern()
 
-    def _generate_pattern(self, **kwargs):
-        """Creates new scan pattern and assigns it to _new_pattern and then emits '_pattern_updated'.
-
-        _new_pattern should be created here and read in the main thread in the callback ONLY..
-
-        Args:
-            **kwargs: arguments passed to `RasterScanPattern.generate()`
-        """
-        self._new_pattern = RasterScanPattern()
-        self._new_pattern.generate(**kwargs)
-        self._pattern_updated.emit()
-
-    def _pattern_generated(self):
-        self._pattern = self._new_pattern  # New pattern should not be read anywhere else
-        self._pattern_gen_thread.join()
-        self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
-        self.pattern_updated.emit()
+        # Debounce timer
+        self._timer_generate = QTimer()
+        self._ctr_generate = 0
 
     def generate_pattern(self):
-        if self._pattern_gen_thread.is_alive():
-            """
-            Don't start new pattern gen if there is already some in progress. This keeps GUI responsive with the expense
-            that quick successive changes to a large pattern may not be reflected in the GUI before scanning
-            """
-            return
-        self._pattern_gen_thread = Thread(target=self._generate_pattern, kwargs={
-            'alines': self.spinACount.value(),
-            'blines': self.spinBCount.value(),
-            'max_trigger_rate': 76000,
-            # Pattern gen in millimeters
-            'fov': [self.spinROIWidth.value() * 0.001, self.spinROIHeight.value() * 0.001],
-            'flyback_duty': self.spinFlybackDuty.value() / 100,
-            'exposure_fraction': self.spinExposureFraction.value() / 100,
-            'fast_axis_step': self.radioXStep.isChecked(),
-            'slow_axis_step': self.radioYStep.isChecked(),
-            'aline_repeat': [1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
-            'bline_repeat': [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
-            'bidirectional': self.checkBidirectional.isChecked(),
-            'rotation_rad': self.parentWidget().spinRotation.value() * np.pi / 180,
-        })
-        self._pattern_gen_thread.start()
+        self._ctr_generate += 1
+        self._timer_generate.singleShot(OCTview.CALLBACK_DEBOUNCE_MS, self._generate_pattern)
+
+    def _generate_pattern(self):
+        self._ctr_generate -= 1
+        if not self._ctr_generate > 0:
+            self._pattern.generate(**{
+                'alines': self.spinACount.value(),
+                'blines': self.spinBCount.value(),
+                'max_trigger_rate': 76000,
+                # Pattern gen in millimeters
+                'fov': [self.spinROIWidth.value() * 0.001, self.spinROIHeight.value() * 0.001],
+                'flyback_duty': self.spinFlybackDuty.value() / 100,
+                'exposure_fraction': self.spinExposureFraction.value() / 100,
+                'fast_axis_step': self.radioXStep.isChecked(),
+                'slow_axis_step': self.radioYStep.isChecked(),
+                'aline_repeat': [1, self.spinARepeat.value()][int(self.checkARepeat.isChecked())],
+                'bline_repeat': [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
+                'bidirectional': self.checkBidirectional.isChecked(),
+                'rotation_rad': self.parentWidget().spinRotation.value() * np.pi / 180,
+            })
+            self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
+            print(self._pattern.__class__.__name__, 'generated!')
+            self.pattern_updated.emit()
 
     def fixSize(self, fixed: bool):
         """Disables all widgets that allow the editing of the image size. This cannot be changed during a scan.
@@ -296,7 +276,6 @@ class RasterScanWidget(ScanWidget, UiWidget):
         else:
             self.spinBCount.setEnabled(True)
             self.labelBCount.setEnabled(True)
-        self.generate_pattern()
 
     def _checkBidirectionalChanged(self):
         if self.checkBidirectional.isChecked():
@@ -309,7 +288,6 @@ class RasterScanWidget(ScanWidget, UiWidget):
         else:
             self.spinFlybackDuty.setEnabled(True)
             self.labelFlybackDuty.setEnabled(True)
-        self.generate_pattern()
 
     def _checkARepeatChanged(self):
         if self.checkARepeat.isChecked():
@@ -318,7 +296,6 @@ class RasterScanWidget(ScanWidget, UiWidget):
             self.radioXStep.setChecked(True)
         else:
             self.spinARepeat.setEnabled(False)
-        self.generate_pattern()
 
     def _checkBRepeatChanged(self):
         if self.checkBRepeat.isChecked():
@@ -326,19 +303,20 @@ class RasterScanWidget(ScanWidget, UiWidget):
             self.spinBRepeat.setEnabled(True)
         else:
             self.spinBRepeat.setEnabled(False)
-        self.generate_pattern()
 
     def _xValueChanged(self):
         if self.checkSquareScan.isChecked():
             self.spinBCount.setValue(self.spinACount.value())
         if self.checkEqualAspect.isChecked():
             self.spinROIHeight.setValue(self.spinROIWidth.value() / self.spinACount.value() * self.spinBCount.value())
-        self.generate_pattern()
 
     def _profileChanged(self):
         self.spinExposureFraction.setEnabled(not self.radioXStep.isChecked())
         self.labelExposureFraction.setEnabled(not self.radioXStep.isChecked())
-        self.generate_pattern()
+
+    # Overload
+    def pattern(self):
+        return copy.copy(self._pattern)
 
 
 class LineScanWidget(ScanWidget, UiWidget):
@@ -937,7 +915,7 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 
 
 class MainWindow(QMainWindow, UiWidget):
-    reload_required = pyqtSignal()  # A significant change has been made to the backend configuration and it must be completely reloaded
+    launch = pyqtSignal()  # A change has been made to the backend configuration and it must be completely reloaded. Also emitted on first launch
     scan_changed = pyqtSignal(int, int)  # Scan pattern has been changed
     processing_changed = pyqtSignal()  # Processing parameters have been changed
     closed = pyqtSignal()  # MainWindow has been closed
@@ -973,7 +951,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.actionSave_Configuration.triggered.connect(self.saveConfiguration)
         self.actionLoad_Configuration.triggered.connect(self.loadConfiguration)
         self.actionSettings.triggered.connect(self._settings_dialog.showDialog)
-        self._settings_dialog.changed.connect(self.reload_required.emit)
+        # self._settings_dialog.changed.connect(self.initialize.emit)
 
         self.ControlGroupBox.scan.connect(self._scan)
         self.ControlGroupBox.acquire.connect(self._acquire)
@@ -982,17 +960,15 @@ class MainWindow(QMainWindow, UiWidget):
         self.ScanGroupBox.changed.connect(lambda: self.scan_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
         self.ProcessingGroupBox.changed.connect(self.processing_changed.emit)
 
-        config_file = os.path.join(OCTview.config_resource_location, '.last')
-        if os.path.exists(config_file):
-            self.loadStateFromJson(config_file)
-
         self._showRepeatProcessing()
 
-    def loadConfiguration(self):
-        file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
-                                           "OCTview configuration file (*.oct)")[0]
+    def loadConfiguration(self, file=None):
+        if file is None:
+            file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
+                                                   "OCTview configuration file (*.oct)")[0]
         if os.path.exists(file):
             self.loadStateFromJson(file)
+            self.launch.emit()
 
     def saveConfiguration(self):
         file = QFileDialog.getSaveFileName(self, "Save Configuration File", OCTview.config_resource_location,
