@@ -173,7 +173,6 @@ class ScanWidget(QWidget):
 
 
 class RasterScanWidget(ScanWidget, UiWidget):
-
     pattern_updated = pyqtSignal()  # Reports new pattern assigned to clients
 
     def __init__(self):
@@ -564,7 +563,6 @@ class FileGroupBox(QGroupBox, UiWidget):
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
-
     changed = pyqtSignal()
 
     def __init__(self):
@@ -957,7 +955,8 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.acquire.connect(self._acquire)
         self.ControlGroupBox.stop.connect(self._stop)
 
-        self.ScanGroupBox.changed.connect(lambda: self.scan_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
+        self.ScanGroupBox.changed.connect(
+            lambda: self.scan_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
         self.ProcessingGroupBox.changed.connect(self.processing_changed.emit)
 
         self._showRepeatProcessing()
@@ -965,7 +964,7 @@ class MainWindow(QMainWindow, UiWidget):
     def loadConfiguration(self, file=None):
         if file is None:
             file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
-                                                   "OCTview configuration file (*.oct)")[0]
+                                               "OCTview configuration file (*.oct)")[0]
         if os.path.exists(file):
             self.loadStateFromJson(file)
             self.launch.emit()
@@ -1067,9 +1066,9 @@ class MainWindow(QMainWindow, UiWidget):
 
     def processed_frame_size(self) -> int:
         return int((self.ScanGroupBox.zroi()[1] - self.ScanGroupBox.zroi()[0]) * \
-               ((self.ScanGroupBox.pattern().total_number_of_alines
-                 / self.ScanGroupBox.pattern().aline_repeat)
-                / self.ScanGroupBox.pattern().bline_repeat))
+                   ((self.ScanGroupBox.pattern().total_number_of_alines
+                     / self.ScanGroupBox.pattern().aline_repeat)
+                    / self.ScanGroupBox.pattern().bline_repeat))
 
     def scan_pattern(self) -> LineScanPattern:
         return self.ScanGroupBox.pattern()

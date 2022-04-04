@@ -259,11 +259,12 @@ inline void recv_msg()
 		}
 		else if (msg.flag & MSG_SET_PATTERN)
 		{
-			printf("fastnisdoct: MSG_SET_PATTERN received\n");
+			printf("fastnisdoct: MSG_SET_PATTERN received... ");
 			scan_defined = false;
 			if (ni::set_scan_pattern(msg.x, msg.y, msg.line_trigger, msg.frame_trigger, msg.n_samples, msg.dac_output_rate) == 0)
 			{
 				scan_defined = true;
+				printf("Buffered new scan pattern!\n");
 				if (ready_to_scan() && state == STATE_OPEN)
 				{
 					state.store(STATE_READY);
@@ -271,7 +272,7 @@ inline void recv_msg()
 			}
 			else
 			{
-				printf("fastnisdoct: Error updating scan.\n");
+				printf("Error updating scan.\n");
 				ni::print_error_msg();
 			}
 		}
@@ -372,12 +373,12 @@ void _main()
 		{
 			// Lock out frame with IMAQ function
 			int examined = ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
-			printf("fastnisdoct: Examined buffer %i\n", examined);
+			// printf("fastnisdoct: Examined buffer %i\n", examined);
 			if (examined > -1 && raw_frame_addr != NULL)
 			{
 				//if (raw_frame_addr[1] > 0)  // Sometimes NI interface returns a bad frame
 				{
-					printf("fastnisdoct: A-line stamp = %i\n", raw_frame_addr[0]);
+					// printf("fastnisdoct: A-line stamp = %i\n", raw_frame_addr[0]);
 					processed_alines_addr = processed_alines_ring->lock_out_head();
 
 					// Send job to AlineProcessingPool
@@ -406,7 +407,7 @@ void _main()
 					{
 						spins += 1;
 					}
-					printf("fastnisdoct: A-line processing pool finished. Spun %i times.\n", spins);
+					// printf("fastnisdoct: A-line processing pool finished. Spun %i times.\n", spins);
 
 					// Pointer swap new background buffer in
 					float* tmp = background_spectrum;

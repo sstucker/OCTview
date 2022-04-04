@@ -355,24 +355,22 @@ namespace ni
 		}
 
 		// Assign buffers for scan pattern
-		delete[] concatenated_scansig;
-		concatenated_scansig = new float64[4 * n];
+		if (n != scansig_n)  // If buffer size needs to change
+		{
+			delete[] concatenated_scansig;
+			concatenated_scansig = new float64[4 * n];
+		}
 		memcpy(concatenated_scansig + 0, x, sizeof(float64) * n);
 		memcpy(concatenated_scansig + n, y, sizeof(float64) * n);
 		memcpy(concatenated_scansig + 2 * n, linetrigger, sizeof(float64) * n);
 		memcpy(concatenated_scansig + 3 * n, frametrigger, sizeof(float64) * n);
 
-		if (n != scansig_n)  // If buffer size needs to change
+		bool32 is_it = false;
+		DAQmxIsTaskDone(scan_task, &is_it);
+		if (!is_it)  // Only buffer the samples now if the task is running. Otherwise DAQmxCfgOutputBuffer and DAQmxWriteAnalogF64 are called on start_scan.
 		{
-			bool32 is_it = false;
-			DAQmxIsTaskDone(scan_task, &is_it);
-			if (!is_it)  // Only buffer the samples if the task is running
-			{
-				err = DAQmxStopTask(scan_task);
-				err = DAQmxCfgOutputBuffer(scan_task, n);
-				err = DAQmxWriteAnalogF64(scan_task, n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
-				err = DAQmxStartTask(scan_task);
-			}
+			err = DAQmxCfgOutputBuffer(scan_task, n);
+			err = DAQmxWriteAnalogF64(scan_task, n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
 		}
 		scansig_n = n;  // Set property to new n
 		return err;

@@ -14,6 +14,7 @@ from widgets import MainWindow
 CALLBACK_DEBOUNCE_MS = 400
 MAX_DISPLAY_UPDATE_RATE = 20
 
+
 class _AppContext(ApplicationContext):
 
     def __init__(self):
@@ -113,14 +114,14 @@ class _AppContext(ApplicationContext):
 
     def _display_update(self):
         if self.controller.grab_frame(self._grab_buffer) > -1:
-            print('Copying to display buffer with shape', np.shape(self._display_buffer))
+            # print('Copying to display buffer with shape', np.shape(self._display_buffer))
             i = 0
             for x in range(self.window.scan_pattern().dimensions[0]):
                 for y in range(self.window.scan_pattern().dimensions[1]):
-                    self._display_buffer[:, x, y] = self._grab_buffer[self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()]
+                    self._display_buffer[:, x, y] = self._grab_buffer[
+                                                    self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()]
                     i += 1
             self.window.display_frame(self._display_buffer)
-            print("Grabbed a frame size", self._processed_frame_size, 'max', np.max(self._display_buffer))
         # else:
         #     print("Failed to grab frame. Maybe one wasnt available yet")
 
@@ -164,9 +165,9 @@ class _AppContext(ApplicationContext):
             self._processed_frame_size = self.window.processed_frame_size()
             self._raw_frame_size = self.window.raw_frame_size()
             self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
-            processed_shape = (self.window.roi_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1])
+            processed_shape = (
+            self.window.roi_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1])
             self._display_buffer = np.zeros(processed_shape, dtype=np.complex64)
-            print('...Frame sizes updated:', self._raw_frame_size, self._processed_frame_size)
 
     def _configure_processing(self):
         self._ctr_configure_processing += 1
@@ -208,7 +209,8 @@ class _AppContext(ApplicationContext):
             scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
             scan_frame_trig[-10::] = self.window.trigger_gain()
             all_samples = np.concatenate([scan_y, scan_x])
-            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:', self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
+            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:',
+                  self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
             self.controller.set_scan(
                 scan_x,
                 scan_y,

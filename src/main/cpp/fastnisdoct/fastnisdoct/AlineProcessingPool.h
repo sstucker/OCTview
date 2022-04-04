@@ -283,10 +283,6 @@ public:
 			{
 				th.join();
 			}
-			else
-			{
-				printf("Worker thread wasn't joinable!!\n");
-			}
 		}
 		pool.clear();
 		for (int i = 0; i < number_of_workers; i++)
