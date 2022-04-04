@@ -127,6 +127,7 @@ CircAcqBuffer<fftwf_complex>* processed_frame_ring = NULL;
 spsc_bounded_queue_t<fftwf_complex*> display_queue(32);
 
 float* background_spectrum = NULL;
+float* background_spectrum_new = NULL;
 
 inline bool ready_to_scan()
 {
@@ -181,8 +182,11 @@ inline void recv_msg()
 				memset(state_data.apod_window, 1, state_data.aline_size * sizeof(float));
 				
 				delete[] background_spectrum;
+				delete[] background_spectrum_new;
 				background_spectrum = new float[msg.aline_size];
+				background_spectrum_new = new float[msg.aline_size];
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
+				memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 
 				// Set up NI image buffers
 				if (ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers) == 0)
@@ -258,12 +262,18 @@ inline void recv_msg()
 		{
 			printf("MSG_SET_PATTERN received\n");
 			scan_defined = false;
-			ni::set_scan_pattern(msg.x, msg.y, msg.line_trigger, msg.frame_trigger, msg.n_samples, msg.dac_output_rate);
-			ni::print_error_msg();
-			scan_defined = true;
-			if (ready_to_scan() && state == STATE_OPEN)
+			if (ni::set_scan_pattern(msg.x, msg.y, msg.line_trigger, msg.frame_trigger, msg.n_samples, msg.dac_output_rate) == 0)
 			{
-				state.store(STATE_READY);
+				scan_defined = true;
+				if (ready_to_scan() && state == STATE_OPEN)
+				{
+					state.store(STATE_READY);
+				}
+			}
+			else
+			{
+				printf("Error updating scan.\n");
+				ni::print_error_msg();
 			}
 		}
 		else if (msg.flag & MSG_START_SCAN)
@@ -273,9 +283,10 @@ inline void recv_msg()
 			{
 				state.store(STATE_SCANNING);
 				aline_processing_pool->start();
+				// WAIT FOR POOL TO BE READY while aline_processing_pool.is
+				ni::start_scan();
+				ni::print_error_msg();
 			}
-			ni::start_scan();
-			ni::print_error_msg();
 		}
 		else if (msg.flag & MSG_STOP_SCAN)
 		{
@@ -319,8 +330,8 @@ inline void recv_msg()
 	}
 	else
 	{
-		printf("Queue was empty.\n");
-		ni::print_error_msg();
+		// printf("Queue was empty.\n");
+		// ni::print_error_msg();
 	}
 }
 
@@ -354,64 +365,74 @@ void _main()
 		else  // if SCANNING or ACQUIRING
 		{
 			// Lock out frame with IMAQ function
-			int examined = ni::examine_buffer(raw_frame_addr, cumulative_buffer_number);
+			int examined = ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
+			printf("Examined buffer %i\n", examined);
 			if (raw_frame_addr != NULL)
 			{
-				processed_alines_addr = processed_alines_ring->lock_out_head();
-
-				// Send job to AlineProcessingPool
-				aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window, background_spectrum);
-				
-				// Calculate average background spectrum (to be used with next scan)
-				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
-				if (state_data.subtract_background)
+				if (raw_frame_addr[0] > 0)  // Sometimes NI interface returns a bad frame
 				{
-					float norm = 1.0 / state_data.aline_size;
-					for (int i = 0; i < state_data.number_of_alines; i++)
+					printf("A-line stamp = %i\n", raw_frame_addr[0]);
+					processed_alines_addr = processed_alines_ring->lock_out_head();
+
+					// Send job to AlineProcessingPool
+					aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window, background_spectrum);
+
+					// Calculate average background spectrum (to be used with next scan)
+					memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
+					if (state_data.subtract_background)
 					{
+						float norm = 1.0 / state_data.aline_size;
+						for (int i = 0; i < state_data.number_of_alines; i++)
+						{
+							for (int j = 0; j < state_data.aline_size; j++)
+							{
+								background_spectrum_new[j] += raw_frame_addr[state_data.aline_size * i + j];
+							}
+						}
 						for (int j = 0; j < state_data.aline_size; j++)
 						{
-							background_spectrum[j] += raw_frame_addr[state_data.aline_size * i + j];
+							background_spectrum_new[j] *= norm;
 						}
 					}
-					for (int j = 0; j < state_data.aline_size; j++)
+					// Wait for job to finish
+					int spins = 0;
+					while (!aline_processing_pool->is_finished())
 					{
-						background_spectrum[j] *= norm;
+						spins += 1;
 					}
-				}
-				// Wait for job to finish
-				int spins = 0;
-				while (!aline_processing_pool->is_finished())
+					printf("A-line processing pool finished. Spun %i times.\n", spins);
+
+					// Pointer swap new background buffer in
+					float* tmp = background_spectrum;
+					background_spectrum = background_spectrum_new;
+					background_spectrum_new = tmp;
+
+					if (!display_queue.full())
+					{
+						fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
+						memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
+						display_queue.enqueue(display_buffer);
+					}
+
+					processed_alines_ring->release_head();
+					cumulative_buffer_number += 1;
+					// Perform A-line averaging or differencing
+					// Perform B-line averaging or differencing
+					// Perform frame averaging
+
+					// if (state.load() == STATE_ACQUIRING)
+					//		enqueue the frame with the StreamWorker
+				}  // if raw frame grabbed properly
+				else
 				{
-					spins += 1;
+					// 	printf("Grabbed a NULL frame.\n");
+					ni::print_error_msg();
 				}
-				printf("A-line processing pool finished. Spun %i times.\n", spins);
-				ni::release_buffer();
-
-				if (!display_queue.full())
-				{
-					fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
-					memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
-					display_queue.enqueue(display_buffer);
-				}
-
-				processed_alines_ring->release_head();
-				cumulative_buffer_number += 1;
-				// Perform A-line averaging or differencing
-				// Perform B-line averaging or differencing
-				// Perform frame averaging
-
-				// if (state.load() == STATE_ACQUIRING)
-				//		enqueue the frame with the StreamWorker
-			}  // if raw frame grabbed properly
-			else
-			{
-				printf("Grabbed a NULL frame.\n");
-				ni::print_error_msg();
-				ni::release_buffer();
 			}
+			ni::release_buffer();
 		}
 		// printf("Main loop running. State %i\n", state.load());
+		// ni::print_camera_serial_msg();
 		fflush(stdout);
 	}
 }
@@ -455,6 +476,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		ni::imaq_close();
 		delete[] background_spectrum;
 		background_spectrum = NULL;
+		delete[] background_spectrum_new;
+		background_spectrum_new = NULL;
 		delete processed_alines_ring;
 		processed_alines_ring = NULL;
 		delete processed_frame_ring;

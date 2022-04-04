@@ -186,15 +186,18 @@ class _AppContext(ApplicationContext):
     def _update_scan_pattern_cb(self):
         self._ctr_update_scan_pattern -= 1
         if not self._ctr_update_scan_pattern > 0:
-            all_samples = np.concatenate([self.window.scan_pattern().x * self.window.scan_scale_factors()[0], self.window.scan_pattern().y * self.window.scan_scale_factors()[1]])
-            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:', self.window.scan_pattern().sample_rate)
-            ft_temp = np.zeros(len(self.window.scan_pattern().x))
-            ft_temp[0:10] = 1
+            scan_x = self.window.scan_pattern().x * self.window.scan_scale_factors()[0]
+            scan_y = self.window.scan_pattern().y * self.window.scan_scale_factors()[1]
+            scan_line_trig = self.window.scan_pattern().line_trigger * self.window.trigger_gain()
+            scan_frame_trig = self.window.scan_pattern().frame_trigger * self.window.trigger_gain()
+            scan_frame_trig[0:4] = self.window.trigger_gain()
+            all_samples = np.concatenate([scan_y, scan_x])
+            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:', self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
             self.controller.set_scan(
-                self.window.scan_pattern().x * self.window.scan_scale_factors()[0],
-                self.window.scan_pattern().y * self.window.scan_scale_factors()[1],
-                self.window.scan_pattern().line_trigger * self.window.trigger_gain(),
-                ft_temp * self.window.trigger_gain(),
+                scan_x,
+                scan_y,
+                scan_line_trig,
+                scan_frame_trig,
                 self.window.scan_pattern().sample_rate,
             )
 

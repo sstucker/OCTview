@@ -171,6 +171,8 @@ class NIOCTController:
             ft (np.ndarray): Frame grabber trigger signal
             rate (int): Sample generation rate
         """
+        if any([len(sig) != len(x) for sig in [y, lt, ft]]):
+            raise ValueError('x, y, lt and ft must be nd.arrays of equal length.')
         self._lib.nisdoct_set_pattern(
             np.array(x).astype(np.float64),
             np.array(y).astype(np.float64),
