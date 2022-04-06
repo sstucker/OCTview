@@ -12,6 +12,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
+#include <cstring>
 
 #include "spscqueue.h"
 #include "AlineProcessingPool.h"
@@ -39,7 +40,7 @@
 #define STATE_ERROR				  static_cast<int>( 6 )
 
 
-struct state_msg {
+struct StateMsg {
 	
 	int flag;
 	
@@ -49,7 +50,6 @@ struct state_msg {
 	const char* ao_lt_ch;
 	const char* ao_ft_ch;
 	const char* ao_st_ch;
-	int dac_output_rate;
 	int aline_size;
 	int spatial_aline_size;
 	int number_of_alines;
@@ -68,17 +68,13 @@ struct state_msg {
 	int a_rpt_proc_flag;
 	int b_rpt_proc_flag;
 	int n_frame_avg;
-	double* x;
-	double* y;
-	int n_samples;
-	double* line_trigger;
-	double* frame_trigger;
+	ScanPattern* scanpattern;
 	const char* file;
 	long long max_bytes;
 	int n_frames_to_acquire;
 };
 
-inline void printf_state_data(state_msg s)
+inline void printf_state_data(StateMsg s)
 {
 	printf("camera name: %s\n", s.cam_name);
 	printf("ao x galvo name: %s\n", s.ao_x_ch);
@@ -86,7 +82,6 @@ inline void printf_state_data(state_msg s)
 	printf("ao lt galvo name: %s\n", s.ao_lt_ch);
 	printf("ao ft galvo name: %s\n", s.ao_ft_ch);
 	printf("ao st galvo name: %s\n", s.ao_st_ch);
-	printf("dac_output_rate: %i\n", s.dac_output_rate);
 	printf("aline_size: %i\n", s.aline_size);
 	printf("number_of_alines: %i\n", s.number_of_alines);
 	printf("alines_per_b: %i\n", s.alines_per_b);
@@ -108,7 +103,7 @@ inline void printf_state_data(state_msg s)
 	printf("n_frames_to_acquire: %i\n", s.n_frames_to_acquire);
 }
 
-spsc_bounded_queue_t<state_msg> msg_queue(32);
+spsc_bounded_queue_t<StateMsg> msg_queue(32);
 
 AlineProcessingPool* aline_processing_pool = NULL;
 
@@ -117,7 +112,7 @@ bool processing_configured = false;
 bool scan_defined = false;
 
 std::atomic_int state = STATE_UNOPENED;
-state_msg state_data;
+StateMsg state_data;
 
 int raw_frame_size = 0;  // Number of elements in the raw frame
 int processed_alines_size = 0;  // Number of elements in the frame after A-line processing has been carried out
@@ -129,7 +124,8 @@ int buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the proc
 CircAcqBuffer<fftwf_complex>* processed_alines_ring = NULL;
 CircAcqBuffer<fftwf_complex>* processed_frame_ring = NULL;
 
-spsc_bounded_queue_t<fftwf_complex*> display_queue(4); // Small queue, main loop should only spend time copying to the queue buffers if the GUI is ready 
+spsc_bounded_queue_t<fftwf_complex*> image_display_queue(4); // Small queues, main loop should only spend time copying to the display buffers if the GUI is ready 
+spsc_bounded_queue_t<float*> spectrum_display_queue(4);
 
 float* background_spectrum = NULL;
 float* background_spectrum_new = NULL;
@@ -146,7 +142,7 @@ inline bool ready_to_scan()
 
 inline void recv_msg()
 {
-	state_msg msg;
+	StateMsg msg;
 	if (msg_queue.dequeue(msg))
 	{
 		if (msg.flag & MSG_CONFIGURE_IMAGE)
@@ -158,7 +154,6 @@ inline void recv_msg()
 				image_configured = false;
 				processing_configured = false;
 
-				state_data.dac_output_rate = msg.dac_output_rate;
 				state_data.aline_size = msg.aline_size;
 				state_data.spatial_aline_size = msg.aline_size / 2 + 1;
 				state_data.number_of_alines = msg.number_of_alines;
@@ -190,7 +185,7 @@ inline void recv_msg()
 
 				// Allocate processing buffers
 				delete[] apodization_window;
-				apodization_window = new float[msg.aline_size];
+				apodization_window = new float[state_data.aline_size];
 				memset(apodization_window, 1, state_data.aline_size * sizeof(float));
 				
 				delete[] background_spectrum;
@@ -251,7 +246,8 @@ inline void recv_msg()
 					state_data.interpdk = msg.interpdk;
 					
 					// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
-					memcpy(apodization_window, msg.apod_window, state_data.aline_size * sizeof(float));
+					memcpy(apodization_window, msg.apod_window, msg.aline_size * sizeof(float));
+					delete[] msg.apod_window;
 
 					state_data.a_rpt_proc_flag = msg.a_rpt_proc_flag;
 					state_data.b_rpt_proc_flag = msg.b_rpt_proc_flag;
@@ -286,9 +282,10 @@ inline void recv_msg()
 		{
 			printf("fastnisdoct: MSG_SET_PATTERN received... ");
 			scan_defined = false;
-			if (ni::set_scan_pattern(msg.x, msg.y, msg.line_trigger, msg.frame_trigger, msg.n_samples, msg.dac_output_rate) == 0)
+			if (ni::set_scan_pattern(msg.scanpattern) == 0)
 			{
 				scan_defined = true;
+				delete msg.scanpattern;  // Free the pattern memory
 				printf("Buffered new scan pattern!\n");
 				if (ready_to_scan() && state == STATE_OPEN)
 				{
@@ -328,11 +325,16 @@ inline void recv_msg()
 				if (state.load() == STATE_SCANNING)
 				{
 					aline_processing_pool->terminate();
-					// Empty out the display queue
-					fftwf_complex* p;
-					while (display_queue.dequeue(p))
+					// Empty out the display queues
+					fftwf_complex* ip;
+					while (image_display_queue.dequeue(ip))
 					{
-						fftwf_free(p);
+						fftwf_free(ip);
+					}
+					float* sp;
+					while (spectrum_display_queue.dequeue(sp))
+					{
+						delete[] sp;
 					}
 					state.store(STATE_READY);
 				}
@@ -414,13 +416,24 @@ void _main()
 						raw_frame_addr[i * state_data.aline_size] = 0;  // Zero all stamps
 					}
 
+					// Buffer a spectrum for output to GUI
+					if (!spectrum_display_queue.full())
+					{
+						float* spectrum_buffer = new float[state_data.aline_size];  // Will be freed by grab_frame or cleanup
+						for (int i = 0; i < state_data.aline_size; i++)
+						{
+							spectrum_buffer[i] = raw_frame_addr[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
+						}
+						spectrum_display_queue.enqueue(spectrum_buffer);
+					}
+
 					// Send job to AlineProcessingPool
 					aline_processing_pool->submit(processed_alines_addr + (ibuf * alines_per_buffer * state_data.roi_size), raw_frame_addr, state_data.interp, state_data.interpdk, apodization_window, background_spectrum);
 
 					// Calculate average background spectrum (to be used with next scan)
 					if (state_data.subtract_background)
 					{
-						for (int i = 0; i < alines_per_buffer; i++)
+						for (int i = 0; i < alines_per_buffer; i++) 
 						{
 							for (int j = 0; j < state_data.aline_size; j++)
 							{
@@ -462,7 +475,7 @@ void _main()
 			if (state_data.subtract_background)
 			{
 				// Normalize the background spectrum
-				float norm = 1.0 / state_data.aline_size;
+				float norm = 1.0 / state_data.number_of_alines;
 				for (int j = 0; j < state_data.aline_size; j++)
 				{
 					background_spectrum_new[j] *= norm;
@@ -473,12 +486,17 @@ void _main()
 				background_spectrum = background_spectrum_new;
 				background_spectrum_new = tmp;
 			}
-
-			if (!display_queue.full())
+			else
 			{
-				fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
-				memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
-				display_queue.enqueue(display_buffer);
+				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
+			}
+
+			// Buffer an image for output to GUI
+			if (!image_display_queue.full())
+			{
+				fftwf_complex* image_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
+				memcpy(image_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
+				image_display_queue.enqueue(image_buffer);
 			}
 
 			processed_alines_ring->release_head();
@@ -515,6 +533,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		printf("fastnisdoct: Frame trig channel ID: %s\n", ao_ft_ch);
 		printf("fastnisdoct: Start trig channel ID: %s\n", ao_st_ch);
 
+		// If you don't use these strings here, dynamically put them somewhere until you do--their values are undefined once Python scope exits
+
 		if (ni::imaq_open(cam_name) == 0)
 		{
 			printf("fastnisdoct: NI IMAQ interface opened.\n");
@@ -539,7 +559,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		main_running = false;
 		main_t.join();
 		delete aline_processing_pool;
-		aline_processing_pool = NULL;
 		if (ni::daq_close() == 0 && ni::imaq_close() == 0)
 		{
 			printf("NI IMAQ and NI DAQmx interfaces closed.\n");
@@ -550,19 +569,13 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 			ni::print_error_msg();
 		}
 		delete[] background_spectrum;
-		background_spectrum = NULL;
 		delete[] background_spectrum_new;
-		background_spectrum_new = NULL;
 		delete processed_alines_ring;
-		processed_alines_ring = NULL;
 		delete processed_frame_ring;
-		processed_frame_ring = NULL;
 		delete apodization_window;
-		apodization_window = NULL;
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(
-		int dac_output_rate,
 		int aline_size,
 		int number_of_alines,
 		int alines_per_b,
@@ -574,8 +587,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int roi_size
 	)
 	{
-		state_msg msg;
-		msg.dac_output_rate = dac_output_rate;
+		StateMsg msg;
 		msg.aline_size = aline_size;
 		msg.number_of_alines = number_of_alines;
 		msg.alines_per_b = alines_per_b;
@@ -595,17 +607,20 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		bool interp,
 		double interpdk,
 		float* apod_window,
+		int aline_size,
 		int a_rpt_proc_flag,
 		int b_rpt_proc_flag,
 		int n_frame_avg
 	)
 	{
-		state_msg msg;
+		StateMsg msg;
 		msg.fft_enabled = fft_enabled;
 		msg.subtract_background = subtract_background;
 		msg.interp = interp;
 		msg.interpdk = interpdk;
-		msg.apod_window = apod_window;
+		msg.aline_size = aline_size;
+		msg.apod_window = new float[aline_size];
+		memcpy(msg.apod_window, apod_window, aline_size * sizeof(float));  // Will be freed after copy into async buffer
 		msg.a_rpt_proc_flag = a_rpt_proc_flag;
 		msg.b_rpt_proc_flag = b_rpt_proc_flag;
 		msg.n_frame_avg = n_frame_avg;
@@ -622,27 +637,22 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int rate
 	)
 	{
-		state_msg msg;
-		msg.x = x;
-		msg.y = y;
-		msg.line_trigger = line_trigger;
-		msg.frame_trigger = frame_trigger;
-		msg.n_samples = n_samples;
-		msg.dac_output_rate = rate;
+		StateMsg msg;
+		msg.scanpattern = new ScanPattern(x, y, line_trigger, frame_trigger, n_samples, rate);  // Will be freed after dequeue and copy into hardware buffer
 		msg.flag = MSG_SET_PATTERN;
 		msg_queue.enqueue(msg);
 	}
 
 	__declspec(dllexport) void nisdoct_start_scan()
 	{
-		state_msg msg;
+		StateMsg msg;
 		msg.flag = MSG_START_SCAN;
 		msg_queue.enqueue(msg);
 	}
 
 	__declspec(dllexport) void nisdoct_stop_scan()
 	{
-		state_msg msg;
+		StateMsg msg;
 		msg.flag = MSG_STOP_SCAN;
 		msg_queue.enqueue(msg);
 	}
@@ -653,7 +663,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int n_frames_to_acquire
 	)
 	{
-		state_msg msg;
+		StateMsg msg;
 		msg.file = file;
 		msg.max_bytes = max_bytes;
 		msg.n_frames_to_acquire = n_frames_to_acquire;
@@ -663,7 +673,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_stop_acquisition()
 	{
-		state_msg msg;
+		StateMsg msg;
 		msg.flag = MSG_STOP_ACQUISITION;
 		msg_queue.enqueue(msg);
 	}
@@ -691,13 +701,38 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	__declspec(dllexport) int nisdoct_grab_frame(fftwf_complex* dst)
 	{
 		auto current_state = state.load();
-		if ((processed_alines_ring != NULL) && (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING))
+		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING)
 		{
 			fftwf_complex* f;
-			if (display_queue.dequeue(f))
+			if (image_display_queue.dequeue(f))
 			{
+				// Note you can access processed_frame_size here because we just checked state, but really this is undefined
 				memcpy(dst, f, processed_frame_size * sizeof(fftwf_complex));
 				fftwf_free(f);
+				return 0;
+			}
+			else
+			{
+				return -1;
+			}
+		}
+		else
+		{
+			return -1;
+		}
+	}
+
+	__declspec(dllexport) int nisdoct_grab_spectrum(float* dst)
+	{
+		auto current_state = state.load();
+		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING)
+		{
+			float* s;
+			if (spectrum_display_queue.dequeue(s))
+			{
+				// Note you can PROBABLY access state_data here because we just checked state, but really this is undefined
+				memcpy(dst, s, state_data.aline_size * sizeof(fftwf_complex));
+				delete[] s;
 				return 0;
 			}
 			else

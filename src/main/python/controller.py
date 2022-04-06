@@ -28,13 +28,14 @@ class NIOCTController:
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
         self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
-        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_int, c.c_bool, c.c_int, c.c_int,
+        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_bool, c.c_int, c.c_int,
                                                       c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int,
-                                                           c.c_int, c.c_int]
+                                                           c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int, c.c_int]
         self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
+        self._lib.nisdoct_grab_spectrum.argtypes = [c_float_p]
 
         self._lib.nisdoct_get_state.restype = c.c_int
         self._lib.nisdoct_ready.restype = c.c_bool
@@ -82,7 +83,6 @@ class NIOCTController:
 
     def configure_image(
             self,
-            dac_output_rate: int,
             aline_size: int,
             number_of_alines: int,
             alines_per_b: int,
@@ -98,7 +98,6 @@ class NIOCTController:
         Acquisition cannot be configured during a scan.
 
         Args:
-            dac_output_rate (int): The rate at which the DAC generates the samples passed to set_scan.
             aline_size (int): The number of voxels in each A-line i.e. 2048
             number_of_alines (int): The number of A-lines in each acquisition frame. Defined by the scan pattern.
             alines_per_b (int): Size of each B-line in A-lines. B-lines are the subdivisions of the acquisition frame.
@@ -115,7 +114,6 @@ class NIOCTController:
         if roi_size is None:
             roi_size = aline_size
         self._lib.nisdoct_configure_image(
-            int(dac_output_rate),
             int(aline_size),
             int(number_of_alines),
             int(alines_per_b),
@@ -163,6 +161,7 @@ class NIOCTController:
             bool(interp),
             float(intpdk),
             np.array(apod_window).astype(np.float32),
+            len(apod_window),  # aline_size
             a_rpt_proc_flag,
             b_rpt_proc_flag,
             int(n_frame_avg)
@@ -181,10 +180,10 @@ class NIOCTController:
         if any([len(sig) != len(x) for sig in [y, lt, ft]]):
             raise ValueError('x, y, lt and ft must be nd.arrays of equal length.')
         self._lib.nisdoct_set_pattern(
-            np.array(x).astype(np.float64),
-            np.array(y).astype(np.float64),
-            np.array(lt).astype(np.float64),
-            np.array(ft).astype(np.float64),
+            np.array(x),
+            np.array(y),
+            np.array(lt),
+            np.array(ft),
             len(x),
             int(rate)
         )
@@ -244,5 +243,6 @@ class NIOCTController:
     def grab_frame(self, output):
         return self._lib.nisdoct_grab_frame(output)
 
-    # def grab_spectrum(self, output):
-    #     return self._lib.NIOCT_grabSpectrum(self._handle, output)
+    def grab_spectrum(self, output):
+        return self._lib.nisdoct_grab_spectrum(output)
+

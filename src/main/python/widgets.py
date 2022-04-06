@@ -671,7 +671,7 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
         super().__init__()
 
         self.resize(200, 100)
-        self.setFixedSize(self.minimumSize())
+        # self.setFixedSize(self.minimumSize())
 
         self._wavelengths = wavelengths
         self._n = len(self._wavelengths)
@@ -885,6 +885,8 @@ class SpectrumWidget(QWidget, UiWidget):
         super().__init__()
         replaceWidget(self.SpectrumPlotWidget, SpectrumPlotWidget(np.arange(0, 2048)))
 
+    def plot(self, spectrum: np.ndarray):
+        self.SpectrumPlotWidget.plot(spectrum)
 
 class CancelDiscardsChangesDialog(QDialog, UiWidget):
     changed = pyqtSignal()
@@ -1124,6 +1126,9 @@ class MainWindow(QMainWindow, UiWidget):
 
     def display_frame(self, frame: np.ndarray):
         self.DisplayWidget.display_frame(frame)
+
+    def display_spectrum(self, spectrum: np.ndarray):
+        self.SpectrumWidget.plot(spectrum)
 
     def trigger_gain(self) -> float:
         return self._settings_dialog.spinTriggerGain.value()

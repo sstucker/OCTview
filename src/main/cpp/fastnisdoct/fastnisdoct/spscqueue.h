@@ -30,6 +30,9 @@
 // most CPU architectures.
 //
 // [1] http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue
+//
+// full method added by sstucker 2022
+//
 
 #ifndef __SPSC_BOUNDED_QUEUE_INCLUDED__
 #define __SPSC_BOUNDED_QUEUE_INCLUDED__

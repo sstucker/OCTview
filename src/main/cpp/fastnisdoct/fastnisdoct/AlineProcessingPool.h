@@ -14,7 +14,7 @@ struct aline_processing_job_msg {
 	uint16_t* src_frame;
 	std::atomic_int* barrier;
 	WavenumberInterpolationPlan* interp_plan;  // if NULL, no interp
-	const float* apod_window;
+	float* apod_window;
 	float* background_spectrum;
 	fftwf_plan* fft_plan;  // if NULL, no FFT
 };
@@ -61,7 +61,7 @@ void aline_processing_worker(
 				}
 				else
 				{
-					memcpy(interp_buffer + i * aline_size, (float*)fft_buffer + i * aline_size, aline_size * number_of_alines * sizeof(float));
+					memcpy((float*)fft_buffer + i * aline_size, interp_buffer, aline_size * sizeof(float));
 				}
 				// Multiply by apodization window
 				for (int j = 0; j < aline_size; j++)
@@ -218,6 +218,7 @@ public:
 					this->interpdk_plan = WavenumberInterpolationPlan(this->aline_size, interpdk);
 					interpdk_plan_p = &this->interpdk_plan;
 					printf(" Finished.\n");
+					fflush(stdout);
 				}
 			}
 			for (int i = 0; i < queues.size(); i++)

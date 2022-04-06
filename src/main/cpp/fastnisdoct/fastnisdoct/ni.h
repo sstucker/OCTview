@@ -39,6 +39,47 @@ int32 scansig_n = 0; // Number of samples in each of the 4 scan signals
 int32 samples_written = 0;  // Returned by NI DAQ after samples are written
 
 
+class ScanPattern
+{
+
+public:
+
+	double* x;
+	double* y;
+	double* line_trigger;
+	double* frame_trigger;
+	int n;
+	int rate;
+
+	ScanPattern(double* x, double* y, double* line_trigger, double* frame_trigger, int n, int rate)
+	{
+		this->x = new double[n];
+		memcpy(this->x, x, sizeof(double) * n);
+
+		this->y = new double[n];
+		memcpy(this->y, y, sizeof(double) * n);
+
+		this->line_trigger = new double[n];
+		memcpy(this->line_trigger, line_trigger, sizeof(double) * n);
+
+		this->frame_trigger = new double[n];
+		memcpy(this->frame_trigger, frame_trigger, sizeof(double) * n);
+
+		this->n = n;
+		this->rate = rate;
+	}
+
+	~ScanPattern()
+	{
+		delete[] this->x;
+		delete[] this->y;
+		delete[] this->line_trigger;
+		delete[] this->frame_trigger;
+	}
+
+};
+
+
 namespace ni
 {
 
@@ -57,45 +98,6 @@ namespace ni
 			printf("No error.\n");
 		}
 	}
-
-	inline void print_camera_serial_msg()
-	{
-		imgSessionSerialFlush(session_id);
-		uInt32 nbytes = 2048;
-		char* buf = new char[2048];
-		err = imgSessionSerialRead(session_id, buf, &nbytes, 2000);
-		if (nbytes > 0)
-		{
-			printf(buf);
-			printf("\n");
-		}
-		else if (err != 0)
-		{
-			print_error_msg();
-			return;
-		}
-		else
-		{
-			printf("No serial message.\n");
-		}
-		delete[] buf;
-	}
-
-	/*
-	int imaq_buffer_cleanup()
-	{
-		err = imgMemUnlock(buflist_id);
-		for (int i = 0; i < numberOfBuffers; i++)
-		{
-			if (imaq_buffers[i] != NULL)
-			{
-				err = imgDisposeBuffer(imaq_buffers[i]);
-			}
-		}
-		err = imgDisposeBufList(buflist_id, FALSE);
-		return err;
-	}
-	*/
 
 	int imaq_buffer_cleanup()
 	{
@@ -143,96 +145,6 @@ namespace ni
 		numberOfBuffers = number_of_buffers;
 		return err;
 	}
-
-	/*
-	int setup_buffers(int aline_size, int number_of_alines, int number_of_buffers)
-	{
-		if (numberOfBuffers > 0)  // Clean up previous buffers
-		{
-			err = imaq_buffer_cleanup();
-		}
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_TOP, 0);
-		if (err != 0)
-		{
-			return err;
-		}
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_LEFT, 0);
-		if (err != 0)
-		{
-			return err;
-		}
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_HEIGHT, number_of_alines);
-		if (err != 0)
-		{
-			return err;
-		}
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_WIDTH, aline_size);
-		if (err != 0)
-		{
-			return err;
-		}
-		// Confirm the change by getting the attributes
-		err = imgGetAttribute(session_id, IMG_ATTR_ROI_WIDTH, &acqWinWidth);
-		err = imgGetAttribute(session_id, IMG_ATTR_ROI_HEIGHT, &acqWinHeight);
-		err = imgGetAttribute(session_id, IMG_ATTR_BYTESPERPIXEL, &bytesPerPixel);
-		if (err != 0)
-		{
-			return err;
-		}
-
-		bufferSize = acqWinWidth * acqWinHeight * bytesPerPixel;
-
-		numberOfBuffers = number_of_buffers;
-
-		err = imgCreateBufList(number_of_buffers, &buflist_id);
-		if (err != 0)
-		{
-			return err;
-		}
-		imaq_buffers = new Int8 *[number_of_buffers];
-
-		int bufCmd;
-		for (int i = 0; i < numberOfBuffers; i++)
-		{
-			err = imgCreateBuffer(session_id, FALSE, bufferSize, (void**)&imaq_buffers[i]);
-			if (err != 0)
-			{
-				return err;
-			}
-			err = imgSetBufferElement2(buflist_id, i, IMG_BUFF_ADDRESS, imaq_buffers[i]);
-			if (err != 0)
-			{
-				return err;
-			}
-			err = imgSetBufferElement2(buflist_id, i, IMG_BUFF_SIZE, bufferSize);
-			if (err != 0)
-			{
-				return err;
-			}
-			bufCmd = (i == (number_of_buffers - 1)) ? IMG_CMD_LOOP : IMG_CMD_NEXT;
-			if (err != 0)
-			{
-				return err;
-			}
-			err = imgSetBufferElement2(buflist_id, i, IMG_BUFF_COMMAND, bufCmd);
-			if (err != 0)
-			{
-				return err;
-			}
-		}
-		err = imgMemLock(buflist_id);
-		if (err != 0)
-		{
-			return err;
-		}
-		err = imgSessionConfigure(session_id, buflist_id);
-		if (err != 0)
-		{
-			return err;
-		}
-		return err;
-	}
-	*/
 
 	int imaq_open(const char* camera_name)
 	{
@@ -367,61 +279,27 @@ namespace ni
 		return imgSessionReleaseBuffer(session_id);
 	}
 
-	int set_scan_pattern(float64* x, float64* y, float64* linetrigger, float64* frametrigger, int n, int pattern_sample_rate)
+	int set_scan_pattern(ScanPattern* pattern)
 	{
-		/*
-		bool ft_hi = false;
-		for (int i = 0; i < n; i++)
-		{
-			if (frametrigger[i] > 4.0)
-			{
-				ft_hi = true;
-				break;
-			}
-		}
-
-		if (!ft_hi)
-		{
-			printf("fastnisdoct: Frame trigger will not drive a frame grab!\n");
-			return -1;
-		}
-
-		bool lt_hi = false;
-		for (int i = 0; i < n; i++)
-		{
-			if (linetrigger[i] > 4.0)
-			{
-				lt_hi = true;
-				break;
-			}
-		}
-
-		if (!lt_hi)
-		{
-			printf("fastnisdoct: Line trigger will not drive a frame grab!\n");
-			return -1;
-		}
-		*/
-
 		// Assign buffers for scan pattern
-		if (n != scansig_n)  // If buffer size needs to change
+		if (pattern->n != scansig_n)  // If buffer size needs to change
 		{
+			scansig_n = pattern->n;  // Set property to new n
 			delete[] concatenated_scansig;
-			concatenated_scansig = new float64[4 * n];
+			concatenated_scansig = new float64[4 * pattern->n];
 		}
-		memcpy(concatenated_scansig + 0, x, sizeof(float64) * n);
-		memcpy(concatenated_scansig + n, y, sizeof(float64) * n);
-		memcpy(concatenated_scansig + 2 * n, linetrigger, sizeof(float64) * n);
-		memcpy(concatenated_scansig + 3 * n, frametrigger, sizeof(float64) * n);
+		memcpy(concatenated_scansig + 0, pattern->x, sizeof(float64) * pattern->n);
+		memcpy(concatenated_scansig + pattern->n, pattern->y, sizeof(float64) * pattern->n);
+		memcpy(concatenated_scansig + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
+		memcpy(concatenated_scansig + 3 * pattern->n, pattern->frame_trigger, sizeof(float64) * pattern->n);
 
 		bool32 is_it = false;
 		DAQmxIsTaskDone(scan_task, &is_it);
 		if (!is_it)  // Only buffer the samples now if the task is running. Otherwise DAQmxCfgOutputBuffer and DAQmxWriteAnalogF64 are called on start_scan.
 		{
-			err = DAQmxCfgOutputBuffer(scan_task, n);
-			err = DAQmxWriteAnalogF64(scan_task, n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
+			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
+			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
 		}
-		scansig_n = n;  // Set property to new n
 		return err;
 	}
 }

@@ -81,7 +81,8 @@ class _AppContext(ApplicationContext):
         # Periodic display of grabbed frame
         self._display_update_timer = QTimer()
         self._display_update_timer.timeout.connect(self._display_update)
-        self._display_buffer = None
+        self._image_buffer = None
+        self._spectrum_buffer = None
 
         self.window = MainWindow()
         self.window.setWindowTitle(self.name + ' v' + self.version)
@@ -114,14 +115,16 @@ class _AppContext(ApplicationContext):
 
     def _display_update(self):
         if self.controller.grab_frame(self._grab_buffer) > -1:
-            # print('Copying to display buffer with shape', np.shape(self._display_buffer))
+            # print('Copying to display buffer with shape', np.shape(self._image_buffer))
             i = 0
             for x in range(self.window.scan_pattern().dimensions[0]):
                 for y in range(self.window.scan_pattern().dimensions[1]):
-                    self._display_buffer[:, x, y] = self._grab_buffer[
+                    self._image_buffer[:, x, y] = self._grab_buffer[
                                                     self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()]
                     i += 1
-            self.window.display_frame(self._display_buffer)
+            self.window.display_frame(self._image_buffer)
+        if self.controller.grab_spectrum(self._spectrum_buffer) > -1:
+            self.window.display_spectrum(self._spectrum_buffer)
         # else:
         #     print("Failed to grab frame. Maybe one wasnt available yet")
 
@@ -153,7 +156,6 @@ class _AppContext(ApplicationContext):
         if not self._ctr_configure_image > 0:
             pat = self.window.scan_pattern()
             self.controller.configure_image(
-                self.window.max_line_rate(),
                 self.window.aline_size(),
                 pat.total_number_of_alines,
                 pat.dimensions[0],
@@ -169,7 +171,8 @@ class _AppContext(ApplicationContext):
             self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
             processed_shape = (
             self.window.roi_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1])
-            self._display_buffer = np.zeros(processed_shape, dtype=np.complex64)
+            self._image_buffer = np.zeros(processed_shape, dtype=np.complex64)
+            self._spectrum_buffer = np.zeros(self.window.aline_size(), dtype=np.float32)
 
     def _configure_processing(self):
         self._ctr_configure_processing += 1
