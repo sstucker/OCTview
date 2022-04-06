@@ -51,8 +51,10 @@ struct state_msg {
 	const char* ao_st_ch;
 	int dac_output_rate;
 	int aline_size;
+	int spatial_aline_size;
 	int number_of_alines;
 	int alines_per_b;
+	int buffer_each_b;
 	int aline_repeat;
 	int bline_repeat;
 	int number_of_buffers;
@@ -121,6 +123,9 @@ int raw_frame_size = 0;  // Number of elements in the raw frame
 int processed_alines_size = 0;  // Number of elements in the frame after A-line processing has been carried out
 int processed_frame_size = 0;  // Number of elements in the frame after inter A-line processing (frame processed) has been carried out
 
+int alines_per_buffer = 0;  // Number of A-lines in each IMAQ buffer. If less than the total number of A-lines per frame, buffers will be concatenated to form a frame
+int buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
+
 CircAcqBuffer<fftwf_complex>* processed_alines_ring = NULL;
 CircAcqBuffer<fftwf_complex>* processed_frame_ring = NULL;
 
@@ -128,6 +133,10 @@ spsc_bounded_queue_t<fftwf_complex*> display_queue(4); // Small queue, main loop
 
 float* background_spectrum = NULL;
 float* background_spectrum_new = NULL;
+
+float* apodization_window = NULL;
+
+int cumulative_buffer_number = 0;  // Number of buffers acquired by IMAQ
 
 inline bool ready_to_scan()
 {
@@ -151,13 +160,17 @@ inline void recv_msg()
 
 				state_data.dac_output_rate = msg.dac_output_rate;
 				state_data.aline_size = msg.aline_size;
+				state_data.spatial_aline_size = msg.aline_size / 2 + 1;
 				state_data.number_of_alines = msg.number_of_alines;
 				state_data.alines_per_b = msg.alines_per_b;
+				state_data.buffer_each_b = msg.buffer_each_b;
 				state_data.aline_repeat = msg.aline_repeat; 
 				state_data.bline_repeat = msg.bline_repeat;
 				state_data.number_of_buffers = msg.number_of_buffers;
 				state_data.roi_offset = msg.roi_offset;
 				state_data.roi_size = msg.roi_size;
+
+				printf("Buffering B-lines: %i\n", state_data.buffer_each_b);
 
 				// printf_state_data(state_data);
 				raw_frame_size = msg.aline_size * msg.number_of_alines;
@@ -167,7 +180,6 @@ inline void recv_msg()
 				printf("fastnisdoct: Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(fftwf_complex) * processed_frame_size));
-				printf("fastnisdoct: Allocating %i ring buffers, total size %f GB...\n", msg.number_of_buffers, total_buffer_size / 1073741824.0);
 				
 				delete processed_alines_ring;
 				delete processed_frame_ring;
@@ -177,9 +189,9 @@ inline void recv_msg()
 				processed_frame_ring = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_frame_size);
 
 				// Allocate processing buffers
-				delete[] state_data.apod_window;
-				state_data.apod_window = new float[msg.aline_size];
-				memset(state_data.apod_window, 1, state_data.aline_size * sizeof(float));
+				delete[] apodization_window;
+				apodization_window = new float[msg.aline_size];
+				memset(apodization_window, 1, state_data.aline_size * sizeof(float));
 				
 				delete[] background_spectrum;
 				delete[] background_spectrum_new;
@@ -188,10 +200,23 @@ inline void recv_msg()
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 				memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 
+				if (state_data.buffer_each_b)
+				{
+					alines_per_buffer = state_data.alines_per_b;
+				}
+				else
+				{
+					alines_per_buffer = state_data.number_of_alines;
+				}
+				buffers_per_frame = state_data.number_of_alines / alines_per_buffer;
+				printf("Buffers per frame: %i\n", buffers_per_frame);
+				printf("A-lines per buffer: %i\n", alines_per_buffer);
+
 				// Set up NI image buffers
-				if (ni::setup_buffers(state_data.aline_size, state_data.number_of_alines, state_data.number_of_buffers) == 0)
+				if (ni::setup_buffers(state_data.aline_size, alines_per_buffer, state_data.number_of_buffers) == 0)
 				{
 					printf("fastnisdoct: Buffers allocated.\n");
+					cumulative_buffer_number = 0;
 					image_configured = true;
 					if (ready_to_scan() && state == STATE_OPEN)
 					{
@@ -226,14 +251,14 @@ inline void recv_msg()
 					state_data.interpdk = msg.interpdk;
 					
 					// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
-					memcpy(state_data.apod_window, msg.apod_window, state_data.aline_size * sizeof(float));
+					memcpy(apodization_window, msg.apod_window, state_data.aline_size * sizeof(float));
 
 					state_data.a_rpt_proc_flag = msg.a_rpt_proc_flag;
 					state_data.b_rpt_proc_flag = msg.b_rpt_proc_flag;
 					state_data.n_frame_avg = msg.n_frame_avg;
 
 					// Initialize the AlineProcessingPool. This creates an FFTW plan and may take a long time.
-					aline_processing_pool = new AlineProcessingPool(state_data.aline_size, state_data.number_of_alines, state_data.roi_offset, state_data.roi_size, state_data.fft_enabled);
+					aline_processing_pool = new AlineProcessingPool(state_data.aline_size, alines_per_buffer, state_data.roi_offset, state_data.roi_size, state_data.fft_enabled);
 
 					processing_configured = true;
 
@@ -253,7 +278,7 @@ inline void recv_msg()
 					state_data.interpdk = msg.interpdk;
 
 					// Apod window signal gets copied for safety(?)
-					memcpy(state_data.apod_window, msg.apod_window, state_data.aline_size * sizeof(float));
+					memcpy(apodization_window, msg.apod_window, state_data.aline_size * sizeof(float));
 				}
 			}
 		}
@@ -349,12 +374,8 @@ void _main()
 {
 	// Initializations
 
-	state_data.apod_window = NULL;
-
 	uint16_t* raw_frame_addr = NULL;
 	fftwf_complex* processed_alines_addr = NULL;
-
-	int cumulative_buffer_number = 0;
 
 	state.store(STATE_OPEN);
 	while (main_running)
@@ -371,34 +392,40 @@ void _main()
 		}
 		else  // if SCANNING or ACQUIRING
 		{
-			// Lock out frame with IMAQ function
-			int examined = ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
-			// printf("fastnisdoct: Examined buffer %i\n", examined);
-			if (examined > -1 && raw_frame_addr != NULL)
+
+			processed_alines_addr = processed_alines_ring->lock_out_head();
+
+			// Set background spectrum to zero before sum
+			memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
+
+			for (int ibuf = 0; ibuf < buffers_per_frame; ibuf++)  // Collect and process IMAQ buffers until whole frame is acquired
 			{
-				//if (raw_frame_addr[1] > 0)  // Sometimes NI interface returns a bad frame
+				printf("Grabbing buffer %i of %i\n", ibuf, buffers_per_frame);
+				// Lock out frame with IMAQ function
+				int examined = ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
+				// printf("fastnisdoct: Examined buffer %i\n", examined);
+				if (examined > -1 && raw_frame_addr != NULL)
 				{
-					// printf("fastnisdoct: A-line stamp = %i\n", raw_frame_addr[0]);
-					processed_alines_addr = processed_alines_ring->lock_out_head();
+					printf("fastnisdoct: stamp[0] = %i\n", raw_frame_addr[state_data.aline_size * 0]);
+					// printf("fastnisdoct: stamp[-1] = %i\n", raw_frame_addr[state_data.aline_size * (state_data.number_of_alines - 1)]);
+
+					for (int i = 0; i < alines_per_buffer; i++)
+					{
+						raw_frame_addr[i * state_data.aline_size] = 0;  // Zero all stamps
+					}
 
 					// Send job to AlineProcessingPool
-					aline_processing_pool->submit(processed_alines_addr, raw_frame_addr, state_data.interp, state_data.interpdk, state_data.apod_window, background_spectrum);
+					aline_processing_pool->submit(processed_alines_addr + (ibuf * alines_per_buffer * state_data.roi_size), raw_frame_addr, state_data.interp, state_data.interpdk, apodization_window, background_spectrum);
 
 					// Calculate average background spectrum (to be used with next scan)
-					memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 					if (state_data.subtract_background)
 					{
-						float norm = 1.0 / state_data.aline_size;
-						for (int i = 0; i < state_data.number_of_alines; i++)
+						for (int i = 0; i < alines_per_buffer; i++)
 						{
 							for (int j = 0; j < state_data.aline_size; j++)
 							{
 								background_spectrum_new[j] += raw_frame_addr[state_data.aline_size * i + j];
 							}
-						}
-						for (int j = 0; j < state_data.aline_size; j++)
-						{
-							background_spectrum_new[j] *= norm;
 						}
 					}
 					// Wait for job to finish
@@ -409,42 +436,58 @@ void _main()
 					}
 					// printf("fastnisdoct: A-line processing pool finished. Spun %i times.\n", spins);
 
-					// Pointer swap new background buffer in
-					float* tmp = background_spectrum;
-					background_spectrum = background_spectrum_new;
-					background_spectrum_new = tmp;
-
-					if (!display_queue.full())
-					{
-						fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
-						memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
-						display_queue.enqueue(display_buffer);
-					}
-
-					processed_alines_ring->release_head();
 					cumulative_buffer_number += 1;
-					// Perform A-line averaging or differencing
-					// Perform B-line averaging or differencing
-					// Perform frame averaging
+				}
+				else  // If frame not grabbed properly
+				{
+					printf("fastnisdoct: Error examining buffer %i.\n", cumulative_buffer_number);
+					ni::print_error_msg();
+					if (ni::release_buffer() != 0)
+					{
+						printf("fastnisdoct: Failed to release buffer!\n");
+						ni::print_error_msg();
+					}
+					break;
+				}
 
-					// if (state.load() == STATE_ACQUIRING)
-					//		enqueue the frame with the StreamWorker
-				}  // if raw frame grabbed properly
-			}
-			else if (examined == IMG_ERR_BAD_ACQWINDOW_RECT)
+				if (ni::release_buffer() != 0)
+				{
+					printf("fastnisdoct: Failed to release buffer!\n");
+					ni::print_error_msg();
+				}
+
+			}  // Buffers per frame
+			
+
+			if (state_data.subtract_background)
 			{
-				ni::print_error_msg();
+				// Normalize the background spectrum
+				float norm = 1.0 / state_data.aline_size;
+				for (int j = 0; j < state_data.aline_size; j++)
+				{
+					background_spectrum_new[j] *= norm;
+				}
+
+				// Pointer swap new background buffer in
+				float* tmp = background_spectrum;
+				background_spectrum = background_spectrum_new;
+				background_spectrum_new = tmp;
 			}
-			else
+
+			if (!display_queue.full())
 			{
-				printf("fastnisdoct: Error examining buffer %i.\n", cumulative_buffer_number);
-				ni::print_error_msg();
+				fftwf_complex* display_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
+				memcpy(display_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
+				display_queue.enqueue(display_buffer);
 			}
-			if (ni::release_buffer() != 0)
-			{
-				printf("fastnisdoct: Failed to release buffer!\n");
-				ni::print_error_msg();
-			}
+
+			processed_alines_ring->release_head();
+			// Perform A-line averaging or differencing
+			// Perform B-line averaging or differencing
+			// Perform frame averaging
+
+			// if (state.load() == STATE_ACQUIRING)
+			//		enqueue the frame with the StreamWorker
 		}
 		// printf("fastnisdoct: Main loop running. State %i\n", state.load());
 		fflush(stdout);
@@ -514,8 +557,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		processed_alines_ring = NULL;
 		delete processed_frame_ring;
 		processed_frame_ring = NULL;
-		delete state_data.apod_window;
-		state_data.apod_window = NULL;
+		delete apodization_window;
+		apodization_window = NULL;
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(
@@ -523,6 +566,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int aline_size,
 		int number_of_alines,
 		int alines_per_b,
+		bool buffer_each_b,
 		int aline_repeat,
 		int bline_repeat,
 		int number_of_buffers,
@@ -535,6 +579,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.aline_size = aline_size;
 		msg.number_of_alines = number_of_alines;
 		msg.alines_per_b = alines_per_b;
+		msg.buffer_each_b = buffer_each_b;
 		msg.aline_repeat = aline_repeat;
 		msg.bline_repeat = bline_repeat;
 		msg.number_of_buffers = number_of_buffers;

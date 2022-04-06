@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindo
     QRadioButton, \
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame, QApplication
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
-from scanpatterns import LineScanPattern, RasterScanPattern
+from PyScanPatterns.scanpatterns import LineScanPattern, RasterScanPattern
 from threading import Thread, Lock
 import copy
 
@@ -223,6 +223,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
                 'bline_repeat': [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
                 'bidirectional': self.checkBidirectional.isChecked(),
                 'rotation_rad': self.parentWidget().spinRotation.value() * np.pi / 180,
+                'trigger_blines': self._settings_dialog.radioTriggerBlines.isChecked()
             })
             self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
             print(self._pattern.__class__.__name__, 'generated!')

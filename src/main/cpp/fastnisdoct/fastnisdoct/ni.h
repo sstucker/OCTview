@@ -29,6 +29,8 @@ uInt32 examined_number;  // Cumulative number of the currently examined IMAQ rin
 
 Int8** imaq_buffers;  // Ring buffer elements managed by IMAQ
 
+uint16_t** buffers = NULL;  // Ring buffer elements allocated manually
+
 // NI-DAQ
 
 int dac_rate = 0;  // The output rate of the DAC used to drive the scan pattern
@@ -79,6 +81,7 @@ namespace ni
 		delete[] buf;
 	}
 
+	/*
 	int imaq_buffer_cleanup()
 	{
 		err = imgMemUnlock(buflist_id);
@@ -92,7 +95,56 @@ namespace ni
 		err = imgDisposeBufList(buflist_id, FALSE);
 		return err;
 	}
+	*/
 
+	int imaq_buffer_cleanup()
+	{
+		for (int i = 0; i < numberOfBuffers; i++)
+		{
+			delete[] buffers[i];
+		}
+		delete buffers;
+		buffers = NULL;
+		return 0;
+	}
+
+	int setup_buffers(int aline_size, int number_of_alines, int number_of_buffers)
+	{
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_TOP, 0);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_LEFT, 0);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_HEIGHT, number_of_alines);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_WIDTH, aline_size);
+		err = imgSetAttribute2(session_id, IMG_ATTR_BYTESPERPIXEL, 2);
+
+		// Confirm the change by getting the attributes
+		err = imgGetAttribute(session_id, IMG_ATTR_ROI_WIDTH, &acqWinWidth);
+		err = imgGetAttribute(session_id, IMG_ATTR_ROI_HEIGHT, &acqWinHeight);
+		err = imgGetAttribute(session_id, IMG_ATTR_BYTESPERPIXEL, &bytesPerPixel);
+
+		if (err != 0)
+		{
+			return err;
+		}
+
+		bufferSize = acqWinWidth * acqWinHeight * bytesPerPixel;
+		if (buffers != NULL)
+		{
+			imaq_buffer_cleanup();
+		}
+		buffers = new uint16_t*[number_of_buffers];
+		for (int i = 0; i < number_of_buffers; i++)
+		{
+			buffers[i] = new uint16_t[aline_size * number_of_alines];
+		}
+		if (number_of_buffers > 0)
+		{
+			imgRingSetup(session_id, number_of_buffers, (void**)buffers, 0, 0);
+		}
+		numberOfBuffers = number_of_buffers;
+		return err;
+	}
+
+	/*
 	int setup_buffers(int aline_size, int number_of_alines, int number_of_buffers)
 	{
 		if (numberOfBuffers > 0)  // Clean up previous buffers
@@ -180,6 +232,7 @@ namespace ni
 		}
 		return err;
 	}
+	*/
 
 	int imaq_open(const char* camera_name)
 	{
@@ -218,12 +271,6 @@ namespace ni
 		const char* aoStartTrigger
 	)
 	{
-		printf("Creating DAQmx channels:\n");
-		printf("X Channel ID: %s\n", aoScanX);
-		printf("Y Channel ID: %s\n", aoScanY);
-		printf("Line Trigger Channel ID: %s\n", aoLineTrigger);
-		printf("Frame Trigger Channel ID: %s\n", aoFrameTrigger);
-		printf("Start Trigger Channel ID: %s\n", aoStartTrigger);
 		err = DAQmxCreateTask("scan", &scan_task);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanX, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanY, "", -10, 10, DAQmx_Val_Volts, NULL);
@@ -242,9 +289,10 @@ namespace ni
 		}
 		else
 		{
+			dac_rate = 76000 * 2;
 			err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
 			err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
-			err = DAQmxCfgSampClkTiming(scan_task, NULL, 152000, DAQmx_Val_Rising, DAQmx_Val_ContSamps, NULL);
+			err = DAQmxCfgSampClkTiming(scan_task, NULL, dac_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, NULL);
 			if (err != 0)
 			{
 				printf("DAQmx failed to program the task:\n");
@@ -255,7 +303,6 @@ namespace ni
 				delete[] buf;
 				return err;
 			}
-			dac_rate = 152000;
 		}
 		return err;
 	}
@@ -322,6 +369,7 @@ namespace ni
 
 	int set_scan_pattern(float64* x, float64* y, float64* linetrigger, float64* frametrigger, int n, int pattern_sample_rate)
 	{
+		/*
 		bool ft_hi = false;
 		for (int i = 0; i < n; i++)
 		{
@@ -353,6 +401,7 @@ namespace ni
 			printf("fastnisdoct: Line trigger will not drive a frame grab!\n");
 			return -1;
 		}
+		*/
 
 		// Assign buffers for scan pattern
 		if (n != scansig_n)  // If buffer size needs to change

@@ -87,7 +87,7 @@ void aline_processing_worker(
 				msg.dst_frame[i][1] /= aline_size;
 			}
 			// printf("Worker %i finished writing to %p, about to increment barrier which is currently %i\n", std::this_thread::get_id(), msg.dst_frame, msg.barrier->load());
-			++*msg.barrier;
+			msg.barrier->fetch_add(1);
 		}
 		else
 		{
@@ -198,7 +198,7 @@ public:
 		uint16_t* src_frame, // Pointer to raw frame
 		bool interpolation_enabled, // Whether or not to perform wavenumber-linearization interpolation.
 		double interpdk, // Wavenumber-linearization interpolation parameter.
-		const float* apodization_window,  // Window function to multiply spectral A-line by prior to FFT.
+		float* apodization_window,  // Window function to multiply spectral A-line by prior to FFT.
 		float* background_spectrum  // Spectrum to subtract from each raw spectrum prior to multiplication by the apod window
 	)
 	{

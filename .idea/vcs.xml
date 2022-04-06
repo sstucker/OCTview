@@ -2,5 +2,8 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/main/python/PyScanPattern" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/main/python/PyScanPatterns" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/src/main/python/scanpatterns" vcs="Git" />
   </component>
 </project>

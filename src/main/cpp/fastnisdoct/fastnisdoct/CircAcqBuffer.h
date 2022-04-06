@@ -149,7 +149,6 @@ public:
 	T* lock_out_head()
 	{
 		while (!locks[head].try_lock());
-		printf("Locked out %i\n", head);
 		return ring[head]->arr;
 	}
 
@@ -160,7 +159,6 @@ public:
 		int oldhead = head;
 		head = mod2(head + 1, ring_size);
 		locks[oldhead].unlock();
-		printf("Released %i, head now %i\n", oldhead, head);
 		return oldhead;
 	}
 

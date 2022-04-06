@@ -151,16 +151,18 @@ class _AppContext(ApplicationContext):
         (zstart, zstop) = self.window.zroi()
         self._ctr_configure_image -= 1
         if not self._ctr_configure_image > 0:
+            pat = self.window.scan_pattern()
             self.controller.configure_image(
                 self.window.max_line_rate(),
                 self.window.aline_size(),
-                self.window.scan_pattern().total_number_of_alines,
-                self.window.scan_pattern().dimensions[0],
-                self.window.scan_pattern().aline_repeat,
-                self.window.scan_pattern().bline_repeat,
+                pat.total_number_of_alines,
+                pat.dimensions[0],
+                pat.aline_repeat,
+                pat.bline_repeat,
                 self.window.number_of_image_buffers(),
                 self.window.roi_offset(),
-                self.window.roi_size()
+                self.window.roi_size(),
+                buffer_blines=pat.trigger_blines
             )
             self._processed_frame_size = self.window.processed_frame_size()
             self._raw_frame_size = self.window.raw_frame_size()
@@ -204,10 +206,27 @@ class _AppContext(ApplicationContext):
         if not self._ctr_update_scan_pattern > 0:
             scan_x = self.window.scan_pattern().x * self.window.scan_scale_factors()[0]
             scan_y = self.window.scan_pattern().y * self.window.scan_scale_factors()[1]
+
             scan_line_trig = self.window.scan_pattern().line_trigger * self.window.trigger_gain()
+
             scan_frame_trig = self.window.scan_pattern().frame_trigger * self.window.trigger_gain()
-            scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
-            scan_frame_trig[-10::] = self.window.trigger_gain()
+            # scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
+            #
+            # t_frame_trig_start = np.where(scan_line_trig > 0)[0][0]
+            # t_frame_trig_end = np.where(scan_line_trig > 0)[0][-1]
+
+            # scan_frame_trig[t_frame_trig_start:t_frame_trig_end] = self.window.trigger_gain()
+            # scan_frame_trig[t_frame_trig_start-1:t_frame_trig_start+4] = self.window.trigger_gain()
+            #
+            scan_line_trig = np.zeros(len(scan_line_trig)).astype(np.float64)
+            # scan_line_trig[0::2] = self.window.trigger_gain()
+
+            # import matplotlib.pyplot as plt
+            # plt.plot(scan_line_trig)
+            # plt.plot(scan_frame_trig)
+            # plt.plot(scan_x)
+            # plt.show()
+
             all_samples = np.concatenate([scan_y, scan_x])
             print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:',
                   self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))

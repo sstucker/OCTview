@@ -3,7 +3,6 @@ import numpy as np
 from numpy.ctypeslib import ndpointer
 import os
 
-
 c_bool_p = ndpointer(dtype=np.bool, ndim=1, flags='C_CONTIGUOUS')
 c_int_p = ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS')
 c_bool_p = ndpointer(dtype=np.bool, ndim=1, flags='C_CONTIGUOUS')
@@ -29,8 +28,10 @@ class NIOCTController:
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
         self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
-        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
-        self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int, c.c_int]
+        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_int, c.c_bool, c.c_int, c.c_int,
+                                                      c.c_int, c.c_int, c.c_int]
+        self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int,
+                                                           c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int, c.c_int]
         self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
@@ -89,8 +90,9 @@ class NIOCTController:
             bline_repeat: int,
             number_of_buffers: int,
             roi_offset=0,
-            roi_size=None
-        ):
+            roi_size=None,
+            buffer_blines=False
+    ):
         """Configures attributes of OCT acquisition such as image size.
 
         Acquisition cannot be configured during a scan.
@@ -99,13 +101,16 @@ class NIOCTController:
             dac_output_rate (int): The rate at which the DAC generates the samples passed to set_scan.
             aline_size (int): The number of voxels in each A-line i.e. 2048
             number_of_alines (int): The number of A-lines in each acquisition frame. Defined by the scan pattern.
-            alines_per_b (int): Size of each B-line in A-lines. B-lines are the subdivisions of the acquisition frame. Defined by the scan pattern.
+            alines_per_b (int): Size of each B-line in A-lines. B-lines are the subdivisions of the acquisition frame.
+                Defined by the scan pattern.
             aline_repeat (int): if > 1, number of repeated successive A-lines in the scan. Defined by the scan pattern.
             bline_repeat (int): if > 1, number of repeated successive B-lines in the scan. Defined by the scan pattern.
             number_of_buffers (int): The number of buffers to allocate for image acquisition and processing. Larger
-                                      values make acquisition more robust to dropped frames but increase memory overhead.
+                values make acquisition more robust to dropped frames but increase memory overhead.
             roi_offset (optional int): Number of voxels to discard from beginning of each spatial A-line
             roi_size (optional int): Number of voxels to keep of each spatial A-line, beginning from roi_offset
+            buffer_blines (optional bool): Default False. If True, frame grabber interface is configured to grab each
+                B-line and concatenate them into frames, as opposed to filling a large buffer with the entire frame.
         """
         if roi_size is None:
             roi_size = aline_size
@@ -114,6 +119,7 @@ class NIOCTController:
             int(aline_size),
             int(number_of_alines),
             int(alines_per_b),
+            bool(buffer_blines),
             int(aline_repeat),
             int(bline_repeat),
             int(number_of_buffers),
@@ -145,7 +151,8 @@ class NIOCTController:
         """
         a_rpt_proc_flag = 0
         b_rpt_proc_flag = 0
-        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing), (a_rpt_proc_flag, a_rpt_proc_flag)):
+        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing),
+                                  (a_rpt_proc_flag, a_rpt_proc_flag)):
             if rpt_proc == 'average':
                 flag = 1
             elif rpt_proc == 'difference':
