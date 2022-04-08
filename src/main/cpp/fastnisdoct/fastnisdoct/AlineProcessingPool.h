@@ -175,14 +175,18 @@ public:
 		fft_buffer = fftwf_alloc_real((aline_size * alines_per_worker + 8 * alines_per_worker) * number_of_workers);
 		printf("Allocated FFTW transform buffer.\n");
 
-		// fftwf_import_wisdom_from_filename("C:/Users/OCT/Dev/RealtimeOCT/octcontroller_fftw_wisdom.txt");
-
-		fft_plan = fftwf_plan_many_dft_r2c(1, n, alines_per_worker, (float*)fft_buffer, inembed, istride, idist, (fftwf_complex*)fft_buffer, onembed, ostride, odist, FFTW_MEASURE);
+		fftwf_import_wisdom_from_filename(".fftwf_wisdom");
+		fftwf_set_timelimit(10.0);
+		fft_plan = fftwf_plan_many_dft_r2c(1, n, alines_per_worker, (float*)fft_buffer, inembed, istride, idist, (fftwf_complex*)fft_buffer, onembed, ostride, odist, FFTW_PATIENT);
 		if (fft_plan == NULL)
 		{
 			printf("Failed to generate FFTWF plan!\n");
 		}
-		printf("Generated FFTWF plan.\n");
+		else
+		{
+			printf("Generated FFTWF plan.\n");
+			fftwf_export_wisdom_to_filename(".fftwf_wisdom");
+		}
 	}
 
 	~AlineProcessingPool()

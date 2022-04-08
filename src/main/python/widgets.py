@@ -689,7 +689,6 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
     def plot(self, data):
         self._current_data = data
         self._spectrum.setData(self._wavelengths, self._current_data)
-        pyqtgraph.QtGui.QApplication.processEvents()
 
     @yrange.setter
     def yrange(self, yrange):
@@ -870,18 +869,8 @@ class DisplayWidget(QWidget, UiWidget):
         if self.tabDisplay.currentIndex() == 0:
             self._enface.updateData(np.real(frame)[0, :, :], fov=[1, 1])
             self._bscan.updateData(np.rot90(np.real(frame)[:, :, 0]), fov=[1 * 10 ** -6, 1 * 10 ** -6])
-        # elif self.tabDisplay.currentIndex() == 1:
-        #     self._volume.updateData(np.abs(frame))
-        # pyqtgraph.QtGui.QApplication.processEvents()
-        QApplication.processEvents()
-
-    def _update(self):
-        img = np.random.random([128, 128, 200])
-        if self.tabDisplay.currentIndex() == 0:
-            self._enface.updateData(img, fov=[1 * 10 ** -6, 1 * 10 ** -6])
-            self._bscan.updateData(img, fov=[1 * 10 ** -6, 1 * 10 ** -6])
         elif self.tabDisplay.currentIndex() == 1:
-            self._volume.updateData(img)
+            self._volume.updateData(np.abs(frame))
         pyqtgraph.QtGui.QApplication.processEvents()
 
 
@@ -948,7 +937,8 @@ class MainWindow(QMainWindow, UiWidget):
         self.ProcessingGroupBox = self.centralWidget.ProcessingGroupBox
         self.ControlGroupBox = self.centralWidget.ControlGroupBox
 
-        # self.statusBar().setSizeGripEnabled(False)
+        self.statusBar().setSizeGripEnabled(False)
+        self.setFixedSize(self.minimumSize())
 
         self.ScanGroupBox.changed.connect(self._showRepeatProcessing)
 

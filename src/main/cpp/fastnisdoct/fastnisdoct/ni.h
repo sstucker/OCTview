@@ -13,6 +13,7 @@ int err;  // Error state of hardware interface
 
 // IMAQ
 
+char cameraName[256];  // Name used to open the IMAQ session
 SESSION_ID session_id;  // IMAQ session ID
 BUFLIST_ID buflist_id;  // IMAQ buflist ID
 INTERFACE_ID interface_id;  // IMAQ interface ID
@@ -99,53 +100,6 @@ namespace ni
 		}
 	}
 
-	int imaq_buffer_cleanup()
-	{
-		for (int i = 0; i < numberOfBuffers; i++)
-		{
-			delete[] buffers[i];
-		}
-		delete buffers;
-		buffers = NULL;
-		return 0;
-	}
-
-	int setup_buffers(int aline_size, int number_of_alines, int number_of_buffers)
-	{
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_TOP, 0);
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_LEFT, 0);
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_HEIGHT, number_of_alines);
-		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_WIDTH, aline_size);
-		err = imgSetAttribute2(session_id, IMG_ATTR_BYTESPERPIXEL, 2);
-
-		// Confirm the change by getting the attributes
-		err = imgGetAttribute(session_id, IMG_ATTR_ROI_WIDTH, &acqWinWidth);
-		err = imgGetAttribute(session_id, IMG_ATTR_ROI_HEIGHT, &acqWinHeight);
-		err = imgGetAttribute(session_id, IMG_ATTR_BYTESPERPIXEL, &bytesPerPixel);
-
-		if (err != 0)
-		{
-			return err;
-		}
-
-		bufferSize = acqWinWidth * acqWinHeight * bytesPerPixel;
-		if (buffers != NULL)
-		{
-			imaq_buffer_cleanup();
-		}
-		buffers = new uint16_t*[number_of_buffers];
-		for (int i = 0; i < number_of_buffers; i++)
-		{
-			buffers[i] = new uint16_t[aline_size * number_of_alines];
-		}
-		if (number_of_buffers > 0)
-		{
-			imgRingSetup(session_id, number_of_buffers, (void**)buffers, 0, 0);
-		}
-		numberOfBuffers = number_of_buffers;
-		return err;
-	}
-
 	int imaq_open(const char* camera_name)
 	{
 		err = imgInterfaceOpen(camera_name, &interface_id);
@@ -164,7 +118,22 @@ namespace ni
 		err = imgSessionTriggerConfigure2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG1, IMG_TRIG_POLAR_ACTIVEH, 1000, IMG_TRIG_ACTION_BUFFER);
 		// Frame trigger output TTL2
 		err = imgSessionTriggerDrive2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG2, IMG_TRIG_POLAR_ACTIVEH, IMG_TRIG_DRIVE_FRAME_START);
+		
+		strcpy_s(cameraName, camera_name); // Save the camera name in case it needs to be reused. If this isn't a copy, arguments from Python will become undefined in async environment
+
 		return err;
+	}
+
+
+	int imaq_buffer_cleanup()
+	{
+		for (int i = 0; i < numberOfBuffers; i++)
+		{
+			delete[] buffers[i];
+		}
+		delete buffers;
+		buffers = NULL;
+		return 0;
 	}
 
 	int imaq_close()
@@ -172,6 +141,46 @@ namespace ni
 		imaq_buffer_cleanup();
 		err = imgClose(session_id, TRUE);
 		err = imgClose(interface_id, TRUE);
+		return err;
+	}
+
+	int setup_buffers(int aline_size, int number_of_alines, int number_of_buffers)
+	{
+		if (buffers != NULL)  // Reopen the session if there are already buffers present.
+		{
+			err = imaq_close();
+			err = imaq_open(cameraName);
+		}
+
+		if (err != 0)
+		{
+			return err;
+		}
+
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_TOP, 0);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_LEFT, 0);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_HEIGHT, number_of_alines);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ACQWINDOW_WIDTH, aline_size);
+		err = imgSetAttribute2(session_id, IMG_ATTR_ROWPIXELS, aline_size);
+		err = imgSetAttribute2(session_id, IMG_ATTR_BYTESPERPIXEL, 2);
+
+		// Confirm the change by getting the attributes
+		err = imgGetAttribute(session_id, IMG_ATTR_ROI_WIDTH, &acqWinWidth);
+		err = imgGetAttribute(session_id, IMG_ATTR_ROI_HEIGHT, &acqWinHeight);
+		err = imgGetAttribute(session_id, IMG_ATTR_BYTESPERPIXEL, &bytesPerPixel);
+
+		bufferSize = acqWinWidth * acqWinHeight * bytesPerPixel;
+
+		buffers = new uint16_t*[number_of_buffers];
+		for (int i = 0; i < number_of_buffers; i++)
+		{
+			buffers[i] = new uint16_t[aline_size * number_of_alines];
+		}
+		if (number_of_buffers > 0)
+		{
+			err = imgRingSetup(session_id, number_of_buffers, (void**)buffers, 0, 0);
+		}
+		numberOfBuffers = number_of_buffers;
 		return err;
 	}
 
@@ -188,15 +197,8 @@ namespace ni
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanY, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoLineTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoFrameTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
-
 		if (err != 0)
 		{
-			printf("DAQmx failed to create task with channels %s, %s, %s, %s:\n", aoScanX, aoScanY, aoLineTrigger, aoFrameTrigger);
-			char* buf = new char[512];
-			DAQmxGetErrorString(err, buf, 512);
-			printf(buf);
-			printf("\n");
-			delete[] buf;
 			return err;
 		}
 		else
@@ -205,16 +207,6 @@ namespace ni
 			err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
 			err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
 			err = DAQmxCfgSampClkTiming(scan_task, NULL, dac_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, NULL);
-			if (err != 0)
-			{
-				printf("DAQmx failed to program the task:\n");
-				char* buf = new char[512];
-				DAQmxGetErrorString(err, buf, 512);
-				printf(buf);
-				printf("\n");
-				delete[] buf;
-				return err;
-			}
 		}
 		return err;
 	}
@@ -266,12 +258,22 @@ namespace ni
 		if (err == 0)
 		{
 			return examined_number;
+			/*
+			If session is not reopened before a second buffer setup, erroneous pointers will be returned without an error code,
+			resulting in access violations. This code checks for that error case.
+			for (int i = 0; i < numberOfBuffers; i++)
+			{
+				if (buffers[i] == *raw_frame_addr)
+				{
+					return examined_number;
+				}
+			}
+			printf("Grabbed %p which was not in buffer list!\n", *raw_frame_addr);
+			*/
+
 		}
-		else
-		{
-			*raw_frame_addr = NULL;
-			return err;
-		}
+		*raw_frame_addr = NULL;
+		return err;
 	}
 
 	int release_buffer()

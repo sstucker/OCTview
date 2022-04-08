@@ -99,7 +99,7 @@ inline void printf_state_data(StateMsg s)
 	printf("b_rpt_proc_flag: %i\n", s.b_rpt_proc_flag);
 	printf("n_frame_avg: %i\n", s.n_frame_avg);
 	printf("file: %s\n", s.file);
-	printf("max_bytes (in GB): %i\n", s.max_bytes / (long long)1073741824);
+	printf("max_bytes (in GB): %lli\n", s.max_bytes / (long long)1073741824);
 	printf("n_frames_to_acquire: %i\n", s.n_frames_to_acquire);
 }
 
@@ -122,7 +122,6 @@ int alines_per_buffer = 0;  // Number of A-lines in each IMAQ buffer. If less th
 int buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
 
 CircAcqBuffer<fftwf_complex>* processed_alines_ring = NULL;
-CircAcqBuffer<fftwf_complex>* processed_frame_ring = NULL;
 
 spsc_bounded_queue_t<fftwf_complex*> image_display_queue(4); // Small queues, main loop should only spend time copying to the display buffers if the GUI is ready 
 spsc_bounded_queue_t<float*> spectrum_display_queue(4);
@@ -132,7 +131,10 @@ float* background_spectrum_new = NULL;
 
 float* apodization_window = NULL;
 
+int* aline_stamp_buffer = NULL; // A-line stamps are copied here. Useful for debugging
+
 int cumulative_buffer_number = 0;  // Number of buffers acquired by IMAQ
+
 
 inline bool ready_to_scan()
 {
@@ -177,11 +179,9 @@ inline void recv_msg()
 				float total_buffer_size = msg.number_of_buffers * ((sizeof(uint16_t) * raw_frame_size) + (sizeof(fftwf_complex) * processed_frame_size));
 				
 				delete processed_alines_ring;
-				delete processed_frame_ring;
 
 				// Allocate or reallocate rings
 				processed_alines_ring = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_alines_size);
-				processed_frame_ring = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_frame_size);
 
 				// Allocate processing buffers
 				delete[] apodization_window;
@@ -190,8 +190,10 @@ inline void recv_msg()
 				
 				delete[] background_spectrum;
 				delete[] background_spectrum_new;
+				delete[] aline_stamp_buffer;
 				background_spectrum = new float[msg.aline_size];
 				background_spectrum_new = new float[msg.aline_size];
+				aline_stamp_buffer = new int[msg.number_of_alines];
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 				memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 
@@ -400,19 +402,18 @@ void _main()
 			// Set background spectrum to zero before sum
 			memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 
-			for (int ibuf = 0; ibuf < buffers_per_frame; ibuf++)  // Collect and process IMAQ buffers until whole frame is acquired
+			int ibuf = 0;
+			while (ibuf < buffers_per_frame)  // Collect and process IMAQ buffers until whole frame is acquired
 			{
-				printf("Grabbing buffer %i of %i\n", ibuf, buffers_per_frame);
+				// printf("Grabbing buffer %i of %i\n", ibuf, buffers_per_frame);
 				// Lock out frame with IMAQ function
 				int examined = ni::examine_buffer(&raw_frame_addr, cumulative_buffer_number);
-				// printf("fastnisdoct: Examined buffer %i\n", examined);
 				if (examined > -1 && raw_frame_addr != NULL)
 				{
-					printf("fastnisdoct: stamp[0] = %i\n", raw_frame_addr[state_data.aline_size * 0]);
-					// printf("fastnisdoct: stamp[-1] = %i\n", raw_frame_addr[state_data.aline_size * (state_data.number_of_alines - 1)]);
 
 					for (int i = 0; i < alines_per_buffer; i++)
 					{
+						aline_stamp_buffer[alines_per_buffer * ibuf + i] = raw_frame_addr[i * state_data.aline_size];
 						raw_frame_addr[i * state_data.aline_size] = 0;  // Zero all stamps
 					}
 
@@ -460,7 +461,6 @@ void _main()
 						printf("fastnisdoct: Failed to release buffer!\n");
 						ni::print_error_msg();
 					}
-					break;
 				}
 
 				if (ni::release_buffer() != 0)
@@ -468,6 +468,8 @@ void _main()
 					printf("fastnisdoct: Failed to release buffer!\n");
 					ni::print_error_msg();
 				}
+
+				ibuf++;
 
 			}  // Buffers per frame
 			
@@ -494,8 +496,8 @@ void _main()
 			// Buffer an image for output to GUI
 			if (!image_display_queue.full())
 			{
-				fftwf_complex* image_buffer = fftwf_alloc_complex(processed_alines_size);  // Will be freed by grab_frame or cleanup
-				memcpy(image_buffer, processed_alines_addr, processed_alines_size * sizeof(fftwf_complex));
+				fftwf_complex* image_buffer = fftwf_alloc_complex(processed_frame_size);  // Will be freed by grab_frame or cleanup
+				memcpy(image_buffer, processed_alines_addr, processed_frame_size * sizeof(fftwf_complex));
 				image_display_queue.enqueue(image_buffer);
 			}
 
@@ -571,7 +573,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		delete[] background_spectrum;
 		delete[] background_spectrum_new;
 		delete processed_alines_ring;
-		delete processed_frame_ring;
 		delete apodization_window;
 	}
 

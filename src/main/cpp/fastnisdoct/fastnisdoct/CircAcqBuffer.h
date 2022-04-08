@@ -38,7 +38,7 @@ protected:
 	CircAcqElement<T>** ring;
 	CircAcqElement<T>* locked_out_buffer;
 	int ring_size;
-	long element_size;
+	uint64_t element_size;
 	int head;
 	std::atomic_long count;  // cumulative count
 	std::mutex* locks;  // Locks on each ring pointer
@@ -68,7 +68,7 @@ public:
 
 	const T* operator [](int i) const { return ring[mod2(i, ring_size)]->arr; }
 
-	CircAcqBuffer(int number_of_buffers, long frame_size)
+	CircAcqBuffer(int number_of_buffers, uint64_t frame_size)
 	{
 		ring_size = number_of_buffers;
 		element_size = frame_size;
