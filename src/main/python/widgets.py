@@ -860,10 +860,16 @@ class DisplayWidget(QWidget, UiWidget):
             self._enface.setVSliderHidden(self.checkBScanMIP.isChecked())
             self._enface.setHSliderHidden(True)
 
-    def display_frame(self, frame: np.ndarray):
+    def display_frame(self, frame: np.ndarray, fov=[1, 1, 1]):
+        """Display a 3D volume via the B-scan and enface viewers.
+
+        Args:
+            frame:
+            fov:
+        """
         if self.tabDisplay.currentIndex() == 0:
-            self._enface.updateData(np.real(frame)[0, :, :], fov=[1 * 10 ** -6, 1 * 10 ** -6])
-            self._bscan.updateData(np.real(frame)[:, :, 0], fov=[1 * 10 ** -6, 1 * 10 ** -6])
+            self._enface.updateData(np.real(frame)[0, :, :], fov=[1, 1])
+            self._bscan.updateData(np.rot90(np.real(frame)[:, :, 0]), fov=[1 * 10 ** -6, 1 * 10 ** -6])
         # elif self.tabDisplay.currentIndex() == 1:
         #     self._volume.updateData(np.abs(frame))
         # pyqtgraph.QtGui.QApplication.processEvents()
@@ -887,6 +893,7 @@ class SpectrumWidget(QWidget, UiWidget):
 
     def plot(self, spectrum: np.ndarray):
         self.SpectrumPlotWidget.plot(spectrum)
+
 
 class CancelDiscardsChangesDialog(QDialog, UiWidget):
     changed = pyqtSignal()

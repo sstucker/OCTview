@@ -187,6 +187,10 @@ public:
 
 	~AlineProcessingPool()
 	{
+		if (is_running())
+		{
+			terminate();
+		}
 		fftwf_free(fft_buffer);
 		fftwf_destroy_plan(fft_plan);
 		fftwf_cleanup();

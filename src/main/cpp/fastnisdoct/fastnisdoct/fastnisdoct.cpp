@@ -115,8 +115,8 @@ std::atomic_int state = STATE_UNOPENED;
 StateMsg state_data;
 
 int raw_frame_size = 0;  // Number of elements in the raw frame
-int processed_alines_size = 0;  // Number of elements in the frame after A-line processing has been carried out
-int processed_frame_size = 0;  // Number of elements in the frame after inter A-line processing (frame processed) has been carried out
+long processed_alines_size = 0;  // Number of elements in the frame after A-line processing has been carried out
+long processed_frame_size = 0;  // Number of elements in the frame after inter A-line processing (frame processed) has been carried out
 
 int alines_per_buffer = 0;  // Number of A-lines in each IMAQ buffer. If less than the total number of A-lines per frame, buffers will be concatenated to form a frame
 int buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
@@ -703,7 +703,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		auto current_state = state.load();
 		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING)
 		{
-			fftwf_complex* f;
+			fftwf_complex* f = NULL;
 			if (image_display_queue.dequeue(f))
 			{
 				// Note you can access processed_frame_size here because we just checked state, but really this is undefined
@@ -727,11 +727,11 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		auto current_state = state.load();
 		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING)
 		{
-			float* s;
+			float* s = NULL;
 			if (spectrum_display_queue.dequeue(s))
 			{
 				// Note you can PROBABLY access state_data here because we just checked state, but really this is undefined
-				memcpy(dst, s, state_data.aline_size * sizeof(fftwf_complex));
+				memcpy(dst, s, state_data.aline_size * sizeof(float));
 				delete[] s;
 				return 0;
 			}

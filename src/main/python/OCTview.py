@@ -114,17 +114,19 @@ class _AppContext(ApplicationContext):
             self.window.set_mode_not_ready()
 
     def _display_update(self):
-        if self.controller.grab_frame(self._grab_buffer) > -1:
-            # print('Copying to display buffer with shape', np.shape(self._image_buffer))
-            i = 0
-            for x in range(self.window.scan_pattern().dimensions[0]):
-                for y in range(self.window.scan_pattern().dimensions[1]):
-                    self._image_buffer[:, x, y] = self._grab_buffer[
-                                                    self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()]
-                    i += 1
-            self.window.display_frame(self._image_buffer)
-        if self.controller.grab_spectrum(self._spectrum_buffer) > -1:
-            self.window.display_spectrum(self._spectrum_buffer)
+        if self._grab_buffer is not None and self._image_buffer is not None:
+            if self.controller.grab_frame(self._grab_buffer) > -1:
+                # print('Copying to display buffer with shape', np.shape(self._image_buffer))
+                i = 0
+                for x in range(self.window.scan_pattern().dimensions[0]):
+                    for y in range(self.window.scan_pattern().dimensions[1]):
+                        self._image_buffer[:, x, y] = self._grab_buffer[
+                                                        self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()]
+                        i += 1
+                self.window.display_frame(self._image_buffer)
+        if self._spectrum_buffer is not None:
+            if self.controller.grab_spectrum(self._spectrum_buffer) > -1:
+                self.window.display_spectrum(self._spectrum_buffer)
         # else:
         #     print("Failed to grab frame. Maybe one wasnt available yet")
 
@@ -168,10 +170,10 @@ class _AppContext(ApplicationContext):
             )
             self._processed_frame_size = self.window.processed_frame_size()
             self._raw_frame_size = self.window.raw_frame_size()
-            self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
             processed_shape = (
             self.window.roi_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1])
             self._image_buffer = np.zeros(processed_shape, dtype=np.complex64)
+            self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
             self._spectrum_buffer = np.zeros(self.window.aline_size(), dtype=np.float32)
 
     def _configure_processing(self):
