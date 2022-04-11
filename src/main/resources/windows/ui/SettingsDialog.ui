@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>509</width>
-    <height>409</height>
+    <width>666</width>
+    <height>488</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -103,6 +103,32 @@
         </property>
        </widget>
       </item>
+      <item row="4" column="0">
+       <widget class="QLabel" name="labelAxialPixelSize">
+        <property name="text">
+         <string>Axial pixel size</string>
+        </property>
+       </widget>
+      </item>
+      <item row="4" column="1">
+       <widget class="QDoubleSpinBox" name="spinAxialPixelSize">
+        <property name="suffix">
+         <string> μm</string>
+        </property>
+        <property name="minimum">
+         <double>0.010000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>500.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.010000000000000</double>
+        </property>
+        <property name="value">
+         <double>14.000000000000000</double>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
@@ -194,13 +220,6 @@
       <string>Global settings</string>
      </property>
      <layout class="QFormLayout" name="formLayout_3">
-      <item row="0" column="0">
-       <widget class="QLabel" name="labelTheme">
-        <property name="text">
-         <string>Theme</string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="1">
        <widget class="QWidget" name="widgetTheme" native="true">
         <layout class="QHBoxLayout" name="horizontalLayout">

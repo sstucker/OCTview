@@ -742,7 +742,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         # self.resize(100, 100)
 
         self._plot = self.addPlot()
-        self.setFixedSize(300, 300)
+        self.setFixedSize(480, 480)
 
         self._plot.setAspectLocked(True)
         self._plot.showGrid(x=True, y=True)
@@ -776,9 +776,9 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self._hslice = None
 
         self._sf = [1, 1]
-        self._data_shape = None
-        # if title is not None:
-        #     self._plot.setLabel('top', text=title)
+        self._data_shape = [0, 0]
+
+        self._setSlice()
 
     def setVSliderHidden(self, hidden: bool):
         if self._vslider is not None:
@@ -805,12 +805,6 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
             self._hslider.setBounds([0, self._sf[1] * self._data_shape[1]])
         self._image.scale(sfx, sfy)
 
-    # def updateData(self, volume, fov=None):
-    #     self._data_shape = volume.shape
-    #     if fov is not None:
-    #         self.setAspect(fov[0], fov[1])
-    #     self._image.setImage(volume[..., 0])
-
     def updateData(self, image, fov=None):
         self._data_shape = image.shape
         if fov is not None:
@@ -819,9 +813,24 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
 
     def _setSlice(self):
         if self._hslider is not None:
-            self._hslice = int(self._hslider.value() / self._sf[0])
+            self._hslice = int(self._hslider.value() / self._sf[1])
+            if self._hslice > self._data_shape[1] - 1:
+                self._hslice = self._data_shape[1] - 1
         if self._vslider is not None:
-            self._vslice = int(self._vslider.value() / self._sf[1])
+            self._vslice = int(self._vslider.value() / self._sf[0])
+            if self._vslice > self._data_shape[0] - 1:
+                self._vslice = self._data_shape[0] - 1
+
+    def setSlice(self):
+        self._setSlice()
+
+    @property
+    def hslice(self):
+        return self._hslice
+
+    @property
+    def vslice(self):
+        return self._vslice
 
 
 class DisplayWidget(QWidget, UiWidget):
@@ -838,38 +847,67 @@ class DisplayWidget(QWidget, UiWidget):
         replaceWidget(self.EnfaceWidget, self._enface)
         replaceWidget(self.BScanWidget, self._bscan)
 
-        self.checkEnfaceMIP.toggled.connect(self._enfaceMIPCheckChanged)
-        self.checkBScanMIP.toggled.connect(self._updateEnfaceSliders)
+        self.checkEnfaceProjection.toggled.connect(self._enfaceProjectionCheckChanged)
+        self.checkBScanProjection.toggled.connect(self._updateEnfaceSliders)
         self.radioViewX.toggled.connect(self._updateEnfaceSliders)
 
-        # self._timer = QTimer()
-        # self._timer.timeout.connect(self._update)
-        # self._timer.start(1000)
-
-    def _enfaceMIPCheckChanged(self):
-        self._bscan.setHSliderHidden(self.checkEnfaceMIP.isChecked())
+    def _enfaceProjectionCheckChanged(self):
+        self._bscan.setHSliderHidden(self.checkEnfaceProjection.isChecked())
+        self.radioEnfaceMax.setEnabled(self.checkEnfaceProjection.isChecked())
+        self.radioEnfaceMean.setEnabled(self.checkEnfaceProjection.isChecked())
 
     def _updateEnfaceSliders(self):
-        self.radioViewX.setEnabled(not self.checkBScanMIP.isChecked())
-        self.radioViewY.setEnabled(not self.checkBScanMIP.isChecked())
+        self.radioBScanMax.setEnabled(self.checkBScanProjection.isChecked())
+        self.radioBScanMean.setEnabled(self.checkBScanProjection.isChecked())
         if self.radioViewX.isChecked():
             self._enface.setVSliderHidden(True)
-            self._enface.setHSliderHidden(self.checkBScanMIP.isChecked())
+            self._enface.setHSliderHidden(self.checkBScanProjection.isChecked())
         else:
-            self._enface.setVSliderHidden(self.checkBScanMIP.isChecked())
+            self._enface.setVSliderHidden(self.checkBScanProjection.isChecked())
             self._enface.setHSliderHidden(True)
 
     def display_frame(self, frame: np.ndarray, fov=[1, 1, 1]):
         """Display a 3D volume via the B-scan and enface viewers.
 
         Args:
-            frame:
-            fov:
+            frame (np.ndarray): 3D or 2D complex frame
+            fov: Dimensions in meters of the frame volume or area.
         """
-        if self.tabDisplay.currentIndex() == 0:
-            self._enface.updateData(np.real(frame)[0, :, :], fov=[1, 1])
-            self._bscan.updateData(np.rot90(np.real(frame)[:, :, 0]), fov=[1 * 10 ** -6, 1 * 10 ** -6])
-        elif self.tabDisplay.currentIndex() == 1:
+        print('Enface', self._enface.hslice, self._enface.vslice)
+        print('B-Scan', self._bscan.hslice, self._bscan.vslice)
+        if self.tabDisplay.currentIndex() == 0:  # If in 2D slicing mode
+            if self.checkEnfaceProjection.isChecked():
+                if self.radioEnfaceMax.isChecked():
+                    f = np.max(np.abs(frame), axis=0)
+                else:
+                    f = np.mean(np.abs(frame), axis=0)
+            else:
+                f = np.abs(frame)[self._bscan.hslice, :, :]
+            if self.checkDb.isChecked():
+                f = 20 * np.log10(f)
+            self._enface.updateData(f, fov=(fov[1], fov[2]))
+            if self.radioViewX.isChecked():
+                if self.checkBScanProjection.isChecked():
+                    if self.radioBScanMax.isChecked():
+                        f = np.max(np.abs(frame), axis=2)
+                    else:
+                        f = np.mean(np.abs(frame), axis=2)
+                else:
+                    f = np.abs(frame[:, :, self._enface.hslice])
+                dim = (fov[0], fov[1])
+            else:  # if Y
+                if self.checkBScanProjection.isChecked():
+                    if self.radioBScanMax.isChecked():
+                        f = np.max(np.abs(frame), axis=1)
+                    else:
+                        f = np.mean(np.abs(frame), axis=1)
+                else:
+                    f = np.abs(frame[:, self._enface.vslice, :])
+                dim = (fov[0], fov[2])
+            if self.checkDb.isChecked():
+                f = 20 * np.log10(f)
+            self._bscan.updateData(np.rot90(f), fov=dim)
+        elif self.tabDisplay.currentIndex() == 1:  # If in volumetric render mode
             self._volume.updateData(np.abs(frame))
         pyqtgraph.QtGui.QApplication.processEvents()
 
@@ -1122,7 +1160,9 @@ class MainWindow(QMainWindow, UiWidget):
         return self.FileGroupBox.filename()
 
     def display_frame(self, frame: np.ndarray):
-        self.DisplayWidget.display_frame(frame)
+        fov = np.array(self.scan_pattern().fov) * 10**-3
+        fov = np.concatenate([[self._settings_dialog.spinAxialPixelSize.value() * 10**-6], fov])
+        self.DisplayWidget.display_frame(frame, fov=fov)
 
     def display_spectrum(self, spectrum: np.ndarray):
         self.SpectrumWidget.plot(spectrum)
