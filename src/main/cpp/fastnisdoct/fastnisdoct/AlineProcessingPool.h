@@ -124,9 +124,9 @@ public:
 
 	int aline_size;
 	int spatial_aline_size;  // A-line size after real-to-complex FFT
-	int total_alines;
+	int64_t total_alines;
 	int number_of_workers;
-	int alines_per_worker;
+	int64_t alines_per_worker;
 
 	AlineProcessingPool()
 	{
@@ -172,7 +172,10 @@ public:
 		int ostride = 1;
 		int* inembed = n;
 		int* onembed = &odist;
-		fft_buffer = fftwf_alloc_real((aline_size * alines_per_worker + 8 * alines_per_worker) * number_of_workers);
+		// Allocate one contiguous buffer for the whole frame's transform and hand out chunks of it to the workers
+		int64_t fft_buffer_size = (aline_size * alines_per_worker + 8 * alines_per_worker) * number_of_workers;
+		fft_buffer = fftwf_alloc_real(fft_buffer_size);
+		// The trasform will be in place, so the buffer will contain first real data and then complex
 		printf("Allocated FFTW transform buffer.\n");
 
 		fftwf_import_wisdom_from_filename(".fftwf_wisdom");

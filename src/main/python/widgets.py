@@ -143,6 +143,19 @@ def _set_widget_value(widget: QWidget, value):
         widget.setCurrentIndex(value)
 
 
+def _connect_all_child_widgets_to_slot(parent_widget: QWidget, slot: callable, recurse=True):
+    for child in parent_widget.children():
+        if recurse:
+            if type(child) in [QWidget, QFrame, QGroupBox]:
+                _connect_all_child_widgets_to_slot(child, slot, recurse=True)
+        if type(child) in [QSpinBox, QDoubleSpinBox]:
+            child.valueChanged.connect(slot)
+        elif type(child) in [QCheckBox]:
+            child.stateChanged.connect(slot)
+        elif type(child) in [QRadioButton]:
+            child.toggled.connect(slot)
+
+
 class ScanWidget(QWidget):
 
     def __init__(self):
@@ -346,16 +359,9 @@ class ScanGroupBox(QGroupBox, UiWidget):
         self.comboScanPattern.currentIndexChanged.connect(self._selectSubwidget)
 
         # All widgets should emit the scan pattern changed signal
-        children = self.children()
+        _connect_all_child_widgets_to_slot(self, self.ScanWidget.generate_pattern)
         for subwidget in list(self._subwidgets.values()):
-            children += subwidget.children()
-        for child in children:
-            if type(child) in [QSpinBox, QDoubleSpinBox]:
-                child.valueChanged.connect(self.ScanWidget.generate_pattern)
-            elif type(child) in [QCheckBox]:
-                child.stateChanged.connect(self.ScanWidget.generate_pattern)
-            elif type(child) in [QRadioButton]:
-                child.toggled.connect(self.ScanWidget.generate_pattern)
+            _connect_all_child_widgets_to_slot(subwidget, self.ScanWidget.generate_pattern)
 
         self.ScanWidget.pattern_updated.connect(self._update_preview)
         self.ScanWidget.pattern_updated.connect(self.changed.emit)
@@ -503,7 +509,7 @@ class ScanDisplayWindow(QFrame):
 
     def previewPattern(self, pattern: LineScanPattern):
         t = np.arange(len(pattern.x)) * 1 / pattern.sample_rate
-        self._line_trigger_item.setData(x=t, y=pattern.line_trigger, name='Line trigger')
+        # self._line_trigger_item.setData(x=t, y=pattern.line_trigger, name='Line trigger')
         self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
         self._x_item.setData(x=t, y=pattern.x, name='x')
         self._y_item.setData(x=t, y=pattern.y, name='y')
@@ -564,6 +570,7 @@ class FileGroupBox(QGroupBox, UiWidget):
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
+
     changed = pyqtSignal()
 
     def __init__(self):
@@ -579,14 +586,7 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.checkInterpolation.toggled.connect(self._interpToggled)
         self.radioFrameNone.toggled.connect(self._frameProcessingToggled)
 
-        # All widgets should emit the changed signal
-        for child in self.children():
-            if type(child) in [QSpinBox, QDoubleSpinBox]:
-                child.valueChanged.connect(self.changed.emit)
-            elif type(child) in [QCheckBox]:
-                child.stateChanged.connect(self.changed.emit)
-            elif type(child) in [QRadioButton]:
-                child.toggled.connect(self.changed.emit)
+        _connect_all_child_widgets_to_slot(self, self.changed.emit)
 
     def _apodToggled(self):
         self.labelApodization.setEnabled(self.checkApodization.isChecked())
@@ -670,7 +670,7 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
     def __init__(self, wavelengths, yrange=[0, 4096]):
         super().__init__()
 
-        self.resize(200, 100)
+        self.resize(100, 200)
         # self.setFixedSize(self.minimumSize())
 
         self._wavelengths = wavelengths
@@ -742,7 +742,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         # self.resize(100, 100)
 
         self._plot = self.addPlot()
-        self.setFixedSize(480, 480)
+        self.setFixedSize(360, 360)
 
         self._plot.setAspectLocked(True)
         self._plot.showGrid(x=True, y=True)
@@ -859,7 +859,7 @@ class DisplayWidget(QWidget, UiWidget):
     def _updateEnfaceSliders(self):
         self.radioBScanMax.setEnabled(self.checkBScanProjection.isChecked())
         self.radioBScanMean.setEnabled(self.checkBScanProjection.isChecked())
-        if self.radioViewX.isChecked():
+        if self.radioViewY.isChecked():
             self._enface.setVSliderHidden(True)
             self._enface.setHSliderHidden(self.checkBScanProjection.isChecked())
         else:
@@ -873,8 +873,8 @@ class DisplayWidget(QWidget, UiWidget):
             frame (np.ndarray): 3D or 2D complex frame
             fov: Dimensions in meters of the frame volume or area.
         """
-        print('Enface', self._enface.hslice, self._enface.vslice)
-        print('B-Scan', self._bscan.hslice, self._bscan.vslice)
+        # print('Enface', self._enface.hslice, self._enface.vslice)
+        # print('B-Scan', self._bscan.hslice, self._bscan.vslice)
         if self.tabDisplay.currentIndex() == 0:  # If in 2D slicing mode
             if self.checkEnfaceProjection.isChecked():
                 if self.radioEnfaceMax.isChecked():
@@ -882,11 +882,11 @@ class DisplayWidget(QWidget, UiWidget):
                 else:
                     f = np.mean(np.abs(frame), axis=0)
             else:
-                f = np.abs(frame)[self._bscan.hslice, :, :]
+                f = np.abs(frame[self._bscan.hslice, :, :])
             if self.checkDb.isChecked():
                 f = 20 * np.log10(f)
             self._enface.updateData(f, fov=(fov[1], fov[2]))
-            if self.radioViewX.isChecked():
+            if self.radioViewY.isChecked():
                 if self.checkBScanProjection.isChecked():
                     if self.radioBScanMax.isChecked():
                         f = np.max(np.abs(frame), axis=2)
@@ -894,8 +894,8 @@ class DisplayWidget(QWidget, UiWidget):
                         f = np.mean(np.abs(frame), axis=2)
                 else:
                     f = np.abs(frame[:, :, self._enface.hslice])
-                dim = (fov[0], fov[1])
-            else:  # if Y
+                dim = (fov[1], fov[0])
+            else:  # if X
                 if self.checkBScanProjection.isChecked():
                     if self.radioBScanMax.isChecked():
                         f = np.max(np.abs(frame), axis=1)
@@ -903,7 +903,7 @@ class DisplayWidget(QWidget, UiWidget):
                         f = np.mean(np.abs(frame), axis=1)
                 else:
                     f = np.abs(frame[:, self._enface.vslice, :])
-                dim = (fov[0], fov[2])
+                dim = (fov[2], fov[0])
             if self.checkDb.isChecked():
                 f = 20 * np.log10(f)
             self._bscan.updateData(np.rot90(f), fov=dim)
@@ -952,7 +952,7 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 class MainWindow(QMainWindow, UiWidget):
     launch = pyqtSignal()  # A change has been made to the backend configuration and it must be completely reloaded. Also emitted on first launch
     scan_changed = pyqtSignal(int, int)  # Scan pattern has been changed
-    processing_changed = pyqtSignal()  # Processing parameters have been changed
+    processing_changed = pyqtSignal(int, int)  # Processing parameters have been changed
     closed = pyqtSignal()  # MainWindow has been closed
     scan = pyqtSignal()  # Scan command
     acquire = pyqtSignal()  # Acquire command
@@ -993,9 +993,11 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.acquire.connect(self._acquire)
         self.ControlGroupBox.stop.connect(self._stop)
 
+        # Emit frame sizes so we know if we need to change the buffer sizes
         self.ScanGroupBox.changed.connect(
             lambda: self.scan_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
-        self.ProcessingGroupBox.changed.connect(self.processing_changed.emit)
+        self.ProcessingGroupBox.changed.connect(
+            lambda: self.processing_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
 
         self._showRepeatProcessing()
 
@@ -1100,13 +1102,28 @@ class MainWindow(QMainWindow, UiWidget):
         return self.ProcessingGroupBox.frame_averaging()
 
     def raw_frame_size(self) -> int:
-        return self.ScanGroupBox.pattern().total_number_of_alines * self.aline_size()
+        return self.scan_pattern().total_number_of_alines * self.aline_size()
 
     def processed_frame_size(self) -> int:
-        return int((self.ScanGroupBox.zroi()[1] - self.ScanGroupBox.zroi()[0]) * \
-                   ((self.ScanGroupBox.pattern().total_number_of_alines
-                     / self.ScanGroupBox.pattern().aline_repeat)
-                    / self.ScanGroupBox.pattern().bline_repeat))
+        processed_frame_size = self.roi_size() * self.scan_pattern().total_number_of_alines
+        if self.aline_repeat_processing() is not None:
+            processed_frame_size = int(processed_frame_size / self.scan_pattern().aline_repeat)
+        if self.bline_repeat_processing() is not None:
+            processed_frame_size = int(processed_frame_size / self.scan_pattern().bline_repeat)
+        return processed_frame_size
+
+    def image_dimensions(self) -> (int, int, int):
+        """The dimensions of the 3D image we expect to grab from the backend.
+
+        TODO: verify (by asking backend) that this is the real size to avoid buffer overruns
+        """
+        n = 1
+        if self.aline_repeat_processing() is None:
+            n *= self.scan_pattern().aline_repeat
+        aline_n = self.aline_size()
+        if self.bline_repeat_processing() is None:
+            n *= self.scan_pattern().bline_repeat
+        return self.roi_size(), n * self.scan_pattern().dimensions[0], self.scan_pattern().dimensions[1]
 
     def scan_pattern(self) -> LineScanPattern:
         return self.ScanGroupBox.pattern()
@@ -1161,7 +1178,7 @@ class MainWindow(QMainWindow, UiWidget):
 
     def display_frame(self, frame: np.ndarray):
         fov = np.array(self.scan_pattern().fov) * 10**-3
-        fov = np.concatenate([[self._settings_dialog.spinAxialPixelSize.value() * 10**-6], fov])
+        fov = np.concatenate([[self._settings_dialog.spinAxialPixelSize.value() * self.roi_size() * 10**-6], fov])
         self.DisplayWidget.display_frame(frame, fov=fov)
 
     def display_spectrum(self, spectrum: np.ndarray):

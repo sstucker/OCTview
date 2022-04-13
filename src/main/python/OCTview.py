@@ -114,6 +114,7 @@ class _AppContext(ApplicationContext):
             self.window.set_mode_not_ready()
 
     def _display_update(self):
+        print(self.window.image_dimensions())
         if self._grab_buffer is not None and self._image_buffer is not None:
             if self.controller.grab_frame(self._grab_buffer) > -1:
                 # print('Copying to display buffer with shape', np.shape(self._image_buffer))
@@ -153,30 +154,37 @@ class _AppContext(ApplicationContext):
         self._timer_configure_image.singleShot(CALLBACK_DEBOUNCE_MS, self._configure_image_cb)
 
     def _configure_image_cb(self):
-        (zstart, zstop) = self.window.zroi()
         self._ctr_configure_image -= 1
         if not self._ctr_configure_image > 0:
             pat = self.window.scan_pattern()
             self.controller.configure_image(
-                self.window.aline_size(),
-                pat.total_number_of_alines,
-                pat.dimensions[0],
-                pat.aline_repeat,
-                pat.bline_repeat,
-                self.window.number_of_image_buffers(),
-                self.window.roi_offset(),
-                self.window.roi_size(),
-                buffer_blines=pat.trigger_blines
+                aline_size=self.window.aline_size(),
+                number_of_alines=pat.total_number_of_alines,
+                alines_per_b=pat.dimensions[0],
+                aline_repeat=pat.aline_repeat,
+                bline_repeat=pat.bline_repeat,
+                number_of_buffers=self.window.number_of_image_buffers(),
+                roi_offset=self.window.roi_offset(),
+                roi_size=self.window.roi_size(),
+                buffer_blines=pat.trigger_blines,
+                aline_repeat_processing=self.window.aline_repeat_processing(),
+                bline_repeat_processing=self.window.bline_repeat_processing(),
+
             )
             self._processed_frame_size = self.window.processed_frame_size()
             self._raw_frame_size = self.window.raw_frame_size()
-            processed_shape = (
-            self.window.roi_size(), self.window.scan_pattern().dimensions[0], self.window.scan_pattern().dimensions[1])
+            processed_shape = self.window.image_dimensions()
             self._image_buffer = np.zeros(processed_shape, dtype=np.complex64)
             self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
             self._spectrum_buffer = np.zeros(self.window.aline_size(), dtype=np.float32)
 
-    def _configure_processing(self):
+    def _configure_processing(self, raw_frame_size: int, processed_frame_size: int):
+        if self._raw_frame_size != raw_frame_size or self._processed_frame_size != processed_frame_size:
+            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._raw_frame_size, raw_frame_size,
+                                                                   self._processed_frame_size, processed_frame_size))
+            self._configure_image()
+        else:
+            print('Updating processing with image of the same size.')
         self._ctr_configure_processing += 1
         self._timer_configure_processing.singleShot(CALLBACK_DEBOUNCE_MS, self._configure_processing_cb)
 
@@ -189,8 +197,6 @@ class _AppContext(ApplicationContext):
                 self.window.interpolation_enabled(),
                 self.window.interpdk(),
                 self.window.apodization_window(),
-                aline_repeat_processing=self.window.aline_repeat_processing(),
-                bline_repeat_processing=self.window.bline_repeat_processing(),
                 n_frame_avg=self.window.frame_averaging()
             )
 
@@ -200,7 +206,7 @@ class _AppContext(ApplicationContext):
             print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._raw_frame_size, raw_frame_size,
                                                                    self._processed_frame_size, processed_frame_size))
             self._configure_image()
-            self._configure_processing()
+            self._configure_processing(raw_frame_size, processed_frame_size)
         else:
             print('Updating scan pattern with pattern of the same size.')
         self._ctr_update_scan_pattern += 1
@@ -224,7 +230,7 @@ class _AppContext(ApplicationContext):
             # scan_frame_trig[t_frame_trig_start-1:t_frame_trig_start+4] = self.window.trigger_gain()
             #
             scan_line_trig = np.zeros(len(scan_line_trig)).astype(np.float64)
-            # scan_line_trig[0::2] = self.window.trigger_gain()
+            scan_line_trig[0::2] = self.window.trigger_gain()
 
             # import matplotlib.pyplot as plt
             # plt.plot(scan_line_trig)

@@ -1,0 +1,1021 @@
+CameraFile (18.50) {
+   Type (Digital)
+   Manufacturer (Goodrich)
+   Model (GL2048L-10A)
+   CreationDate (20140828000000)
+   Protocol (IMAQ)
+   InterfaceInfo (1430) {
+      AcquisitionWindow (0, 0, 2048, 1000)
+      BinaryThreshold (128, 200)
+      BitDepth (12)
+      BitsPerComponent (12)
+      NumComponents (1)
+      NumPhantomComponents (0)
+      Unsigned16BitImage (No)
+      FrameTimeout (5100)
+      LUT (Normal)
+      LUTTransform (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+      MaxImageSize (2048, 4194304)
+      ScanType (LineScan)
+      Scaling (1)
+      DetectPCLK (Yes)
+      FastRearm (Yes)
+      SynchronizeEnables (No)
+      ConfigDelay (40)
+      Interlaced (No)
+      Serial {
+         Baud (56000)
+         SerialDisabled (No)
+         Databits (8)
+         Parity (N)
+         DTR (High)
+         RTS (High)
+         Stopbits (1)
+         TermChars (>)
+      }
+      SignalLevels {
+         PGOutput (RS422)
+      }
+      ControlLinesSource {
+         UseDefaultSource (Yes)
+         CCSourceLine0 (None, 0)
+         CCSourceLine1 (None, 1)
+         CCSourceLine2 (None, 2)
+         CCSourceLine3 (None, 3)
+      }
+      Bayer {
+         Pattern (None)
+         Algorithm (Bilinear)
+         RedGain (1.000000)
+         GreenGain (1.000000)
+         BlueGain (1.000000)
+      }
+      TestImageType (None)
+      TestImageFrameBlanking (100)
+      TestImageLineBlanking (100)
+      NumCameraTaps (2)
+      NumCameraXZones (1)
+      NumCameraTapsPerXZone (2)
+      NumCameraYZones (1)
+      NumCameraTapsPerYZone (1)
+      TimeSlots (1)
+      XZonePixelExtractor (Left)
+      YZonePixelExtractor (Top)
+      NeedYChip (No)
+      NeedZChip (No)
+      LVALHighTrue (Yes)
+      FVALHighTrue (Yes)
+      DVALHighTrue (Yes)
+      DVALMode (1)
+      AcquisitionBitstream (CL_TCxTx_Base-Class01.dat)
+      Tap (0) {
+         Position (Normal)
+         Start (Left, Top)
+      }
+   }
+   InterfaceInfo (1427) {
+      AcquisitionWindow (0, 0, 2048, 1000)
+      BinaryThreshold (128, 200)
+      BitDepth (12)
+      BitsPerComponent (12)
+      NumComponents (1)
+      NumPhantomComponents (0)
+      Unsigned16BitImage (No)
+      FrameTimeout (5100)
+      LUT (Normal)
+      LUTTransform (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+      MaxImageSize (2048, 4194304)
+      ScanType (LineScan)
+      Scaling (1)
+      DetectPCLK (Yes)
+      FastRearm (Yes)
+      SynchronizeEnables (No)
+      ConfigDelay (40)
+      Interlaced (No)
+      Serial {
+         Baud (56000)
+         SerialDisabled (No)
+         Databits (8)
+         Parity (N)
+         DTR (High)
+         RTS (High)
+         Stopbits (1)
+         TermChars (>)
+      }
+      SignalLevels {
+         PGOutput (RS422)
+         Trigger0 (TTL)
+         Trigger1 (TTL)
+         Trigger2 (TTL)
+         Trigger3 (TTL)
+      }
+      ControlLinesSource {
+         UseDefaultSource (Yes)
+         CCSourceLine0 (None, 0)
+         CCSourceLine1 (None, 1)
+         CCSourceLine2 (None, 2)
+         CCSourceLine3 (None, 3)
+      }
+      Bayer {
+         Pattern (None)
+         Algorithm (Bilinear)
+         RedGain (1.000000)
+         GreenGain (1.000000)
+         BlueGain (1.000000)
+      }
+      TestImageType (None)
+      TestImageFrameBlanking (100)
+      TestImageLineBlanking (100)
+      NumCameraTaps (2)
+      NumCameraXZones (1)
+      NumCameraTapsPerXZone (2)
+      NumCameraYZones (1)
+      NumCameraTapsPerYZone (1)
+      TimeSlots (1)
+      XZonePixelExtractor (Left)
+      YZonePixelExtractor (Top)
+      NeedYChip (No)
+      NeedZChip (No)
+      LVALHighTrue (Yes)
+      FVALHighTrue (Yes)
+      DVALHighTrue (Yes)
+      DVALMode (1)
+      AcquisitionBitstream (CL_TCxTx_Base-Class02.dat)
+      Tap (0) {
+         Position (Normal)
+         Start (Left, Top)
+      }
+   }
+   InterfaceInfo (1429) {
+      AcquisitionWindow (0, 0, 2048, 1000)
+      BinaryThreshold (128, 200)
+      BitDepth (12)
+      BitsPerComponent (12)
+      NumComponents (1)
+      NumPhantomComponents (0)
+      Unsigned16BitImage (No)
+      FrameTimeout (5100)
+      LUT (Normal)
+      LUTTransform (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+      MaxImageSize (2048, 4194304)
+      ScanType (LineScan)
+      Scaling (1)
+      DetectPCLK (Yes)
+      FastRearm (Yes)
+      SynchronizeEnables (No)
+      ConfigDelay (40)
+      Interlaced (No)
+      Serial {
+         Baud (56000)
+         SerialDisabled (No)
+         Databits (8)
+         Parity (N)
+         DTR (High)
+         RTS (High)
+         Stopbits (1)
+         TermChars (>)
+      }
+      SignalLevels {
+         PGOutput (RS422)
+      }
+      ControlLinesSource {
+         UseDefaultSource (Yes)
+         CCSourceLine0 (None, 0)
+         CCSourceLine1 (None, 1)
+         CCSourceLine2 (None, 2)
+         CCSourceLine3 (None, 3)
+      }
+      Bayer {
+         Pattern (None)
+         Algorithm (Bilinear)
+         RedGain (1.000000)
+         GreenGain (1.000000)
+         BlueGain (1.000000)
+      }
+      TestImageType (None)
+      TestImageFrameBlanking (100)
+      TestImageLineBlanking (100)
+      NumCameraTaps (2)
+      NumCameraXZones (1)
+      NumCameraTapsPerXZone (2)
+      NumCameraYZones (1)
+      NumCameraTapsPerYZone (1)
+      TimeSlots (1)
+      XZonePixelExtractor (Left)
+      YZonePixelExtractor (Top)
+      NeedYChip (No)
+      NeedZChip (No)
+      LVALHighTrue (Yes)
+      FVALHighTrue (Yes)
+      DVALHighTrue (Yes)
+      DVALMode (1)
+      AcquisitionBitstream (EP1S20_CL_TCxTx_Base.dat)
+      Tap (0) {
+         Position (Normal)
+         Start (Left, Top)
+      }
+   }
+   InterfaceInfo (1433) {
+      AcquisitionWindow (0, 0, 2048, 1000)
+      BinaryThreshold (128, 200)
+      BitDepth (12)
+      BitsPerComponent (12)
+      NumComponents (1)
+      NumPhantomComponents (0)
+      Unsigned16BitImage (No)
+      FrameTimeout (5100)
+      LUT (Normal)
+      LUTTransform (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+      MaxImageSize (2048, 4194304)
+      ScanType (LineScan)
+      Scaling (1)
+      DetectPCLK (Yes)
+      EnablePoCL (No)
+      FastRearm (Yes)
+      SynchronizeEnables (No)
+      ConfigDelay (40)
+      Interlaced (No)
+      Serial {
+         Baud (56000)
+         SerialDisabled (No)
+         Databits (8)
+         Parity (N)
+         DTR (High)
+         RTS (High)
+         Stopbits (1)
+         TermChars (>)
+      }
+      SignalLevels {
+         PGOutput (RS422)
+      }
+      ControlLinesSource {
+         UseDefaultSource (Yes)
+         CCSourceLine0 (None, 0)
+         CCSourceLine1 (None, 1)
+         CCSourceLine2 (None, 2)
+         CCSourceLine3 (None, 3)
+      }
+      Bayer {
+         Pattern (None)
+         Algorithm (Bilinear)
+         RedGain (1.000000)
+         GreenGain (1.000000)
+         BlueGain (1.000000)
+      }
+      TestImageType (None)
+      TestImageFrameBlanking (100)
+      TestImageLineBlanking (100)
+      NumCameraTaps (2)
+      NumCameraXZones (1)
+      NumCameraTapsPerXZone (2)
+      NumCameraYZones (1)
+      NumCameraTapsPerYZone (1)
+      BitMapping (Standard)
+      TimeSlots (1)
+      InterleaveYZones (No)
+      XZonePixelExtractor (Left)
+      YZonePixelExtractor (Top)
+      NeedYChip (No)
+      NeedZChip (No)
+      LVALHighTrue (Yes)
+      FVALHighTrue (Yes)
+      DVALHighTrue (Yes)
+      DVALMode (1)
+      AcquisitionBitstream (Class07.dat)
+      AcquisitionBitstreamCompressed (Yes)
+      Tap (0) {
+         Position (Normal)
+         Start (Left, Top)
+      }
+   }
+   InterfaceInfo (1435) {
+      AcquisitionWindow (0, 0, 2048, 1000)
+      BinaryThreshold (128, 200)
+      BitDepth (12)
+      BitsPerComponent (12)
+      NumComponents (1)
+      NumPhantomComponents (0)
+      Unsigned16BitImage (No)
+      FrameTimeout (5100)
+      LUT (Normal)
+      LUTTransform (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+      MaxImageSize (2048, 4194304)
+      ScanType (LineScan)
+      Scaling (1)
+      DetectPCLK (Yes)
+      EnablePoCL (No)
+      FastRearm (Yes)
+      SynchronizeEnables (No)
+      ConfigDelay (40)
+      Interlaced (No)
+      Serial {
+         Baud (56000)
+         SerialDisabled (No)
+         Databits (8)
+         Parity (N)
+         DTR (High)
+         RTS (High)
+         Stopbits (1)
+         TermChars (>)
+      }
+      SignalLevels {
+         PGOutput (RS422)
+      }
+      ControlLinesSource {
+         UseDefaultSource (Yes)
+         CCSourceLine0 (None, 0)
+         CCSourceLine1 (None, 1)
+         CCSourceLine2 (None, 2)
+         CCSourceLine3 (None, 3)
+      }
+      Bayer {
+         Pattern (None)
+         Algorithm (Bilinear)
+         RedGain (1.000000)
+         GreenGain (1.000000)
+         BlueGain (1.000000)
+      }
+      TestImageType (None)
+      TestImageFrameBlanking (100)
+      TestImageLineBlanking (100)
+      NumCameraTaps (2)
+      NumCameraXZones (1)
+      NumCameraTapsPerXZone (2)
+      NumCameraYZones (1)
+      NumCameraTapsPerYZone (1)
+      BitMapping (Standard)
+      TimeSlots (1)
+      XZonePixelExtractor (Left)
+      YZonePixelExtractor (Top)
+      NeedYChip (No)
+      NeedZChip (No)
+      LVALHighTrue (Yes)
+      FVALHighTrue (Yes)
+      DVALHighTrue (Yes)
+      DVALMode (1)
+      AcquisitionBitstream (Class08.dat)
+      Tap (0) {
+         Position (Normal)
+         Start (Left, Top)
+      }
+   }
+   InterfaceInfo (1436) {
+      AcquisitionWindow (0, 0, 2048, 1000)
+      BinaryThreshold (128, 200)
+      BitDepth (12)
+      BitsPerComponent (12)
+      NumComponents (1)
+      NumPhantomComponents (0)
+      Unsigned16BitImage (No)
+      FrameTimeout (5100)
+      LUT (Normal)
+      LUTTransform (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+      MaxImageSize (2048, 4194304)
+      ScanType (LineScan)
+      Scaling (1)
+      DetectPCLK (Yes)
+      EnablePoCL (No)
+      FastRearm (Yes)
+      SynchronizeEnables (No)
+      ConfigDelay (40)
+      Interlaced (No)
+      Serial {
+         Baud (56000)
+         SerialDisabled (No)
+         Databits (8)
+         Parity (N)
+         DTR (High)
+         RTS (High)
+         Stopbits (1)
+         TermChars (>)
+      }
+      SignalLevels {
+         PGOutput (RS422)
+      }
+      ControlLinesSource {
+         UseDefaultSource (Yes)
+         CCSourceLine0 (None, 0)
+         CCSourceLine1 (None, 1)
+         CCSourceLine2 (None, 2)
+         CCSourceLine3 (None, 3)
+      }
+      Bayer {
+         Pattern (None)
+         Algorithm (Bilinear)
+         RedGain (1.000000)
+         GreenGain (1.000000)
+         BlueGain (1.000000)
+      }
+      TestImageType (None)
+      TestImageFrameBlanking (100)
+      TestImageLineBlanking (100)
+      NumCameraTaps (2)
+      NumCameraXZones (1)
+      NumCameraTapsPerXZone (2)
+      NumCameraYZones (1)
+      NumCameraTapsPerYZone (1)
+      TimeSlots (1)
+      XZonePixelExtractor (Left)
+      YZonePixelExtractor (Top)
+      NeedYChip (No)
+      NeedZChip (No)
+      LVALHighTrue (Yes)
+      FVALHighTrue (Yes)
+      DVALHighTrue (Yes)
+      DVALMode (1)
+      AcquisitionBitstream (Class09.dat)
+      Tap (0) {
+         Position (Normal)
+         Start (Left, Top)
+      }
+   }
+   InterfaceInfo (1437) {
+      AcquisitionWindow (0, 0, 2048, 1000)
+      BinaryThreshold (128, 200)
+      BitDepth (12)
+      BitsPerComponent (12)
+      NumComponents (1)
+      NumPhantomComponents (0)
+      Unsigned16BitImage (No)
+      FrameTimeout (5100)
+      LUT (Normal)
+      LUTTransform (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+      MaxImageSize (2048, 4194304)
+      ScanType (LineScan)
+      Scaling (1)
+      DetectPCLK (Yes)
+      EnablePoCL (No)
+      FastRearm (Yes)
+      SynchronizeEnables (No)
+      ConfigDelay (40)
+      Interlaced (No)
+      Serial {
+         Baud (56000)
+         SerialDisabled (No)
+         Databits (8)
+         Parity (N)
+         DTR (High)
+         RTS (High)
+         Stopbits (1)
+         TermChars (>)
+      }
+      SignalLevels {
+         PGOutput (RS422)
+      }
+      ControlLinesSource {
+         UseDefaultSource (Yes)
+         CCSourceLine0 (None, 0)
+         CCSourceLine1 (None, 1)
+         CCSourceLine2 (None, 2)
+         CCSourceLine3 (None, 3)
+      }
+      Bayer {
+         Pattern (None)
+         Algorithm (Bilinear)
+         RedGain (1.000000)
+         GreenGain (1.000000)
+         BlueGain (1.000000)
+      }
+      TestImageType (None)
+      TestImageFrameBlanking (100)
+      TestImageLineBlanking (100)
+      NumCameraTaps (2)
+      NumCameraXZones (1)
+      NumCameraTapsPerXZone (2)
+      NumCameraYZones (1)
+      NumCameraTapsPerYZone (1)
+      BitMapping (Standard)
+      TimeSlots (1)
+      XZonePixelExtractor (Left)
+      YZonePixelExtractor (Top)
+      NeedYChip (No)
+      NeedZChip (No)
+      LVALHighTrue (Yes)
+      FVALHighTrue (Yes)
+      DVALHighTrue (Yes)
+      DVALMode (1)
+      Tap (0) {
+         Position (Normal)
+         Start (Left, Top)
+      }
+   }
+   Pattern {
+      Action (PG) {
+         Line (0) {
+            Start (High)
+            (CC1 Trigger Width) * 5, (CC1 Trigger Period) - (CC1 Trigger Width) * 5
+         }
+         Line (1) {
+            Start (Low)
+         }
+         Line (2) {
+            Start (Low)
+         }
+         Line (3) {
+            Start (Low)
+         }
+         Clock (0x78)
+         RepeatSource (Fixed, 656)
+      }
+   }
+   Attribute (Serial Commands) {
+      Value (List) {
+         Name (OFF) {
+         }
+         Name (ON) {
+            Action (Serial) {
+               Command (*\r)
+               Response ()
+               Timeout (3000)
+               Delay (50)
+            }
+            Action (Serial) {
+               Command (RESPONSE BRIEF\r)
+               Response (RESPONSE BRIEF\rOK\r>)
+               Timeout (3000)
+               Delay (0)
+            }
+            Action (Serial) {
+               Command (RESET\r)
+               Response (RESET\rRoic off finished \rInitialized ROIC SPI... \rRoic on finished \rOK\r>)
+               Timeout (5000)
+               Delay (0)
+            }
+            Attribute (FPA Sensitivity) {
+               Value (List) {
+                  Name (High) {
+                     Action (Serial) {
+                        Command (FPA:FBCAP 3\r)
+                        Response (FPA:FBCAP 3\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (Medium High) {
+                     Action (Serial) {
+                        Command (FPA:FBCAP 2\r)
+                        Response (FPA:FBCAP 2\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (Medium Low) {
+                     Action (Serial) {
+                        Command (FPA:FBCAP 1\r)
+                        Response (FPA:FBCAP 1\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (Low) {
+                     Action (Serial) {
+                        Command (FPA:FBCAP 0\r)
+                        Response (FPA:FBCAP 0\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Default (High)
+                  Current (High)
+               }
+            }
+            Attribute (Exposure Modes) {
+               Value (List) {
+                  Name (Exposure: 100% Duty) {
+                     Attribute (Exposure Time) {
+                        Value (Integer) {
+                           Min (731)
+                           Max (800000)
+                           Increment (1)
+                           Display {
+                              Multiplier (0.012500)
+                              Offset (0.000000)
+                              Precision (1)
+                              Units (�s)
+                           }
+                           Default (732)
+                           Current (732)
+                           Action (Serial) {
+                              Command (EXP:MAXRATE %d\r)
+                              Response (EXP:MAXRATE %d\rOK\r>)
+                              Timeout (3000)
+                              Delay (0)
+                           }
+                        }
+                     }
+                  }
+                  Name (Line Time: 100% Duty) {
+                     Attribute (Line Time) {
+                        Value (Integer) {
+                           Min (1048)
+                           Max (800455)
+                           Increment (1)
+                           Display {
+                              Multiplier (0.012500)
+                              Offset (0.000000)
+                              Precision (1)
+                              Units (�s)
+                           }
+                           Default (1048)
+                           Current (1048)
+                           Action (Serial) {
+                              Command (FRAME:PERIOD:MAXEXP %d\r)
+                              Response (FRAME:PERIOD:MAXEXP %d\rOK\r>)
+                              Timeout (3000)
+                              Delay (0)
+                           }
+                        }
+                     }
+                  }
+                  Default (Line Time: 100% Duty)
+                  Current (Line Time: 100% Duty)
+               }
+            }
+            Attribute (Corrections) {
+               Value (List) {
+                  Name (OFF) {
+                     Action (Serial) {
+                        Command (CORR:OFFSET OFF\r)
+                        Response (CORR:OFFSET OFF\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                     Action (Serial) {
+                        Command (CORR:GAIN OFF\r)
+                        Response (CORR:GAIN OFF\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                     Action (Serial) {
+                        Command (CORR:PIXEL OFF\r)
+                        Response (CORR:PIXEL OFF\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (ON) {
+                     Action (Serial) {
+                        Command (CORR:OFFSET ON\r)
+                        Response (CORR:OFFSET ON\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                     Action (Serial) {
+                        Command (CORR:GAIN ON\r)
+                        Response (CORR:GAIN ON\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                     Action (Serial) {
+                        Command (CORR:PIXEL ON\r)
+                        Response (CORR:PIXEL ON\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (Manual) {
+                     Attribute (Offset Correction) {
+                        Value (List) {
+                           Name (OFF) {
+                              Action (Serial) {
+                                 Command (CORR:OFFSET OFF\r)
+                                 Response (CORR:OFFSET OFF\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (ON) {
+                              Action (Serial) {
+                                 Command (CORR:OFFSET ON\r)
+                                 Response (CORR:OFFSET ON\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Default (ON)
+                           Current (ON)
+                        }
+                     }
+                     Attribute (Uniformity Correction) {
+                        Value (List) {
+                           Name (OFF) {
+                              Action (Serial) {
+                                 Command (CORR:GAIN OFF\r)
+                                 Response (CORR:GAIN OFF\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (ON) {
+                              Action (Serial) {
+                                 Command (CORR:GAIN ON\r)
+                                 Response (CORR:GAIN ON\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Default (ON)
+                           Current (ON)
+                        }
+                     }
+                     Attribute (Pixel Replace) {
+                        Value (List) {
+                           Name (OFF) {
+                              Action (Serial) {
+                                 Command (CORR:PIXEL OFF\r)
+                                 Response (CORR:PIXEL OFF\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (ON) {
+                              Action (Serial) {
+                                 Command (CORR:PIXEL ON\r)
+                                 Response (CORR:PIXEL ON\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Default (ON)
+                           Current (ON)
+                        }
+                     }
+                     Attribute (Dark Level) {
+                        Value (Integer) {
+                           Min (0)
+                           Max (2048)
+                           Increment (50)
+                           Display {
+                              Multiplier (1.000000)
+                              Offset (0.000000)
+                              Precision (0)
+                              Units (DN)
+                           }
+                           Default (100)
+                           Current (100)
+                           Action (Serial) {
+                              Command (CORR:OFFSET:GLOBAL %d\r)
+                              Response (CORR:OFFSET:GLOBAL %d\rOK\r>)
+                              Timeout (3000)
+                              Delay (0)
+                           }
+                        }
+                     }
+                  }
+                  Default (ON)
+                  Current (ON)
+               }
+            }
+            Attribute (Calibrate Mode) {
+               Value (List) {
+                  Name (OFF) {
+                  }
+                  Name (ON) {
+                     Attribute (Calibrate Dark) {
+                        Value (List) {
+                           Name (1. Put in Dark) {
+                              Action (Serial) {
+                                 Command (\r)
+                                 Response (\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (2. Take Dark) {
+                              Action (Serial) {
+                                 Command (CORR:DARK\r)
+                                 Response (CORR:DARK\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (3. Finished) {
+                              Action (Serial) {
+                                 Command (\r)
+                                 Response (\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Default (1. Put in Dark)
+                           Current (1. Put in Dark)
+                        }
+                     }
+                     Attribute (Calibrate Bright) {
+                        Value (List) {
+                           Name (1. Set Light) {
+                              Action (Serial) {
+                                 Command (\r)
+                                 Response (\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (2. Take Bright) {
+                              Action (Serial) {
+                                 Command (CORR:LIGHT\r)
+                                 Response (CORR:LIGHT\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (3. Finished) {
+                              Action (Serial) {
+                                 Command (\r)
+                                 Response (\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Default (1. Set Light)
+                           Current (1. Set Light)
+                        }
+                     }
+                  }
+                  Default (OFF)
+                  Current (OFF)
+               }
+            }
+            Attribute (Digital Gain) {
+               Value (Integer) {
+                  Min (1)
+                  Max (256)
+                  Increment (1)
+                  Display {
+                     Multiplier (0.031250)
+                     Offset (0.000000)
+                     Precision (2)
+                     Units ()
+                  }
+                  Default (32)
+                  Current (32)
+                  Action (Serial) {
+                     Command (GAIN:DIGITAL %d\r)
+                     Response (GAIN:DIGITAL %d\rOK\r>)
+                     Timeout (3000)
+                     Delay (0)
+                  }
+               }
+            }
+            Attribute (Camera Test Pattern) {
+               Value (List) {
+                  Name (OFF) {
+                     Action (Serial) {
+                        Command (TESTPAT:CAM OFF\r)
+                        Response (TESTPAT:CAM OFF\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (ON) {
+                     Action (Serial) {
+                        Command (TESTPAT:CAM ON\r)
+                        Response (TESTPAT:CAM ON\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                     Attribute (Type) {
+                        Value (List) {
+                           Name (+1 Ramp) {
+                              Action (Serial) {
+                                 Command (TESTPAT:TYPE 0\r)
+                                 Response (TESTPAT:TYPE 0\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (+2 Ramp) {
+                              Action (Serial) {
+                                 Command (TESTPAT:TYPE 1\r)
+                                 Response (TESTPAT:TYPE 1\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Name (+4 Ramp) {
+                              Action (Serial) {
+                                 Command (TESTPAT:TYPE 2\r)
+                                 Response (TESTPAT:TYPE 2\rOK\r>)
+                                 Timeout (3000)
+                                 Delay (0)
+                              }
+                           }
+                           Default (+1 Ramp)
+                           Current (+1 Ramp)
+                        }
+                     }
+                  }
+                  Default (OFF)
+                  Current (OFF)
+               }
+            }
+            Attribute (Line Stamp) {
+               Value (List) {
+                  Name (OFF) {
+                     Action (Serial) {
+                        Command (FRAME:STAMP OFF\r)
+                        Response (FRAME:STAMP OFF\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (ON) {
+                     Action (Serial) {
+                        Command (FRAME:STAMP ON\r)
+                        Response (FRAME:STAMP ON\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Default (ON)
+                  Current (ON)
+               }
+            }
+            Attribute (Trigger Mode) {
+               Value (List) {
+                  Name (0:  Internal) {
+                     Action (Serial) {
+                        Command (TRIG:MODE 0\r)
+                        Response (TRIG:MODE 0\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (1:  Fixed Exp) {
+                     Action (Serial) {
+                        Command (TRIG:MODE 1\r)
+                        Response (TRIG:MODE 1\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (2:  Variable Exp) {
+                     Action (Serial) {
+                        Command (TRIG:MODE 2\r)
+                        Response (TRIG:MODE 2\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Default (0:  Internal)
+                  Current (0:  Internal)
+               }
+            }
+            Attribute (Trigger Polarity) {
+               Value (List) {
+                  Name (CC1 High) {
+                     Action (Serial) {
+                        Command (TRIG:POL HIGH\r)
+                        Response (TRIG:POL HIGH\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Name (CC1 Low) {
+                     Action (Serial) {
+                        Command (TRIG:POL LOW\r)
+                        Response (TRIG:POL LOW\rOK\r>)
+                        Timeout (3000)
+                        Delay (0)
+                     }
+                  }
+                  Default (CC1 High)
+                  Current (CC1 High)
+               }
+            }
+            Attribute (CC1 Trigger Width) {
+               Value (Integer) {
+                  Min (47)
+                  Max (100000)
+                  Increment (1)
+                  Display {
+                     Multiplier (0.100000)
+                     Offset (0.000000)
+                     Precision (1)
+                     Units (�S)
+                  }
+                  Default (47)
+                  Current (47)
+               }
+            }
+            Attribute (CC1 Trigger Period) {
+               Value (Integer) {
+                  Min (132)
+                  Max (100600)
+                  Increment (1)
+                  Display {
+                     Multiplier (0.100000)
+                     Offset (0.000000)
+                     Precision (1)
+                     Units (�S)
+                  }
+                  Default (132)
+                  Current (132)
+               }
+            }
+         }
+         Default (ON)
+         Current (ON)
+      }
+   }
+}

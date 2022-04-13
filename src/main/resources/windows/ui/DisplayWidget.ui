@@ -208,7 +208,7 @@
                 </sizepolicy>
                </property>
                <property name="text">
-                <string>View slow-axis (X)</string>
+                <string>View fast-axis (X)</string>
                </property>
                <property name="checked">
                 <bool>true</bool>
@@ -224,7 +224,7 @@
                 </sizepolicy>
                </property>
                <property name="text">
-                <string>View fast-axis (Y)</string>
+                <string>View slow-axis (Y)</string>
                </property>
               </widget>
              </item>

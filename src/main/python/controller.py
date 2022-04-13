@@ -28,10 +28,9 @@ class NIOCTController:
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
         self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
-        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_int, c.c_int, c.c_bool, c.c_int, c.c_int,
-                                                      c.c_int, c.c_int, c.c_int]
-        self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int,
-                                                           c.c_int, c.c_int, c.c_int]
+        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c.c_long, c.c_bool, c.c_int, c.c_int,
+                                                      c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
+        self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int, c.c_int]
         self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
@@ -91,7 +90,9 @@ class NIOCTController:
             number_of_buffers: int,
             roi_offset=0,
             roi_size=None,
-            buffer_blines=False
+            buffer_blines=False,
+            aline_repeat_processing: str = None,
+            bline_repeat_processing: str = None,
     ):
         """Configures attributes of OCT acquisition such as image size.
 
@@ -110,7 +111,18 @@ class NIOCTController:
             roi_size (optional int): Number of voxels to keep of each spatial A-line, beginning from roi_offset
             buffer_blines (optional bool): Default False. If True, frame grabber interface is configured to grab each
                 B-line and concatenate them into frames, as opposed to filling a large buffer with the entire frame.
+            aline_repeat_processing (str): Defines processing to be carried out on repeated A-lines. Can be None or
+                `'average'`. If `aline_repeat` is 2, can be `'difference'`. Default None.
+            bline_repeat_processing (str): Defines processing to be carried out on repeated B-lines. Can be None or
+                `'average'`. If `aline_repeat` is 2, can be `'difference'`. Default None.
         """
+        a_rpt_proc_flag = 0
+        b_rpt_proc_flag = 0
+        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing), (a_rpt_proc_flag, a_rpt_proc_flag)):
+            if rpt_proc == 'average':
+                flag = 1
+            elif rpt_proc == 'difference':
+                flag = 2
         if roi_size is None:
             roi_size = aline_size
         self._lib.nisdoct_configure_image(
@@ -120,6 +132,8 @@ class NIOCTController:
             bool(buffer_blines),
             int(aline_repeat),
             int(bline_repeat),
+            int(a_rpt_proc_flag),
+            int(b_rpt_proc_flag),
             int(number_of_buffers),
             int(roi_offset),
             int(roi_size),
@@ -132,8 +146,6 @@ class NIOCTController:
             interp: bool,
             intpdk: float,
             apod_window: np.ndarray,
-            aline_repeat_processing: str = None,
-            bline_repeat_processing: str = None,
             n_frame_avg: int = 0
     ):
         """Set parameters of SD-OCT processing. Can be called during a scan.
@@ -143,18 +155,8 @@ class NIOCTController:
             interp (bool): If True, carry out linear-in-wavelength -> linear-in-wavenumber interpolation.
             intpdk (float): Parameter for linear-in-wavelength -> linear-in-wavenmber interpolation.
             apod_window (np.ndarray): Window which is multiplied by each spectral A-line prior to FFT i.e. Hanning window.
-            aline_repeat_processing (str): Defines processing to be carried out on repeated A-lines. Can be None or `'average'`. If `aline_repeat` is 2, can be `'difference'`. Default None.
-            bline_repeat_processing (str): Defines processing to be carried out on repeated B-lines. Can be None or `'average'`. If `aline_repeat` is 2, can be `'difference'`. Default None.
             n_frame_avg (int): if > 1, frames to average together. Frame size is defined by `configure_image`. Default 0.
         """
-        a_rpt_proc_flag = 0
-        b_rpt_proc_flag = 0
-        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing),
-                                  (a_rpt_proc_flag, a_rpt_proc_flag)):
-            if rpt_proc == 'average':
-                flag = 1
-            elif rpt_proc == 'difference':
-                flag = 2
         self._lib.nisdoct_configure_processing(
             bool(enabled),
             bool(subtract_background),
@@ -162,8 +164,6 @@ class NIOCTController:
             float(intpdk),
             np.array(apod_window).astype(np.float32),
             len(apod_window),  # aline_size
-            a_rpt_proc_flag,
-            b_rpt_proc_flag,
             int(n_frame_avg)
         )
 

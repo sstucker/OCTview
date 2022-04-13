@@ -19,10 +19,10 @@ BUFLIST_ID buflist_id;  // IMAQ buflist ID
 INTERFACE_ID interface_id;  // IMAQ interface ID
 TaskHandle scan_task;  // NI-DAQ task handle
 
-int acqWinWidth;  // A-line size
-int acqWinHeight;  // Number of A-lines per buffer
+int32_t acqWinWidth;  // A-line size
+int32_t acqWinHeight;  // Number of A-lines per buffer
 int bytesPerPixel;
-int bufferSize;  // Equivalent to acqWinWidth * acqWinHeight * bytesPerPixel
+int32_t bufferSize;  // Equivalent to acqWinWidth * acqWinHeight * bytesPerPixel
 int numberOfBuffers = 0;  // Number of IMAQ ring buffer elements
 int bufferNumber;  // Cumulative acquired IMAQ ring buffer element
 
@@ -118,7 +118,7 @@ namespace ni
 		err = imgSessionTriggerConfigure2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG1, IMG_TRIG_POLAR_ACTIVEH, 1000, IMG_TRIG_ACTION_BUFFER);
 		// Frame trigger output TTL2
 		err = imgSessionTriggerDrive2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG2, IMG_TRIG_POLAR_ACTIVEH, IMG_TRIG_DRIVE_FRAME_START);
-		
+
 		strcpy_s(cameraName, camera_name); // Save the camera name in case it needs to be reused. If this isn't a copy, arguments from Python will become undefined in async environment
 
 		return err;
@@ -138,13 +138,12 @@ namespace ni
 
 	int imaq_close()
 	{
-		imaq_buffer_cleanup();
 		err = imgClose(session_id, TRUE);
 		err = imgClose(interface_id, TRUE);
 		return err;
 	}
 
-	int setup_buffers(int aline_size, int number_of_alines, int number_of_buffers)
+	int setup_buffers(int aline_size, int32_t number_of_alines, int number_of_buffers)
 	{
 		if (buffers != NULL)  // Reopen the session if there are already buffers present.
 		{
@@ -203,7 +202,7 @@ namespace ni
 		}
 		else
 		{
-			dac_rate = 76000 * 2;
+			dac_rate = 76263 * 2;
 			err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
 			err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
 			err = DAQmxCfgSampClkTiming(scan_task, NULL, dac_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, NULL);
@@ -223,19 +222,19 @@ namespace ni
 
 	int start_scan()
 	{
-			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
-			err = DAQmxStartTask(scan_task);
+		err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
+		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
+		err = DAQmxStartTask(scan_task);
+		if (err == 0)
+		{
+			err = imgSessionStartAcquisition(session_id);
 			if (err == 0)
 			{
-				err = imgSessionStartAcquisition(session_id);
-				if (err == 0)
-				{
-					printf("Started scan!\n");
-					return 0;
-				}
+				printf("Started scan!\n");
+				return 0;
 			}
-			return err;
+		}
+		return err;
 	}
 
 	int stop_scan()

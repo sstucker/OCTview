@@ -12,7 +12,7 @@
   </property>
   <layout class="QGridLayout" name="gridLayout">
    <item row="4" column="0">
-    <layout class="QFormLayout" name="formLayout">
+    <layout class="QFormLayout" name="formExp">
      <item row="1" column="0">
       <widget class="QLabel" name="labelFlybackDuty">
        <property name="text">
@@ -188,7 +188,7 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QWidget" name="widgetXProfile" native="true">
+      <widget class="QFrame" name="frameXProfile">
        <layout class="QVBoxLayout" name="FastAxisProfile">
         <item>
          <widget class="QRadioButton" name="radioXSaw">
@@ -337,7 +337,7 @@
       </widget>
      </item>
      <item row="3" column="1">
-      <widget class="QWidget" name="widgetYProfile" native="true">
+      <widget class="QFrame" name="frameYProfile">
        <layout class="QVBoxLayout" name="SlowAxisProfile">
         <item>
          <widget class="QRadioButton" name="radioYSaw">
