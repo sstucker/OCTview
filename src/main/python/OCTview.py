@@ -159,7 +159,9 @@ class _AppContext(ApplicationContext):
             pat = self.window.scan_pattern()
             self.controller.configure_image(
                 aline_size=self.window.aline_size(),
-                number_of_alines=pat.total_number_of_alines,
+                alines_in_scan=pat.alines_in_scan,
+                image_mask=pat.image_mask,
+                alines_in_image=pat.total_number_of_alines,
                 alines_per_b=pat.dimensions[0],
                 aline_repeat=pat.aline_repeat,
                 bline_repeat=pat.bline_repeat,

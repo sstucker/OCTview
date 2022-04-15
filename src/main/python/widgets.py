@@ -1105,12 +1105,15 @@ class MainWindow(QMainWindow, UiWidget):
         return self.scan_pattern().total_number_of_alines * self.aline_size()
 
     def processed_frame_size(self) -> int:
-        processed_frame_size = self.roi_size() * self.scan_pattern().total_number_of_alines
-        if self.aline_repeat_processing() is not None:
-            processed_frame_size = int(processed_frame_size / self.scan_pattern().aline_repeat)
-        if self.bline_repeat_processing() is not None:
-            processed_frame_size = int(processed_frame_size / self.scan_pattern().bline_repeat)
-        return processed_frame_size
+        try:
+            processed_frame_size = self.roi_size() * self.scan_pattern().total_number_of_alines
+            if self.aline_repeat_processing() is not None:
+                processed_frame_size = int(processed_frame_size / self.scan_pattern().aline_repeat)
+            if self.bline_repeat_processing() is not None:
+                processed_frame_size = int(processed_frame_size / self.scan_pattern().bline_repeat)
+            return processed_frame_size
+        except ZeroDivisionError:
+            return 0
 
     def image_dimensions(self) -> (int, int, int):
         """The dimensions of the 3D image we expect to grab from the backend.

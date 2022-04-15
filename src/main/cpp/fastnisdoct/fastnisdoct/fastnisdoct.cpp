@@ -51,15 +51,16 @@ struct StateMsg {
 	int flag;
 	
 	const char* cam_name;
-	const char* ao_x_ch; 
+	const char* ao_x_ch;
 	const char* ao_y_ch;
 	const char* ao_lt_ch;
 	const char* ao_ft_ch;
 	const char* ao_st_ch;
 	int aline_size;
 	int spatial_aline_size;
-	int64_t number_of_alines_buffered;
-	int64_t number_of_alines;
+	int64_t alines_in_scan;
+	int64_t alines_in_image;
+	bool* image_mask;
 	int alines_per_b;
 	int buffer_each_b;
 	int aline_repeat;
@@ -90,7 +91,7 @@ inline void printf_state_data(StateMsg s)
 	printf("ao ft galvo name: %s\n", s.ao_ft_ch);
 	printf("ao st galvo name: %s\n", s.ao_st_ch);
 	printf("aline_size: %i\n", s.aline_size);
-	printf("number_of_alines: %i\n", s.number_of_alines);
+	printf("number_of_alines: %i\n", s.alines_in_image);
 	printf("alines_per_b: %i\n", s.alines_per_b);
 	printf("aline_repeat: %i\n", s.aline_repeat);
 	printf("bline_repeat: %i\n", s.bline_repeat);
@@ -145,7 +146,7 @@ float* background_spectrum_new = NULL;
 
 float* apodization_window = NULL;  // Multiplied by each spectrum.
 
-int* aline_stamp_buffer = NULL; // A-line stamps are copied here. For debugging and latency monitoring
+uint16_t* aline_stamp_buffer = NULL; // A-line stamps are copied here. For debugging and latency monitoring
 
 int32_t cumulative_buffer_number = 0;  // Number of buffers acquired by IMAQ
 int32_t cumulative_frame_number = 0;  // Number of frames acquired by main
@@ -172,7 +173,8 @@ inline void recv_msg()
 
 				state_data.aline_size = msg.aline_size;
 				state_data.spatial_aline_size = msg.aline_size / 2 + 1;
-				state_data.number_of_alines = msg.number_of_alines;
+				state_data.alines_in_scan = msg.alines_in_scan; // TODO make parameters
+				state_data.alines_in_image = msg.alines_in_image;
 				state_data.alines_per_b = msg.alines_per_b;
 				state_data.buffer_each_b = msg.buffer_each_b;
 				state_data.aline_repeat = msg.aline_repeat; 
@@ -185,11 +187,9 @@ inline void recv_msg()
 
 				printf("Buffering B-lines: %i\n", state_data.buffer_each_b);
 
-				state_data.number_of_alines_buffered = state_data.number_of_alines; // TODO make parameters
+				raw_frame_size = state_data.aline_size * state_data.alines_in_image;
 
-				raw_frame_size = state_data.aline_size * state_data.number_of_alines;
-
-				processed_alines_size = state_data.roi_size * state_data.number_of_alines;
+				processed_alines_size = state_data.roi_size * state_data.alines_in_image;
 
 				// Processed frame size is smaller than processed A-lines size if A-lines or frames are combined via averaging or differencing
 				processed_frame_size = processed_alines_size; 
@@ -202,13 +202,17 @@ inline void recv_msg()
 					processed_frame_size /= state_data.bline_repeat;
 				}
 
-				printf("fastnisdoct: Image configured: Number of A-lines: %i\n", state_data.number_of_alines);
+				printf("fastnisdoct: Image configured: Number of A-lines: %i\n", state_data.alines_in_image);
 				printf("fastnisdoct: Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 				
 				// Allocate frame grab buffers
 				delete[] discard_mask;
-				discard_mask = new bool[state_data.number_of_alines_buffered];
-				memset(discard_mask, true, state_data.number_of_alines_buffered * sizeof(bool));
+				if (state_data.alines_in_scan > state_data.alines_in_image)
+				{
+					discard_mask = new bool[state_data.alines_in_scan];
+					memcpy(discard_mask, msg.image_mask, state_data.alines_in_scan * sizeof(bool));
+					delete[] msg.image_mask;
+				}
 
 				delete[] raw_frame_roi;
 				delete[] raw_frame_roi_new;
@@ -229,19 +233,19 @@ inline void recv_msg()
 				delete[] aline_stamp_buffer;
 				background_spectrum = new float[msg.aline_size];
 				background_spectrum_new = new float[msg.aline_size];
-				aline_stamp_buffer = new int[msg.number_of_alines];
+				aline_stamp_buffer = new uint16_t[msg.alines_in_image];
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 				memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 
 				if (state_data.buffer_each_b)
 				{
-					alines_per_buffer = state_data.alines_per_b;
+					alines_per_buffer = state_data.alines_in_scan / (state_data.alines_in_image / state_data.alines_per_b);
 				}
 				else
 				{
-					alines_per_buffer = state_data.number_of_alines;
+					alines_per_buffer = state_data.alines_in_scan;
 				}
-				buffers_per_frame = state_data.number_of_alines / alines_per_buffer;
+				buffers_per_frame = state_data.alines_in_scan / alines_per_buffer;
 				printf("Buffers per frame: %i\n", buffers_per_frame);
 				printf("A-lines per buffer: %i\n", alines_per_buffer);
 
@@ -291,7 +295,7 @@ inline void recv_msg()
 					state_data.n_frame_avg = msg.n_frame_avg;
 
 					// Initialize the AlineProcessingPool. This creates an FFTW plan and may take a long time.
-					aline_processing_pool = new AlineProcessingPool(state_data.aline_size, state_data.number_of_alines, state_data.roi_offset, state_data.roi_size, state_data.fft_enabled);
+					aline_processing_pool = new AlineProcessingPool(state_data.aline_size, state_data.alines_in_image, state_data.roi_offset, state_data.roi_size, state_data.fft_enabled);
 
 					processing_configured = true;
 
@@ -451,17 +455,18 @@ void _main()
 			memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 
 			// Collect IMAQ buffers until whole frame is acquired
-			int ibuf = 0;
-			while (ibuf < buffers_per_frame)
+			int i_buf = 0;
+			int i_img = 0;
+			while (i_buf < buffers_per_frame)
 			{
 				// Lock out frame with IMAQ function
 				int examined = ni::examine_buffer(&locked_out_addr, cumulative_buffer_number);
 				if (examined > -1 && locked_out_addr != NULL)
 				{
-					// printf("Wanted %i, got %i. Frame %i of %i\n", cumulative_buffer_number, examined, ibuf + 1, buffers_per_frame);
+					// printf("Wanted %i, got %i. Frame %i of %i\n", cumulative_buffer_number, examined, i_buf + 1, buffers_per_frame);
 					for (int i = 0; i < alines_per_buffer; i++)
 					{
-						aline_stamp_buffer[alines_per_buffer * ibuf + i] = locked_out_addr[i * state_data.aline_size];
+						aline_stamp_buffer[alines_per_buffer * i_buf] = locked_out_addr[i * state_data.aline_size];
 						locked_out_addr[i * state_data.aline_size] = 0;  // Zero all stamps
 					}
 
@@ -478,8 +483,20 @@ void _main()
 					}
 
 					// Copy buffer to frame
-					memcpy(raw_frame_roi_new + ibuf * alines_per_buffer * state_data.aline_size, locked_out_addr, alines_per_buffer * state_data.aline_size * sizeof(uint16_t));
-
+					for (int j_buf = 0; j_buf < alines_per_buffer; j_buf++)
+					{
+						if (discard_mask[i_buf * alines_per_buffer + j_buf])
+						{
+							printf("Copying A-line at %i into image index %i / %i\n", j_buf, i_img, state_data.alines_in_image);
+							memcpy(raw_frame_roi_new + i_img * state_data.aline_size, locked_out_addr + j_buf * state_data.aline_size, state_data.aline_size * sizeof(uint16_t));
+							i_img++;
+						}
+						else
+						{
+							printf("Discarding A-line at %i\n", j_buf);
+						}
+					}
+					
 					// Buffer a spectrum for output to GUI
 					if (!spectrum_display_queue.full())
 					{
@@ -498,7 +515,7 @@ void _main()
 					}
 
 					cumulative_buffer_number += 1;
-					ibuf++;
+					i_buf++;
 
 				}
 				else  // If frame not grabbed properly
@@ -517,7 +534,7 @@ void _main()
 			if (state_data.subtract_background)
 			{
 				// Normalize the background spectrum
-				float norm = 1.0 / state_data.number_of_alines;
+				float norm = 1.0 / state_data.alines_in_image;
 				for (int j = 0; j < state_data.aline_size; j++)
 				{
 					background_spectrum_new[j] *= norm;
@@ -532,6 +549,13 @@ void _main()
 			{
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 			}
+
+			/*
+			for (int i = 0; i < state_data.alines_in_image; i++)
+			{
+				printf("stamp[%i] = %i\n", i, aline_stamp_buffer[i]);
+			}
+			*/
 
 			// Pointer swap new grab buffer buffer in
 			uint16_t* tmp = raw_frame_roi;
@@ -649,7 +673,9 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_configure_image(
 		int aline_size,
-		int64_t number_of_alines,
+		int64_t alines_in_scan,
+		bool* image_mask,
+		int64_t alines_in_image,
 		int64_t alines_per_b,
 		bool buffer_each_b,
 		int aline_repeat,
@@ -663,7 +689,18 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	{
 		StateMsg msg;
 		msg.aline_size = aline_size;
-		msg.number_of_alines = number_of_alines;
+		msg.alines_in_scan = alines_in_scan;
+		msg.alines_in_image = alines_in_image;
+		if (alines_in_scan > alines_in_image)
+		{
+			bool* mask = new bool[alines_in_scan];
+			memcpy(mask, image_mask, alines_in_scan * sizeof(bool));
+			msg.image_mask = mask;
+		}
+		else
+		{
+			msg.image_mask = NULL;
+		}
 		msg.alines_per_b = alines_per_b;
 		msg.buffer_each_b = buffer_each_b;
 		msg.aline_repeat = aline_repeat;

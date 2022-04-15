@@ -28,8 +28,8 @@ class NIOCTController:
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
         self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
-        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c.c_long, c.c_bool, c.c_int, c.c_int,
-                                                      c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
+        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_bool,
+                                                      c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int, c.c_int]
         self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
@@ -83,7 +83,9 @@ class NIOCTController:
     def configure_image(
             self,
             aline_size: int,
-            number_of_alines: int,
+            alines_in_scan: int,
+            alines_in_image: int,
+            image_mask: np.ndarray,
             alines_per_b: int,
             aline_repeat: int,
             bline_repeat: int,
@@ -100,7 +102,9 @@ class NIOCTController:
 
         Args:
             aline_size (int): The number of voxels in each A-line i.e. 2048
-            number_of_alines (int): The number of A-lines in each acquisition frame. Defined by the scan pattern.
+            alines_in_scan (int): The total A-lines exposed during each acquisition frame. Defined by the scan pattern.
+            image_mask (np.ndarray): Boolean array of length `alines_in_scan` which is True for A-lines which are to be copied to the acquisition frame
+            alines_in_image (int): The number of A-lines that make up the image in each acquisition frame. Defined by the scan pattern.
             alines_per_b (int): Size of each B-line in A-lines. B-lines are the subdivisions of the acquisition frame.
                 Defined by the scan pattern.
             aline_repeat (int): if > 1, number of repeated successive A-lines in the scan. Defined by the scan pattern.
@@ -127,7 +131,9 @@ class NIOCTController:
             roi_size = aline_size
         self._lib.nisdoct_configure_image(
             int(aline_size),
-            int(number_of_alines),
+            int(alines_in_scan),
+            image_mask.astype(bool),
+            int(alines_in_image),
             int(alines_per_b),
             bool(buffer_blines),
             int(aline_repeat),

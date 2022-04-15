@@ -202,7 +202,7 @@ namespace ni
 		}
 		else
 		{
-			dac_rate = 76263 * 2;
+			dac_rate = 76000 * 2;
 			err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
 			err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
 			err = DAQmxCfgSampClkTiming(scan_task, NULL, dac_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, NULL);
