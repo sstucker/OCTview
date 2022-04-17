@@ -141,6 +141,8 @@ uint16_t* raw_frame_roi = NULL;  // Frame which the contents of IMAQ buffers are
 uint16_t* raw_frame_roi_new = NULL;
 bool* discard_mask = NULL;  // Bitmask which reduces number_of_alines_buffered to number_of_alines. Intended to remove unwanted A-lines exposed during flyback, etc.
 
+std::vector<std::vector<std::tuple<int, int>>> roi_cpy_map; // Variable number of (offset, start) for each buffer. Predetermined and used to optimize copying the ROI.
+
 float* background_spectrum = NULL;  // Subtracted from each spectrum.
 float* background_spectrum_new = NULL;
 
@@ -205,15 +207,6 @@ inline void recv_msg()
 				printf("fastnisdoct: Image configured: Number of A-lines: %i\n", state_data.alines_in_image);
 				printf("fastnisdoct: Image configured: raw frame size: %i, processed frame size: %i\n", raw_frame_size, processed_frame_size);
 				
-				// Allocate frame grab buffers
-				delete[] discard_mask;
-				if (state_data.alines_in_scan > state_data.alines_in_image)
-				{
-					discard_mask = new bool[state_data.alines_in_scan];
-					memcpy(discard_mask, msg.image_mask, state_data.alines_in_scan * sizeof(bool));
-					delete[] msg.image_mask;
-				}
-
 				delete[] raw_frame_roi;
 				delete[] raw_frame_roi_new;
 				raw_frame_roi = new uint16_t[raw_frame_size];
@@ -233,21 +226,65 @@ inline void recv_msg()
 				delete[] aline_stamp_buffer;
 				background_spectrum = new float[msg.aline_size];
 				background_spectrum_new = new float[msg.aline_size];
-				aline_stamp_buffer = new uint16_t[msg.alines_in_image];
+				aline_stamp_buffer = new uint16_t[msg.alines_in_scan];
 				memset(background_spectrum, 0, state_data.aline_size * sizeof(float));
 				memset(background_spectrum_new, 0, state_data.aline_size * sizeof(float));
 
 				if (state_data.buffer_each_b)
 				{
-					alines_per_buffer = state_data.alines_in_scan / (state_data.alines_in_image / state_data.alines_per_b);
+					alines_per_buffer = state_data.alines_in_scan / (state_data.alines_in_image / (state_data.alines_per_b * state_data.aline_repeat * state_data.bline_repeat));
 				}
 				else
 				{
 					alines_per_buffer = state_data.alines_in_scan;
 				}
 				buffers_per_frame = state_data.alines_in_scan / alines_per_buffer;
+
 				printf("Buffers per frame: %i\n", buffers_per_frame);
 				printf("A-lines per buffer: %i\n", alines_per_buffer);
+
+				// Allocate frame grab buffers, determine ROI copy map
+				delete[] discard_mask;
+				roi_cpy_map.clear();
+				if (state_data.alines_in_scan > state_data.alines_in_image)
+				{
+					// discard_mask = new bool[state_data.alines_in_scan];
+					// memcpy(discard_mask, msg.image_mask, state_data.alines_in_scan * sizeof(bool));
+					int offset = -1;
+					int size = 0;
+					int i_frame = 0;
+					for (int i = 0; i < buffers_per_frame; i++)
+					{
+						std::vector<std::tuple<int, int>> blocks_in_buffer;
+						for (int j = 0; j < alines_per_buffer; j++)
+						{
+							if (size == 0)  // If not counting a copy block
+							{
+								if (msg.image_mask[i_frame])  // Enter new block
+								{
+									size = 1;
+									offset = j;
+								}
+							}
+							else  // If in a block
+							{
+								if (msg.image_mask[i_frame])
+								{
+									size++;
+								}
+								else  // Block has ended
+								{
+									printf("Found block at %i with size %i\n", offset, size);
+									blocks_in_buffer.push_back(std::tuple<int, int>{ offset, size });
+									offset = -1;
+									size = 0;
+								}
+							}
+							i_frame++;
+						}
+						roi_cpy_map.push_back(blocks_in_buffer);
+					}
+				}
 
 				// Set up NI image buffers
 				if (ni::setup_buffers(state_data.aline_size, alines_per_buffer, state_data.number_of_buffers) == 0)
@@ -410,7 +447,6 @@ inline void recv_msg()
 	}
 }
 
-
 std::atomic_bool main_running = false;
 std::thread main_t;
 void _main()
@@ -457,12 +493,14 @@ void _main()
 			// Collect IMAQ buffers until whole frame is acquired
 			int i_buf = 0;
 			int i_img = 0;
+			int buffer_copy_p = 0;
 			while (i_buf < buffers_per_frame)
 			{
 				// Lock out frame with IMAQ function
 				int examined = ni::examine_buffer(&locked_out_addr, cumulative_buffer_number);
 				if (examined > -1 && locked_out_addr != NULL)
 				{
+
 					// printf("Wanted %i, got %i. Frame %i of %i\n", cumulative_buffer_number, examined, i_buf + 1, buffers_per_frame);
 					for (int i = 0; i < alines_per_buffer; i++)
 					{
@@ -483,18 +521,18 @@ void _main()
 					}
 
 					// Copy buffer to frame
-					for (int j_buf = 0; j_buf < alines_per_buffer; j_buf++)
+					if (state_data.alines_in_image < state_data.alines_in_scan)
 					{
-						if (discard_mask[i_buf * alines_per_buffer + j_buf])
+						for (int j = 0; j < roi_cpy_map[i_buf].size(); j++)
 						{
-							printf("Copying A-line at %i into image index %i / %i\n", j_buf, i_img, state_data.alines_in_image);
-							memcpy(raw_frame_roi_new + i_img * state_data.aline_size, locked_out_addr + j_buf * state_data.aline_size, state_data.aline_size * sizeof(uint16_t));
-							i_img++;
+							memcpy(raw_frame_roi + buffer_copy_p, locked_out_addr + std::get<0>(roi_cpy_map[i_buf][j]), state_data.aline_size * std::get<1>(roi_cpy_map[i_buf][j]) * sizeof(uint16_t));
+							buffer_copy_p += (state_data.aline_size * std::get<1>(roi_cpy_map[i_buf][j]));
 						}
-						else
-						{
-							printf("Discarding A-line at %i\n", j_buf);
-						}
+					}
+					else
+					{
+						memcpy(raw_frame_roi + buffer_copy_p, locked_out_addr, alines_per_buffer * state_data.aline_size * sizeof(uint16_t));
+						buffer_copy_p += i_buf * alines_per_buffer * state_data.aline_size;
 					}
 					
 					// Buffer a spectrum for output to GUI

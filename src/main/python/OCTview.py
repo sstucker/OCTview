@@ -232,7 +232,7 @@ class _AppContext(ApplicationContext):
             # scan_frame_trig[t_frame_trig_start-1:t_frame_trig_start+4] = self.window.trigger_gain()
             #
             scan_line_trig = np.zeros(len(scan_line_trig)).astype(np.float64)
-            scan_line_trig[0::2] = self.window.trigger_gain()
+            # scan_line_trig[0::2] = self.window.trigger_gain()
 
             # import matplotlib.pyplot as plt
             # plt.plot(scan_line_trig)
