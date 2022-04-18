@@ -951,8 +951,8 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 
 class MainWindow(QMainWindow, UiWidget):
     launch = pyqtSignal()  # A change has been made to the backend configuration and it must be completely reloaded. Also emitted on first launch
-    scan_changed = pyqtSignal(int, int)  # Scan pattern has been changed
-    processing_changed = pyqtSignal(int, int)  # Processing parameters have been changed
+    scan_changed = pyqtSignal(int, int)  # Scan pattern has been changed. Passes frame sizes so backend can decide what needs to be done
+    processing_changed = pyqtSignal(int, int)  # Processing parameters have been changed. Passes frame sizes so backend can decide what needs to be done
     closed = pyqtSignal()  # MainWindow has been closed
     scan = pyqtSignal()  # Scan command
     acquire = pyqtSignal()  # Acquire command
@@ -987,7 +987,6 @@ class MainWindow(QMainWindow, UiWidget):
         self.actionSave_Configuration.triggered.connect(self.saveConfiguration)
         self.actionLoad_Configuration.triggered.connect(self.loadConfiguration)
         self.actionSettings.triggered.connect(self._settings_dialog.showDialog)
-        # self._settings_dialog.changed.connect(self.initialize.emit)
 
         self.ControlGroupBox.scan.connect(self._scan)
         self.ControlGroupBox.acquire.connect(self._acquire)
@@ -1115,7 +1114,7 @@ class MainWindow(QMainWindow, UiWidget):
         except ZeroDivisionError:
             return 0
 
-    def image_dimensions(self) -> (int, int, int):
+    def image_dimensions(self) -> tuple(int, int, int):
         """The dimensions of the 3D image we expect to grab from the backend.
 
         TODO: verify (by asking backend) that this is the real size to avoid buffer overruns
@@ -1140,7 +1139,7 @@ class MainWindow(QMainWindow, UiWidget):
     def max_line_rate(self) -> int:
         return int(1000 * self._settings_dialog.spinMaxLineRate.value() - 1)  # Convert from kHz float to Hz int
 
-    def zroi(self) -> (int, int):
+    def zroi(self) -> tuple(int, int):
         return self.ScanGroupBox.zroi()
 
     def roi_size(self) -> int:
@@ -1193,6 +1192,6 @@ class MainWindow(QMainWindow, UiWidget):
     def trigger_gain(self) -> float:
         return self._settings_dialog.spinTriggerGain.value()
 
-    def scan_scale_factors(self) -> (float, float):
+    def scan_scale_factors(self) -> tuple(float, float):
         return (self._settings_dialog.spinXScaleFactor.value(),
                 self._settings_dialog.spinYScaleFactor.value())
