@@ -78,7 +78,7 @@ struct StateMsg {
 	int b_rpt_proc_flag;
 	int n_frame_avg;
 	ScanPattern* scanpattern;
-	const char* file;
+	const char* file_name;
 	int file_type;
 	long long max_bytes;
 	int n_frames_to_acquire;
@@ -108,7 +108,7 @@ inline void printf_state_data(StateMsg s)
 	printf("a_rpt_proc_flag: %i\n", s.a_rpt_proc_flag);
 	printf("b_rpt_proc_flag: %i\n", s.b_rpt_proc_flag);
 	printf("n_frame_avg: %i\n", s.n_frame_avg);
-	printf("file: %s\n", s.file);
+	printf("file: %s\n", s.file_name);
 	printf("max_bytes (in GB): %lli\n", s.max_bytes / (long long)1073741824);
 	printf("n_frames_to_acquire: %i\n", s.n_frames_to_acquire);
 }
@@ -155,7 +155,6 @@ uint16_t* aline_stamp_buffer = NULL; // A-line stamps are copied here. For debug
 int32_t cumulative_buffer_number = 0;  // Number of buffers acquired by IMAQ
 int32_t cumulative_frame_number = 0;  // Number of frames acquired by main
 
-FileStreamWorker fstream_worker;
 
 inline bool ready_to_scan()
 {
@@ -334,6 +333,7 @@ inline void recv_msg()
 					state_data.n_frame_avg = msg.n_frame_avg;
 
 					// Initialize the AlineProcessingPool. This creates an FFTW plan and may take a long time.
+					delete aline_processing_pool;
 					aline_processing_pool = new AlineProcessingPool(state_data.aline_size, state_data.alines_in_image, state_data.roi_offset, state_data.roi_size, state_data.fft_enabled);
 
 					processing_configured = true;
@@ -432,14 +432,14 @@ inline void recv_msg()
 			{
 				if (msg.n_frames_to_acquire > -1)
 				{
-					fstream_worker.start_streaming(msg.file, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, state_data.aline_size, state_data.alines_in_image, msg.n_frames_to_acquire);
+					start_streaming(msg.file_name, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, state_data.aline_size, state_data.alines_in_image, msg.n_frames_to_acquire);
 				}
 				else
 				{
-					fstream_worker.start_streaming(msg.file, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, state_data.aline_size, state_data.alines_in_image);
+					start_streaming(msg.file_name, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, state_data.aline_size, state_data.alines_in_image);
 				}
 				state.store(STATE_ACQUIRIING);
-				delete[] msg.file;
+				delete[] msg.file_name;
 			}
 		}
 		else if (msg.flag & MSG_STOP_ACQUISITION)
@@ -447,7 +447,7 @@ inline void recv_msg()
 			printf("fastnisdoct: MSG_STOP_ACQUISITION received\n");
 			if (state.load() == STATE_ACQUIRIING)
 			{
-				fstream_worker.stop_streaming();
+				stop_streaming();
 				state.store(STATE_SCANNING);
 			}
 		}
@@ -743,9 +743,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.alines_in_image = alines_in_image;
 		if (alines_in_scan > alines_in_image)
 		{
-			bool* mask = new bool[alines_in_scan];
-			memcpy(mask, image_mask, alines_in_scan * sizeof(bool));
-			msg.image_mask = mask;
+			msg.image_mask = new bool[alines_in_scan];
+			memcpy(msg.image_mask, image_mask, alines_in_scan * sizeof(bool));
 		}
 		else
 		{
@@ -823,9 +822,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	)
 	{
 		StateMsg msg;
-		char* f = new char[512];
-		memcpy(f, file, strlen(file) * sizeof(char));
-		msg.file = f;
+		msg.file_name = new char[512];
+		memcpy((void*)msg.file_name, file, strlen(file) * sizeof(char) + 1);
 		msg.max_bytes = max_bytes;
 		msg.file_type = FSTREAM_TYPE_RAW;
 		msg.n_frames_to_acquire = n_frames_to_acquire;

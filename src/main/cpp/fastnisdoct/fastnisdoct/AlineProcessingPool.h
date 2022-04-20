@@ -7,7 +7,7 @@
 #include "fftw3.h"
 #include "WavenumberInterpolationPlan.h"
 
-#define IDLE_SLEEP_MS 10
+# define IDLE_SLEEP_MS 10
 
 struct aline_processing_job_msg {
 	fftwf_complex* dst_frame;
