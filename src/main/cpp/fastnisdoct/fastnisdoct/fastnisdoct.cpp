@@ -20,6 +20,7 @@
 #include "spscqueue.h"
 #include "AlineProcessingPool.h"
 #include "CircAcqBuffer.h"
+#include "FileStreamWorker.h"
 #include "ni.h"
 
 #define IDLE_SLEEP_MS 10
@@ -78,6 +79,7 @@ struct StateMsg {
 	int n_frame_avg;
 	ScanPattern* scanpattern;
 	const char* file;
+	int file_type;
 	long long max_bytes;
 	int n_frames_to_acquire;
 };
@@ -129,7 +131,7 @@ int64_t processed_frame_size = 0;  // Number of complex-valued voxels in the fra
 int32_t alines_per_buffer = 0;  // Number of A-lines in each IMAQ buffer. If less than the total number of A-lines per frame, buffers will be concatenated to form a frame
 int32_t buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
 
-CircAcqBuffer<fftwf_complex>* processed_alines_ring = NULL;  // Ring buffer which frames are written to prior to export.
+CircAcqBuffer<fftwf_complex>* processed_image_buffer = NULL;  // Ring buffer which frames are written to prior to export.
 
 // TODO replace with CircAcqBuffers or otherwise preallocate display buffers
 
@@ -152,6 +154,8 @@ uint16_t* aline_stamp_buffer = NULL; // A-line stamps are copied here. For debug
 
 int32_t cumulative_buffer_number = 0;  // Number of buffers acquired by IMAQ
 int32_t cumulative_frame_number = 0;  // Number of frames acquired by main
+
+FileStreamWorker fstream_worker;
 
 inline bool ready_to_scan()
 {
@@ -213,8 +217,8 @@ inline void recv_msg()
 				raw_frame_roi_new = new uint16_t[raw_frame_size];
 
 				// Allocate or reallocate rings
-				delete processed_alines_ring;
-				processed_alines_ring = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_alines_size);
+				delete processed_image_buffer;
+				processed_image_buffer = new CircAcqBuffer<fftwf_complex>(state_data.number_of_buffers, processed_alines_size);
 
 				// Allocate processing buffers
 				delete[] apodization_window;
@@ -243,13 +247,11 @@ inline void recv_msg()
 				printf("Buffers per frame: %i\n", buffers_per_frame);
 				printf("A-lines per buffer: %i\n", alines_per_buffer);
 
-				// Allocate frame grab buffers, determine ROI copy map
+				// Predetermine indices to minimize copy operations
 				delete[] discard_mask;
 				roi_cpy_map.clear();
 				if (state_data.alines_in_scan > state_data.alines_in_image)
 				{
-					// discard_mask = new bool[state_data.alines_in_scan];
-					// memcpy(discard_mask, msg.image_mask, state_data.alines_in_scan * sizeof(bool));
 					int offset = -1;
 					int size = 0;
 					int i_frame = 0;
@@ -428,7 +430,16 @@ inline void recv_msg()
 			printf("fastnisdoct: MSG_START_ACQUISITION received\n");
 			if (state.load() == STATE_SCANNING)
 			{
+				if (msg.n_frames_to_acquire > -1)
+				{
+					fstream_worker.start_streaming(msg.file, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, state_data.aline_size, state_data.alines_in_image, msg.n_frames_to_acquire);
+				}
+				else
+				{
+					fstream_worker.start_streaming(msg.file, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, state_data.aline_size, state_data.alines_in_image);
+				}
 				state.store(STATE_ACQUIRIING);
+				delete[] msg.file;
 			}
 		}
 		else if (msg.flag & MSG_STOP_ACQUISITION)
@@ -436,6 +447,7 @@ inline void recv_msg()
 			printf("fastnisdoct: MSG_STOP_ACQUISITION received\n");
 			if (state.load() == STATE_ACQUIRIING)
 			{
+				fstream_worker.stop_streaming();
 				state.store(STATE_SCANNING);
 			}
 		}
@@ -483,7 +495,7 @@ void _main()
 			// Send async job to AlineProcessingPool unless we have not grabbed a frame yet
 			if (cumulative_frame_number > 0)
 			{
-				processed_alines_addr = processed_alines_ring->lock_out_head();  // Lock out the export ring element we are writing to. This is what gets written to disk by a Writer
+				processed_alines_addr = processed_image_buffer->lock_out_head();  // Lock out the export ring element we are writing to. This is what gets written to disk by a Writer
 				aline_processing_pool->submit(processed_alines_addr, raw_frame_roi, state_data.interp, state_data.interpdk, apodization_window, background_spectrum);
 			}
 
@@ -631,7 +643,7 @@ void _main()
 				QueryPerformanceCounter(&end);
 				interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
 
-				processed_alines_ring->release_head();
+				processed_image_buffer->release_head();
 
 				printf("Processed frame %i elapsed %f, %f Hz, \n", cumulative_frame_number - 1, interval, 1.0 / interval);
 
@@ -703,7 +715,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		}
 		delete[] background_spectrum;
 		delete[] background_spectrum_new;
-		delete processed_alines_ring;
+		delete processed_image_buffer;
 		delete apodization_window;
 		delete[] raw_frame_roi;
 		delete[] raw_frame_roi_new;
@@ -804,15 +816,18 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg_queue.enqueue(msg);
 	}
 
-	__declspec(dllexport) void nisdoct_start_acquisition(
+	__declspec(dllexport) void nisdoct_start_raw_acquisition(
 		const char* file,
 		long long max_bytes,
 		int n_frames_to_acquire
 	)
 	{
 		StateMsg msg;
-		msg.file = file;
+		char* f = new char[512];
+		memcpy(f, file, strlen(file) * sizeof(char));
+		msg.file = f;
 		msg.max_bytes = max_bytes;
+		msg.file_type = FSTREAM_TYPE_RAW;
 		msg.n_frames_to_acquire = n_frames_to_acquire;
 		msg.flag = MSG_START_ACQUISITION;
 		msg_queue.enqueue(msg);

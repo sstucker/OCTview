@@ -11,6 +11,9 @@
 #include <Windows.h>
 #include <fstream>
 
+#define MAX_PATH 512
+#define IDLE_SLEEP_MS 10
+
 enum FileStreamMessageFlag
 {
 	StartStream = 1 << 1,
@@ -22,10 +25,10 @@ DEFINE_ENUM_FLAG_OPERATORS(FileStreamMessageFlag);
 
 enum FileStreamType
 {
-	FSTREAM_TYPE_TIF = 1 << 1,
-	FSTREAM_TYPE_NPY = 1 << 2,
-	FSTREAM_TYPE_MAT = 1 << 3,
-	FSTREAM_TYPE_RAW = 1 << 4
+	FSTREAM_TYPE_TIF = 1,
+	FSTREAM_TYPE_NPY = 2,
+	FSTREAM_TYPE_MAT = 3,
+	FSTREAM_TYPE_RAW = 4
 };
 
 DEFINE_ENUM_FLAG_OPERATORS(FileStreamType);
@@ -34,11 +37,11 @@ struct FileStreamMessage
 {
 	FileStreamMessageFlag flag;
 	const char* fname;
-	int fsize;
-	FileStreamType ftype;
+	int64_t fsize;
+	FileStreamType ftype; 
 	CircAcqBuffer<fftwf_complex>* circacqbuffer;
 	int aline_size;  // Number of voxels in each A-line (ROI size)
-	int number_of_alines;
+	int64_t number_of_alines;
 	int n_to_stream;  // Number of frames to save for numbered stream
 };
 
@@ -51,7 +54,7 @@ class Writer
 {
 public:
 	virtual void open(const char* name) {}
-	virtual void writeFrame(void* f, int frame_size) {}
+	virtual void writeFrame(void* f, int64_t frame_size) {}
 	virtual void close() {}
 };
 
@@ -68,7 +71,7 @@ public:
 		fout = std::ofstream(name, std::ios::out | std::ios::binary);
 	}
 
-	void writeFrame(void* f, int frame_size) override
+	void writeFrame(void* f, int64_t frame_size) override
 	{
 		fout.write((char*)f, frame_size);
 	}
@@ -86,8 +89,6 @@ class FileStreamWorker final
 
 protected:
 
-	int id;
-
 	std::thread fstream_thread;
 
 	FstreamQueue* msg_queue;
@@ -95,7 +96,7 @@ protected:
 	std::atomic_bool main_running;
 	std::atomic_bool streaming;
 
-	const char* file_name;
+	char file_name[MAX_PATH];
 
 	int file_name_inc;
 	int frames_in_current_file;
@@ -106,8 +107,8 @@ protected:
 	int latest_frame_n;
 
 	int aline_size;
-	int number_of_alines;
-	int file_max_bytes;
+	int64_t number_of_alines;
+	int64_t file_max_bytes;
 	int n_to_stream;
 
 	inline void recv_msg()
@@ -125,7 +126,7 @@ protected:
 
 					n_to_stream = -1; // If -1, indefinite stream
 
-					file_name = msg.fname;
+					strcpy_s(file_name, msg.fname);
 					file_type = msg.ftype;
 
 					aline_size = msg.aline_size;
@@ -141,7 +142,7 @@ protected:
 			}
 			if (msg.flag & StreamN)
 			{
-				// printf("Numbered save: streaming %i frames to file %s.\n", msg.n_to_stream, file_name);
+				printf("Numbered save: streaming %i frames to file %s.\n", msg.n_to_stream, file_name);
 				n_to_stream = msg.n_to_stream;
 			}
 			if (msg.flag & StopStream)
@@ -154,6 +155,7 @@ protected:
 		}
 		else
 		{
+			main_running.store(false);
 			return;
 		}
 	}
@@ -167,7 +169,7 @@ protected:
 
 		// TODO various types
 		RawWriter file;
-		const char* suffix = ".RAW";
+		const char* suffix = "";
 
 		while (main_running.load() == true)
 		{
@@ -186,11 +188,11 @@ protected:
 						char fname[MAX_PATH];
 						if (file_name_inc == 0)
 						{
-							sprintf(fname, "%s%s", file_name, suffix);
+							sprintf_s(fname, "%s%s", file_name, suffix);
 						}
 						else
 						{
-							sprintf(fname, "%s_%i%s", file_name, file_name_inc, suffix);
+							sprintf_s(fname, "%s_%i%s", file_name, file_name_inc, suffix);
 						}
 						file.open(fname);
 						frames_in_current_file = 0;
@@ -255,30 +257,22 @@ public:
 
 	FileStreamWorker()
 	{
-		msg_queue = new FstreamQueue(0);
+		msg_queue = new FstreamQueue(256);
 		main_running = ATOMIC_VAR_INIT(false);
 		streaming = ATOMIC_VAR_INIT(false);
 	}
-
-	FileStreamWorker(int thread_id)
-	{
-		id = thread_id;
-
-		msg_queue = new FstreamQueue(65536);
-		main_running = ATOMIC_VAR_INIT(true);
-		streaming = ATOMIC_VAR_INIT(false);
-		fstream_thread = std::thread(&FileStreamWorker::main, this);
-	}
-
-	// DO NOT access non-atomics from outside main()
 
 	bool is_streaming()
 	{
 		return streaming.load();
 	}
 
-	void start_streaming(const char* fname, int max_bytes, FileStreamType ftype, CircAcqBuffer<fftwf_complex>* buffer, int aline_size, int number_of_alines)
+	void start_streaming(const char* fname, int64_t max_bytes, FileStreamType ftype, CircAcqBuffer<fftwf_complex>* buffer, int aline_size, int number_of_alines)
 	{
+		main_running.store(true);
+		streaming.store(true);
+		fstream_thread = std::thread(&FileStreamWorker::main, this);
+	
 		FileStreamMessage msg;
 		msg.flag = StartStream;
 		msg.fname = fname;
@@ -291,6 +285,10 @@ public:
 
 	void start_streaming(const char* fname, int max_bytes, FileStreamType ftype, CircAcqBuffer<fftwf_complex>* buffer, int aline_size, int number_of_alines, int n_to_stream)
 	{
+		main_running.store(true);
+		streaming.store(true);
+		fstream_thread = std::thread(&FileStreamWorker::main, this);
+
 		FileStreamMessage msg;
 		msg.flag = StartStream | StreamN;
 		msg.fname = fname;

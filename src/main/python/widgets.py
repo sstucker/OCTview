@@ -1114,7 +1114,7 @@ class MainWindow(QMainWindow, UiWidget):
         except ZeroDivisionError:
             return 0
 
-    def image_dimensions(self) -> tuple(int, int, int):
+    def image_dimensions(self) -> (int, int, int):
         """The dimensions of the 3D image we expect to grab from the backend.
 
         TODO: verify (by asking backend) that this is the real size to avoid buffer overruns
@@ -1139,7 +1139,7 @@ class MainWindow(QMainWindow, UiWidget):
     def max_line_rate(self) -> int:
         return int(1000 * self._settings_dialog.spinMaxLineRate.value() - 1)  # Convert from kHz float to Hz int
 
-    def zroi(self) -> tuple(int, int):
+    def zroi(self) -> (int, int):
         return self.ScanGroupBox.zroi()
 
     def roi_size(self) -> int:
@@ -1192,6 +1192,6 @@ class MainWindow(QMainWindow, UiWidget):
     def trigger_gain(self) -> float:
         return self._settings_dialog.spinTriggerGain.value()
 
-    def scan_scale_factors(self) -> tuple(float, float):
+    def scan_scale_factors(self) -> (float, float):
         return (self._settings_dialog.spinXScaleFactor.value(),
                 self._settings_dialog.spinYScaleFactor.value())

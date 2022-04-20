@@ -32,7 +32,7 @@ class NIOCTController:
                                                       c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
         self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int, c.c_int]
-        self._lib.nisdoct_start_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
+        self._lib.nisdoct_start_raw_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
         self._lib.nisdoct_grab_spectrum.argtypes = [c_float_p]
 
@@ -212,7 +212,7 @@ class NIOCTController:
             max_bytes: Maximum size of each file before starting a new one.
             frames_to_acquire: The number of frames to acquire. If -1, acquisition continues until `stop_acquisition` is called.
         """
-        self._lib.nisdoct_start_acquisition(
+        self._lib.nisdoct_start_raw_acquisition(
             bytes(file, encoding='utf8'),
             np.longlong(max_bytes),
             int(frames_to_acquire)
