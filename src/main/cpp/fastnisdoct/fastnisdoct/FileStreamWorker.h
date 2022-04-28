@@ -183,6 +183,7 @@ inline int _start
 	{
 		return -1;
 	}
+
 	memcpy(_file_name, fname, strlen(fname) * sizeof(char) + 1);  // Copy string to module-managed buffer
 	_file_max_bytes = max_bytes;
 	_file_type = ftype;

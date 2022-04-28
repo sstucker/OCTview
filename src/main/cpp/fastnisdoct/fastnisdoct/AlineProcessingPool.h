@@ -117,12 +117,13 @@ private:
 
 	void* fft_buffer;  // Buffer for the real-to-complex FFT before cropping
 
-	int roi_offset;
-	int roi_size;
-
 public:
 
 	int aline_size;
+	int64_t number_of_alines;
+	int roi_offset;
+	int roi_size;
+
 	int spatial_aline_size;  // A-line size after real-to-complex FFT
 	int64_t total_alines;
 	int number_of_workers;
@@ -138,7 +139,7 @@ public:
 
 	AlineProcessingPool(
 		int aline_size,  // Size of each A-line
-		int number_of_alines,  // The total number of A-lines
+		int64_t number_of_alines,  // The total number of A-lines
 		int roi_offset,  // The offset from the start of the spatial A-line to begin the axial ROI
 		int roi_size,  // The number of voxels in the axial ROI
 		bool fft_enabled  // Whether or not to perform an FFT. If false, axial ROI cropping does not take place.
@@ -148,14 +149,27 @@ public:
 
 		// Need these for second constructor phase
 		this->aline_size = aline_size;
-		this->spatial_aline_size = aline_size / 2 + 1;
+		this->number_of_alines = number_of_alines;
 		this->roi_offset = roi_offset;
 		this->roi_size = roi_size;
 
+		this->spatial_aline_size = aline_size / 2 + 1;
+
 		total_alines = number_of_alines;
 
-		number_of_workers = std::thread::hardware_concurrency();
-		
+		if (number_of_alines > 1024)
+		{
+			number_of_workers = std::thread::hardware_concurrency();
+		}
+		else if (number_of_alines > 512)
+		{
+			number_of_workers = std::thread::hardware_concurrency() / 4;
+		}
+		else
+		{
+			number_of_workers = 1;
+		}
+
 		// Ensure number of threads is compatible with the number of A-lines. Worst case only 1 thread will be used.
 		while ((number_of_alines % number_of_workers != 0) && (number_of_workers > 1))
 		{

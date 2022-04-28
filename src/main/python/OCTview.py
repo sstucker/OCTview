@@ -1,7 +1,7 @@
 import ctypes
 import os
 import sys
-
+import time
 import numpy as np
 import qdarkstyle
 from PyQt5.QtWidgets import QSplashScreen
@@ -32,34 +32,7 @@ class _AppContext(ApplicationContext):
         self.window = None  # Qt window
         self.controller = None  # Backend. This AppContext instance mediates their communication
 
-    def _launch(self):
-        # Configure/reconfigure GUI, load backend
-
-        if self.window is None:
-            sys.exit('Failed to load GUI.')
-
-        if self.window.darkTheme:
-            self.app.setStyleSheet(qdarkstyle.load_stylesheet())
-        else:
-            self.app.setStyleSheet('')
-
-        # Connect MainWindow interaction signals to backend interface
-        self.window.scan.connect(self._start_scanning)
-        self.window.acquire.connect(self._start_acquisition)
-        self.window.stop.connect(self._stop)
-        self.window.closed.connect(self._close_controller)
-        self.window.scan_changed.connect(self._update_scan_pattern)
-        self.window.processing_changed.connect(self._configure_processing)
-        self.window.launch.connect(self._launch)
-
-        # Open controller
-        self._open_controller()
-        self._update_timer.start(100)  # 10 Hz
-
-        self.window.show()
-
     def run(self):
-
         # Debounce timers
         self._timer_configure_image = QTimer()
         self._ctr_configure_image = 0
@@ -71,7 +44,8 @@ class _AppContext(ApplicationContext):
         self._ctr_update_scan_pattern = 0
 
         # Record these sizes to optimize calls to interface
-        self._raw_frame_size = 0
+        self._uncropped_frame_size = 0
+        self._unprocessed_frame_size = 0
         self._processed_frame_size = 0
 
         # Repeated update execution keeps GUI in step with controller
@@ -90,6 +64,7 @@ class _AppContext(ApplicationContext):
 
         # Load the window's state from .last JSON
         # Will emit all the signals but we have not connected them yet
+
         self.window.loadConfiguration(file=os.path.join(self.config_resource_location, '.last'))
 
         # ... Do anything else before backend setup
@@ -97,6 +72,34 @@ class _AppContext(ApplicationContext):
         self._launch()
 
         return self.app.exec_()
+
+    def _launch(self):
+        # Configure/reconfigure GUI, load backend
+
+        if self.window is None:
+            sys.exit('Failed to load GUI.')
+
+        if self.window.darkTheme:
+            self.app.setStyleSheet(qdarkstyle.load_stylesheet())
+        else:
+            self.app.setStyleSheet('')
+
+        # Connect MainWindow interaction signals to backend interface
+        self.window.scan.connect(self._start_scanning)
+        self.window.acquire.connect(self._start_acquisition)
+        self.window.stop.connect(self._stop)
+        self.window.closed.connect(self._close_controller)
+        self.window.scan_changed.connect(self._configure_image)
+        self.window.processing_changed.connect(self._configure_processing)
+        self.window.launch.connect(self._launch)
+
+        # Open controller
+        self._open_controller()
+        self._configure_image()
+        self._configure_processing(self.window.unprocessed_frame_size(), self.window.processed_frame_size())
+        self._update_timer.start(100)  # 10 Hz
+
+        self.window.show()
 
     def _update(self):
         state = self.controller.state
@@ -114,7 +117,6 @@ class _AppContext(ApplicationContext):
             self.window.set_mode_not_ready()
 
     def _display_update(self):
-        print(self.window.image_dimensions())
         if self._grab_buffer is not None and self._image_buffer is not None:
             if self.controller.grab_frame(self._grab_buffer) > -1:
                 # print('Copying to display buffer with shape', np.shape(self._image_buffer))
@@ -122,7 +124,8 @@ class _AppContext(ApplicationContext):
                 for x in range(self.window.scan_pattern().dimensions[0]):
                     for y in range(self.window.scan_pattern().dimensions[1]):
                         self._image_buffer[:, x, y] = self._grab_buffer[
-                                                        self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()]
+                            self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()
+                        ]
                         i += 1
                 self.window.display_frame(self._image_buffer)
         if self._spectrum_buffer is not None:
@@ -144,6 +147,7 @@ class _AppContext(ApplicationContext):
             self.window.analog_output_line_trig_ch_name(),
             self.window.analog_output_frame_trig_ch_name(),
             self.window.analog_output_start_trig_ch_name(),
+            self.window.number_of_image_buffers()
         )
 
     def _close_controller(self):
@@ -157,73 +161,13 @@ class _AppContext(ApplicationContext):
         self._ctr_configure_image -= 1
         if not self._ctr_configure_image > 0:
             pat = self.window.scan_pattern()
-            self.controller.configure_image(
-                aline_size=self.window.aline_size(),
-                alines_in_scan=pat.alines_in_scan,
-                image_mask=pat.image_mask,
-                alines_in_image=pat.total_number_of_alines,
-                alines_per_b=pat.dimensions[0],
-                aline_repeat=pat.aline_repeat,
-                bline_repeat=pat.bline_repeat,
-                number_of_buffers=self.window.number_of_image_buffers(),
-                roi_offset=self.window.roi_offset(),
-                roi_size=self.window.roi_size(),
-                buffer_blines=pat.trigger_blines,
-                aline_repeat_processing=self.window.aline_repeat_processing(),
-                bline_repeat_processing=self.window.bline_repeat_processing(),
+            scan_x = pat.x * self.window.scan_scale_factors()[0]
+            scan_y = pat.y * self.window.scan_scale_factors()[1]
 
-            )
-            self._processed_frame_size = self.window.processed_frame_size()
-            self._raw_frame_size = self.window.raw_frame_size()
-            processed_shape = self.window.image_dimensions()
-            self._image_buffer = np.zeros(processed_shape, dtype=np.complex64)
-            self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
-            self._spectrum_buffer = np.zeros(self.window.aline_size(), dtype=np.float32)
+            scan_line_trig = pat.line_trigger * self.window.trigger_gain()
 
-    def _configure_processing(self, raw_frame_size: int, processed_frame_size: int):
-        if self._raw_frame_size != raw_frame_size or self._processed_frame_size != processed_frame_size:
-            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._raw_frame_size, raw_frame_size,
-                                                                   self._processed_frame_size, processed_frame_size))
-            self._configure_image()
-        else:
-            print('Updating processing with image of the same size.')
-        self._ctr_configure_processing += 1
-        self._timer_configure_processing.singleShot(CALLBACK_DEBOUNCE_MS, self._configure_processing_cb)
-
-    def _configure_processing_cb(self):
-        self._ctr_configure_processing -= 1
-        if not self._ctr_configure_processing > 0:
-            self.controller.configure_processing(
-                self.window.processing_enabled(),
-                self.window.background_subtraction_enabled(),
-                self.window.interpolation_enabled(),
-                self.window.interpdk(),
-                self.window.apodization_window(),
-                n_frame_avg=self.window.frame_averaging()
-            )
-
-    def _update_scan_pattern(self, raw_frame_size: int, processed_frame_size: int):
-        # If frame sizes are changing with this pattern update, reconfigure
-        if self._raw_frame_size != raw_frame_size or self._processed_frame_size != processed_frame_size:
-            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._raw_frame_size, raw_frame_size,
-                                                                   self._processed_frame_size, processed_frame_size))
-            self._configure_image()
-            self._configure_processing(raw_frame_size, processed_frame_size)
-        else:
-            print('Updating scan pattern with pattern of the same size.')
-        self._ctr_update_scan_pattern += 1
-        self._timer_update_scan_pattern.singleShot(CALLBACK_DEBOUNCE_MS, self._update_scan_pattern_cb)
-
-    def _update_scan_pattern_cb(self):
-        self._ctr_update_scan_pattern -= 1
-        if not self._ctr_update_scan_pattern > 0:
-            scan_x = self.window.scan_pattern().x * self.window.scan_scale_factors()[0]
-            scan_y = self.window.scan_pattern().y * self.window.scan_scale_factors()[1]
-
-            scan_line_trig = self.window.scan_pattern().line_trigger * self.window.trigger_gain()
-
-            scan_frame_trig = self.window.scan_pattern().frame_trigger * self.window.trigger_gain()
-            # scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
+            scan_frame_trig = pat.frame_trigger * self.window.trigger_gain()
+            scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
             #
             # t_frame_trig_start = np.where(scan_line_trig > 0)[0][0]
             # t_frame_trig_end = np.where(scan_line_trig > 0)[0][-1]
@@ -243,12 +187,54 @@ class _AppContext(ApplicationContext):
             all_samples = np.concatenate([scan_y, scan_x])
             print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:',
                   self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
-            self.controller.set_scan(
-                scan_x,
-                scan_y,
-                scan_line_trig,
-                scan_frame_trig,
-                self.window.scan_pattern().sample_rate,
+            self.controller.configure_image(
+                aline_size=self.window.aline_size(),
+                alines_in_scan=pat.alines_in_scan,
+                image_mask=pat.image_mask,
+                alines_in_image=pat.total_number_of_alines,
+                alines_per_bline=pat.dimensions[0],
+                alines_per_buffer=self.window.alines_per_buffer(),
+                x_scan_signal=scan_x,
+                y_scan_signal=scan_y,
+                line_trigger_scan_signal=scan_line_trig,
+                frame_trigger_scan_signal=scan_frame_trig,
+                signal_output_rate=pat.sample_rate,
+                line_rate=pat.max_trigger_rate,
+                aline_repeat=pat.aline_repeat,
+                bline_repeat=pat.bline_repeat,
+                roi_offset=self.window.roi_offset(),
+                roi_size=self.window.roi_size(),
+                aline_repeat_processing=self.window.aline_repeat_processing(),
+                bline_repeat_processing=self.window.bline_repeat_processing()
+            )
+            self._uncropped_frame_size = self.window.uncropped_frame_size()
+            self._unprocessed_frame_size = self.window.unprocessed_frame_size()
+            self._processed_frame_size = self.window.processed_frame_size()
+            processed_shape = self.window.image_dimensions()
+            self._image_buffer = np.zeros(processed_shape, dtype=np.complex64)
+            self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
+            self._spectrum_buffer = np.zeros(self.window.aline_size(), dtype=np.float32)
+
+    def _configure_processing(self, unprocessed_frame_size: int, processed_frame_size: int):
+        # Because some changes to processing are really changes to the IMAGE at the controller level, do this check
+        if self._unprocessed_frame_size != unprocessed_frame_size or self._processed_frame_size != processed_frame_size:
+            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._unprocessed_frame_size, unprocessed_frame_size,
+                                                                   self._processed_frame_size, processed_frame_size))
+            self._configure_image()
+        else:
+            print('Updating processing with image of the same size.')
+        self._ctr_configure_processing += 1
+        self._timer_configure_processing.singleShot(CALLBACK_DEBOUNCE_MS, self._configure_processing_cb)
+
+    def _configure_processing_cb(self):
+        self._ctr_configure_processing -= 1
+        if not self._ctr_configure_processing > 0:
+            self.controller.configure_processing(
+                self.window.background_subtraction_enabled(),
+                self.window.interpolation_enabled(),
+                self.window.interpdk(),
+                self.window.apodization_window(),
+                n_frame_avg=self.window.frame_averaging()
             )
 
     def _start_scanning(self):
@@ -278,6 +264,7 @@ class _AppContext(ApplicationContext):
 
 # Module interface
 AppContext = _AppContext()
+window = AppContext.window
 ui_resource_location = AppContext.ui_resource_location
 config_resource_location = AppContext.config_resource_location
 lib_resource_location = AppContext.lib_resource_location

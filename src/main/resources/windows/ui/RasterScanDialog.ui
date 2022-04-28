@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>484</width>
-    <height>188</height>
+    <width>492</width>
+    <height>211</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,21 +17,21 @@
    <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="3" column="0">
-    <widget class="QLabel" name="labelSamplesTransit">
+   <item row="2" column="0">
+    <widget class="QLabel" name="labelSamplesOff">
      <property name="text">
-      <string>n-samples transit</string>
+      <string>n-samples trigger low</string>
      </property>
     </widget>
    </item>
-   <item row="0" column="1">
+   <item row="1" column="1">
     <widget class="QSpinBox" name="spinSamplesOn">
      <property name="minimum">
       <number>1</number>
      </property>
     </widget>
    </item>
-   <item row="1" column="1">
+   <item row="2" column="1">
     <widget class="QSpinBox" name="spinSamplesOff">
      <property name="minimum">
       <number>1</number>
@@ -39,13 +39,41 @@
     </widget>
    </item>
    <item row="3" column="1">
+    <widget class="QSpinBox" name="spinSamplesSettle">
+     <property name="minimum">
+      <number>1</number>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="0">
+    <widget class="QLabel" name="labelSamplesTransit">
+     <property name="text">
+      <string>n-samples transit</string>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1">
     <widget class="QSpinBox" name="spinSamplesTransit">
      <property name="minimum">
       <number>1</number>
      </property>
     </widget>
    </item>
-   <item row="7" column="0" colspan="2">
+   <item row="1" column="0">
+    <widget class="QLabel" name="labelSamplesOn">
+     <property name="text">
+      <string>n-samples trigger high</string>
+     </property>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QLabel" name="labelSamplesSettle">
+     <property name="text">
+      <string>n-samples settle</string>
+     </property>
+    </widget>
+   </item>
+   <item row="9" column="0" colspan="2">
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -55,35 +83,43 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
-    <widget class="QSpinBox" name="spinSamplesSettle">
-     <property name="minimum">
-      <number>1</number>
+   <item row="5" column="0">
+    <widget class="QLabel" name="labelTriggerMode">
+     <property name="text">
+      <string>Trigger mode</string>
      </property>
     </widget>
    </item>
-   <item row="1" column="0">
-    <widget class="QLabel" name="labelSamplesOff">
-     <property name="text">
-      <string>n-samples trigger low</string>
+   <item row="0" column="1">
+    <widget class="QDoubleSpinBox" name="spinMaxLineRate">
+     <property name="suffix">
+      <string> Hz</string>
+     </property>
+     <property name="decimals">
+      <number>0</number>
+     </property>
+     <property name="minimum">
+      <double>1.000000000000000</double>
+     </property>
+     <property name="maximum">
+      <double>999000.000000000000000</double>
+     </property>
+     <property name="singleStep">
+      <double>1.000000000000000</double>
+     </property>
+     <property name="value">
+      <double>76263.000000000000000</double>
      </property>
     </widget>
    </item>
    <item row="0" column="0">
-    <widget class="QLabel" name="labelSamplesOn">
+    <widget class="QLabel" name="labelMaxLineRate">
      <property name="text">
-      <string>n-samples trigger high</string>
+      <string>Max line rate</string>
      </property>
     </widget>
    </item>
-   <item row="2" column="0">
-    <widget class="QLabel" name="labelSamplesSettle">
-     <property name="text">
-      <string>n-samples settle</string>
-     </property>
-    </widget>
-   </item>
-   <item row="4" column="1">
+   <item row="5" column="1">
     <widget class="QFrame" name="frame">
      <property name="frameShape">
       <enum>QFrame::StyledPanel</enum>
@@ -110,13 +146,6 @@
        </widget>
       </item>
      </layout>
-    </widget>
-   </item>
-   <item row="4" column="0">
-    <widget class="QLabel" name="labelTriggerMode">
-     <property name="text">
-      <string>Trigger mode</string>
-     </property>
     </widget>
    </item>
   </layout>

@@ -27,11 +27,12 @@ class NIOCTController:
         """
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
-        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
-        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_bool,
-                                                      c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int]
-        self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
-        self._lib.nisdoct_set_pattern.argtypes = [c_double_p, c_double_p, c_double_p, c_double_p, c.c_int, c.c_int]
+        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p,
+                                           c.c_int]
+        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_long,
+                                                      c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c_double_p,
+                                                      c_double_p, c_double_p, c_double_p, c.c_long, c.c_int]
+        self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
         self._lib.nisdoct_start_raw_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
         self._lib.nisdoct_grab_spectrum.argtypes = [c_float_p]
@@ -48,6 +49,7 @@ class NIOCTController:
              ao_ch_lt_name,
              ao_ch_ft_name,
              ao_ch_st_name,
+             number_of_buffers
              ):
         """Open the interface. To change these values, the interface must be closed and then opened again.
 
@@ -58,23 +60,17 @@ class NIOCTController:
             ao_ch_lt_name (str): NI-DAQ analog out channel identifier to be used for camera triggering
             ao_ch_ft_name (str): NI-DAQ analog out channel identifier to be used for frame grab triggering
             ao_ch_st_name (str): NI-DAQ analog out channel identifier to be used to trigger other devices on imaging start
+            number_of_buffers (int): The number of buffers to allocate for image acquisition and processing. Larger
+                values make acquisition more robust to dropped frames but increase memory overhead.
         """
-
-        # Open the interface
-        # self._camera_name = bytes(camera_name, encoding='utf8')
-        # self._ao_ch_x_name = bytes(ao_ch_x_name, encoding='utf8')
-        # self._ao_ch_y_name = bytes(ao_ch_y_name, encoding='utf8')
-        # self._ao_ch_lt_name = bytes(ao_ch_lt_name, encoding='utf8')
-        # self._ao_ch_ft_name = bytes(ao_ch_ft_name, encoding='utf8')
-        # self._ao_ch_st_name = bytes(ao_ch_st_name, encoding='utf8')
-
         self._lib.nisdoct_open(
             bytes(camera_name, encoding='utf8'),
             bytes(ao_ch_x_name, encoding='utf8'),
             bytes(ao_ch_y_name, encoding='utf8'),
             bytes(ao_ch_lt_name, encoding='utf8'),
             bytes(ao_ch_ft_name, encoding='utf8'),
-            bytes(ao_ch_st_name, encoding='utf8')
+            bytes(ao_ch_st_name, encoding='utf8'),
+            int(number_of_buffers)
         )
 
     def close(self):
@@ -83,16 +79,21 @@ class NIOCTController:
     def configure_image(
             self,
             aline_size: int,
-            alines_in_scan: int,
-            alines_in_image: int,
+            alines_in_scan: np.long,
             image_mask: np.ndarray,
-            alines_per_b: int,
+            alines_in_image: int,
+            alines_per_bline: int,
+            alines_per_buffer: int,
+            x_scan_signal: np.ndarray,
+            y_scan_signal: np.ndarray,
+            line_trigger_scan_signal: np.ndarray,
+            frame_trigger_scan_signal: np.ndarray,
+            signal_output_rate: int,
+            line_rate: int,
             aline_repeat: int,
             bline_repeat: int,
-            number_of_buffers: int,
             roi_offset=0,
             roi_size=None,
-            buffer_blines=False,
             aline_repeat_processing: str = None,
             bline_repeat_processing: str = None,
     ):
@@ -102,52 +103,61 @@ class NIOCTController:
 
         Args:
             aline_size (int): The number of voxels in each A-line i.e. 2048
-            alines_in_scan (int): The total A-lines exposed during each acquisition frame. Defined by the scan pattern.
-            image_mask (np.ndarray): Boolean array of length `alines_in_scan` which is True for A-lines which are to be copied to the acquisition frame
-            alines_in_image (int): The number of A-lines that make up the image in each acquisition frame. Defined by the scan pattern.
-            alines_per_b (int): Size of each B-line in A-lines. B-lines are the subdivisions of the acquisition frame.
-                Defined by the scan pattern.
+            alines_in_scan (int): The total A-lines exposed during each acquisition frame.
+            image_mask (np.ndarray): Boolean array of length `alines_in_scan` which is True for A-lines which are to be
+                copied to the acquisition frame.
+            alines_in_image (int): The total A-lines copied to the image.
+            alines_per_bline (int): Size of each B-line subdivision of the acquisition frame.
+            alines_per_buffer (int): Each grab buffer will be sized to contain this many A-lines.
             aline_repeat (int): if > 1, number of repeated successive A-lines in the scan. Defined by the scan pattern.
             bline_repeat (int): if > 1, number of repeated successive B-lines in the scan. Defined by the scan pattern.
-            number_of_buffers (int): The number of buffers to allocate for image acquisition and processing. Larger
-                values make acquisition more robust to dropped frames but increase memory overhead.
-            roi_offset (optional int): Number of voxels to discard from beginning of each spatial A-line
-            roi_size (optional int): Number of voxels to keep of each spatial A-line, beginning from roi_offset
-            buffer_blines (optional bool): Default False. If True, frame grabber interface is configured to grab each
-                B-line and concatenate them into frames, as opposed to filling a large buffer with the entire frame.
             aline_repeat_processing (str): Defines processing to be carried out on repeated A-lines. Can be None or
                 `'average'`. If `aline_repeat` is 2, can be `'difference'`. Default None.
             bline_repeat_processing (str): Defines processing to be carried out on repeated B-lines. Can be None or
                 `'average'`. If `aline_repeat` is 2, can be `'difference'`. Default None.
+            roi_offset (optional int): Number of voxels to discard from beginning of each spatial A-line
+            roi_size (optional int): Number of voxels to keep of each spatial A-line, beginning from roi_offset
+            x_scan_signal (np.ndarray): X galvo drive signal.
+            y_scan_signal (np.ndarray): Y galvo drive signal.
+            line_trigger_scan_signal (np.ndarray): Camera A-line exposure trigger signal.
+            frame_trigger_scan_signal (np.ndarray): Frame grabber trigger signal.
+            signal_output_rate (int): Sample generation rate.
+            line_rate (int): Line rate. Should be evenly divisible into `signal_output_rate`.
         """
         a_rpt_proc_flag = 0
         b_rpt_proc_flag = 0
-        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing), (a_rpt_proc_flag, a_rpt_proc_flag)):
-            if rpt_proc == 'average':
+        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing),
+                                  (a_rpt_proc_flag, a_rpt_proc_flag)):
+            if rpt_proc == 'average' or rpt_proc == 1:
                 flag = 1
-            elif rpt_proc == 'difference':
+            elif rpt_proc == 'difference' or rpt_proc == 2:
                 flag = 2
         if roi_size is None:
             roi_size = aline_size
         self._lib.nisdoct_configure_image(
             int(aline_size),
-            int(alines_in_scan),
-            image_mask.astype(bool),
-            int(alines_in_image),
-            int(alines_per_b),
-            bool(buffer_blines),
+            np.long(alines_in_scan),
+            np.array(image_mask).astype(bool),
+            np.long(alines_in_image),
+            np.long(alines_per_bline),
+            np.long(alines_per_buffer),
             int(aline_repeat),
             int(bline_repeat),
             int(a_rpt_proc_flag),
             int(b_rpt_proc_flag),
-            int(number_of_buffers),
             int(roi_offset),
             int(roi_size),
+            np.array(x_scan_signal).astype(np.float64),
+            np.array(y_scan_signal).astype(np.float64),
+            np.array(line_trigger_scan_signal).astype(np.float64),
+            np.array(frame_trigger_scan_signal).astype(np.float64),
+            np.long(len(x_scan_signal)),
+            np.long(signal_output_rate),
+            int(line_rate)
         )
 
     def configure_processing(
             self,
-            enabled: bool,
             subtract_background: bool,
             interp: bool,
             intpdk: float,
@@ -156,7 +166,6 @@ class NIOCTController:
     ):
         """Set parameters of SD-OCT processing. Can be called during a scan.
         Args:
-            enabled (bool): If False, spectral data is saved and the rest of the configuration is ignored.
             subtract_background (bool): If True, carry out background subtraction on each A-line.
             interp (bool): If True, carry out linear-in-wavelength -> linear-in-wavenumber interpolation.
             intpdk (float): Parameter for linear-in-wavelength -> linear-in-wavenmber interpolation.
@@ -164,34 +173,12 @@ class NIOCTController:
             n_frame_avg (int): if > 1, frames to average together. Frame size is defined by `configure_image`. Default 0.
         """
         self._lib.nisdoct_configure_processing(
-            bool(enabled),
             bool(subtract_background),
             bool(interp),
             float(intpdk),
             np.array(apod_window).astype(np.float32),
             len(apod_window),  # aline_size
             int(n_frame_avg)
-        )
-
-    def set_scan(self, x, y, lt, ft, rate):
-        """Sets the signals used to drive the galvos and trigger camera and frame grabber. Can be called during a scan.
-
-        Args:
-            x (np.ndarray): X galvo drive signal
-            y (np.ndarray): Y galvo drive signal
-            lt (np.ndarray): Camera A-line exposure trigger signal
-            ft (np.ndarray): Frame grabber trigger signal
-            rate (int): Sample generation rate
-        """
-        if any([len(sig) != len(x) for sig in [y, lt, ft]]):
-            raise ValueError('x, y, lt and ft must be nd.arrays of equal length.')
-        self._lib.nisdoct_set_pattern(
-            np.array(x),
-            np.array(y),
-            np.array(lt),
-            np.array(ft),
-            len(x),
-            int(rate)
         )
 
     def start_scan(self):
@@ -251,4 +238,3 @@ class NIOCTController:
 
     def grab_spectrum(self, output):
         return self._lib.nisdoct_grab_spectrum(output)
-

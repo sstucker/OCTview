@@ -146,7 +146,7 @@ def _set_widget_value(widget: QWidget, value):
 def _connect_all_child_widgets_to_slot(parent_widget: QWidget, slot: callable, recurse=True):
     for child in parent_widget.children():
         if recurse:
-            if type(child) in [QWidget, QFrame, QGroupBox]:
+            if type(child) in [QWidget, QFrame, QGroupBox, QDialog]:
                 _connect_all_child_widgets_to_slot(child, slot, recurse=True)
         if type(child) in [QSpinBox, QDoubleSpinBox]:
             child.valueChanged.connect(slot)
@@ -183,6 +183,10 @@ class ScanWidget(QWidget):
     def fixSize(self, fix: bool):
         """Disable all controls that allow the size of the image to be changed."""
         raise NotImplementedError()
+
+    def blines_triggered(self) -> bool:
+        """If True, the second dimension of `pattern.dimensions` is the number of A-lines acquired per frame trigger."""
+        return False
 
 
 class RasterScanWidget(ScanWidget, UiWidget):
@@ -225,7 +229,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
             self._pattern.generate(**{
                 'alines': self.spinACount.value(),
                 'blines': self.spinBCount.value(),
-                'max_trigger_rate': 76000,
+                'max_trigger_rate': self.max_line_rate(),
                 # Pattern gen in millimeters
                 'fov': [self.spinROIWidth.value() * 0.001, self.spinROIHeight.value() * 0.001],
                 'flyback_duty': self.spinFlybackDuty.value() / 100,
@@ -236,7 +240,9 @@ class RasterScanWidget(ScanWidget, UiWidget):
                 'bline_repeat': [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
                 'bidirectional': self.checkBidirectional.isChecked(),
                 'rotation_rad': self.parentWidget().spinRotation.value() * np.pi / 180,
-                'trigger_blines': self._settings_dialog.radioTriggerBlines.isChecked()
+                'trigger_blines': self.blines_triggered(),
+                'samples_on': self._settings_dialog.spinSamplesOn.value(),
+                'samples_off': self._settings_dialog.spinSamplesOff.value()
             })
             self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
             print(self._pattern.__class__.__name__, 'generated!')
@@ -261,6 +267,12 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.spinACount.setEnabled(not fixed)
         self.checkSquareScan.setEnabled(not fixed)
         self.buttonSettings.setEnabled(not fixed)
+
+    def max_line_rate(self) -> int:
+        return int(self._settings_dialog.spinMaxLineRate.value())  # Hz
+
+    def blines_triggered(self) -> bool:
+        return self._settings_dialog.radioTriggerBlines.isChecked()
 
     def a_repeats(self):
         if self.checkARepeat.isChecked():
@@ -417,6 +429,9 @@ class ScanGroupBox(QGroupBox, UiWidget):
     def b_repeats(self):
         return self.ScanWidget.b_repeats()
 
+    def blines_triggered(self) -> bool:
+        return self.ScanWidget.blines_triggered()
+
 
 class ControlGroupBox(QGroupBox, UiWidget):
     scan = pyqtSignal()
@@ -490,13 +505,13 @@ class ScanDisplayWindow(QFrame):
         self.hide()
 
         self._graphics_window = pyqtgraph.GraphicsWindow()
-        self._signal_plot = self._graphics_window.addPlot(row=0, col=0, rowspan=1, colspan=2)
+        # self._signal_plot = self._graphics_window.addPlot(row=0, col=0, rowspan=1, colspan=2)
 
-        self._line_trigger_item = self._signal_plot.plot()
-        self._frame_trigger_item = self._signal_plot.plot()
-        self._x_item = self._signal_plot.plot()
-        self._y_item = self._signal_plot.plot()
-        self._trigger_legend = self._signal_plot.addLegend()
+        # self._line_trigger_item = self._signal_plot.plot()
+        # self._frame_trigger_item = self._signal_plot.plot()
+        # self._x_item = self._signal_plot.plot()
+        # self._y_item = self._signal_plot.plot()
+        # self._trigger_legend = self._signal_plot.addLegend()
 
         self._scan_plot = self._graphics_window.addPlot(row=1, col=0, rowspan=2, colspan=2)
         self._scan_item = self._scan_plot.plot()
@@ -508,21 +523,21 @@ class ScanDisplayWindow(QFrame):
         self.setLayout(self._layout)
 
     def previewPattern(self, pattern: LineScanPattern):
-        t = np.arange(len(pattern.x)) * 1 / pattern.sample_rate
-        # self._line_trigger_item.setData(x=t, y=pattern.line_trigger, name='Line trigger')
-        self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
-        self._x_item.setData(x=t, y=pattern.x, name='x')
-        self._y_item.setData(x=t, y=pattern.y, name='y')
+        # t = np.arange(len(pattern.x)) * 1 / pattern.sample_rate
+        # # self._line_trigger_item.setData(x=t, y=pattern.line_trigger, name='Line trigger')
+        # self._frame_trigger_item.setData(x=t, y=pattern.frame_trigger, name='Frame trigger')
+        # self._x_item.setData(x=t, y=pattern.x, name='x')
+        # self._y_item.setData(x=t, y=pattern.y, name='y')
 
         exp = np.zeros(len(pattern.x)).astype(np.int32)
         exp[pattern.line_trigger.astype(bool)] = 1
         x_pts = pattern.x
         y_pts = pattern.y
-        self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=0.5, color='#FEFEFE'),
-                                antialias=False, autodownsample=True)
+        self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=1, color='#FEFEFE'),
+                                antialias=True, autodownsample=True, skipFiniteCheck=True)
         self._scan_points_item.setData(x=x_pts, y=y_pts, connect=exp,
-                                       pen=pyqtgraph.mkPen(width=3, color='r', capstyle='round'), antialias=True,
-                                       autodownsample=True)
+                                       pen=pyqtgraph.mkPen(width=1, color='r', capstyle='round'), antialias=True,
+                                       autodownsample=True, skipFiniteCheck=True)
 
         self.show()
 
@@ -951,7 +966,7 @@ class RasterScanDialog(CancelDiscardsChangesDialog):
 
 class MainWindow(QMainWindow, UiWidget):
     launch = pyqtSignal()  # A change has been made to the backend configuration and it must be completely reloaded. Also emitted on first launch
-    scan_changed = pyqtSignal(int, int)  # Scan pattern has been changed. Passes frame sizes so backend can decide what needs to be done
+    scan_changed = pyqtSignal()  # Scan pattern has been changed. Passes frame sizes so backend can decide what needs to be done
     processing_changed = pyqtSignal(int, int)  # Processing parameters have been changed. Passes frame sizes so backend can decide what needs to be done
     closed = pyqtSignal()  # MainWindow has been closed
     scan = pyqtSignal()  # Scan command
@@ -993,11 +1008,8 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox.stop.connect(self._stop)
 
         # Emit frame sizes so we know if we need to change the buffer sizes
-        self.ScanGroupBox.changed.connect(
-            lambda: self.scan_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
-        self.ProcessingGroupBox.changed.connect(
-            lambda: self.processing_changed.emit(self.raw_frame_size(), self.processed_frame_size()))
-
+        self.ScanGroupBox.changed.connect(self.scan_changed.emit)
+        self.ProcessingGroupBox.changed.connect(lambda: self.processing_changed.emit(self.unprocessed_frame_size(), self.processed_frame_size()))
         self._showRepeatProcessing()
 
     def loadConfiguration(self, file=None):
@@ -1100,7 +1112,10 @@ class MainWindow(QMainWindow, UiWidget):
     def frame_averaging(self) -> int:
         return self.ProcessingGroupBox.frame_averaging()
 
-    def raw_frame_size(self) -> int:
+    def uncropped_frame_size(self) -> int:
+        return self.scan_pattern().n_triggers
+
+    def unprocessed_frame_size(self) -> int:
         return self.scan_pattern().total_number_of_alines * self.aline_size()
 
     def processed_frame_size(self) -> int:
@@ -1189,9 +1204,15 @@ class MainWindow(QMainWindow, UiWidget):
     def trigger_gain(self) -> float:
         return self._settings_dialog.spinTriggerGain.value()
 
-    def trigger_gain(self) -> float:
-        return self._settings_dialog.spinTriggerGain.value()
-
     def scan_scale_factors(self) -> (float, float):
         return (self._settings_dialog.spinXScaleFactor.value(),
                 self._settings_dialog.spinYScaleFactor.value())
+
+    def alines_per_buffer(self) -> int:
+        """The number of A-lines per frame trigger pulse."""
+        if self.ScanGroupBox.blines_triggered():
+            assert self.uncropped_frame_size() % self.scan_pattern().dimensions[1] == 0,\
+                'Total A-lines triggered not evenly divisible by number of B-lines'
+            return int(self.uncropped_frame_size() / self.scan_pattern().dimensions[1])
+        else:
+            return self.uncropped_frame_size()

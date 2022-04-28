@@ -116,7 +116,7 @@ public:
 
 	long lock_out_wait(int n, T** buffer)
 	{
-		printf("CircAcqBuffer: Attempting to lock out %i.\n", n);
+		// printf("CircAcqBuffer: Attempting to lock out %i.\n", n);
 		while (locked.load() != -1);  // Only one buffer can be locked out at a time
 		int got = -1;
 		int requested = mod2(n, ring_size);
@@ -150,7 +150,7 @@ public:
 	T* lock_out_head()
 	{
 		while (!locks[head].try_lock());
-		printf("CircAcqBuffer: Locked out %i for writing.\n", head);
+		// printf("CircAcqBuffer: Locked out %i for writing.\n", head);
 		return ring[head]->arr;
 	}
 
@@ -161,7 +161,7 @@ public:
 		int oldhead = head;
 		head = mod2(head + 1, ring_size);
 		locks[oldhead].unlock();
-		printf("CircAcqBuffer: Released %i.\n", oldhead);
+		// printf("CircAcqBuffer: Released %i.\n", oldhead);
 		return oldhead;
 	}
 
