@@ -189,9 +189,9 @@ class _AppContext(ApplicationContext):
                   self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
             self.controller.configure_image(
                 aline_size=self.window.aline_size(),
-                alines_in_scan=pat.alines_in_scan,
+                alines_in_scan=pat.points_in_scan,
                 image_mask=pat.image_mask,
-                alines_in_image=pat.total_number_of_alines,
+                alines_in_image=pat.points_in_image,
                 alines_per_bline=pat.dimensions[0],
                 alines_per_buffer=self.window.alines_per_buffer(),
                 x_scan_signal=scan_x,
@@ -252,7 +252,7 @@ class _AppContext(ApplicationContext):
             self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate * 1000))
         self.controller.start_acquisition(
             self.window.filename(),
-            self.window.file_max_bytes(),
+            self.window.file_max_gb(),
             self.window.frames_to_acquire()
         )
 

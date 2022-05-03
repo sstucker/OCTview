@@ -561,10 +561,10 @@ class FileGroupBox(QGroupBox, UiWidget):
         self.lineDirectory.setText(self._directory)
 
     def directory(self) -> str:
-        return self._directory
+        return self.lineDirectory.text()
 
     def trial(self) -> str:
-        return self._file_name
+        return self.lineFileName.text()
 
     def filename(self):
         return os.path.join(self.directory(), self.trial())
@@ -575,13 +575,13 @@ class FileGroupBox(QGroupBox, UiWidget):
     def filetype(self):
         return self.comboFileType.currentIndex()
 
-    def max_bytes(self) -> int:
+    def max_gb(self) -> float:
         txt = self.comboFileSize.currentText()
         units = {
-            'MB': np.longlong(1048576),
-            'GB': np.longlong(1073741824),
+            'MB': 0.001,
+            'GB': 1.0,
         }
-        return units[txt.split(' ')[1]] * np.longlong(int(txt.split(' ')[0]))
+        return units[txt.split(' ')[1]] * float(int(txt.split(' ')[0]))
 
 
 class ProcessingGroupBox(QGroupBox, UiWidget):
@@ -1113,14 +1113,14 @@ class MainWindow(QMainWindow, UiWidget):
         return self.ProcessingGroupBox.frame_averaging()
 
     def uncropped_frame_size(self) -> int:
-        return self.scan_pattern().n_triggers
+        return self.scan_pattern().points_in_scan
 
     def unprocessed_frame_size(self) -> int:
-        return self.scan_pattern().total_number_of_alines * self.aline_size()
+        return self.scan_pattern().points_in_image * self.aline_size()
 
     def processed_frame_size(self) -> int:
         try:
-            processed_frame_size = self.roi_size() * self.scan_pattern().total_number_of_alines
+            processed_frame_size = self.roi_size() * self.scan_pattern().points_in_image
             if self.aline_repeat_processing() is not None:
                 processed_frame_size = int(processed_frame_size / self.scan_pattern().aline_repeat)
             if self.bline_repeat_processing() is not None:
@@ -1187,13 +1187,14 @@ class MainWindow(QMainWindow, UiWidget):
     def frames_to_acquire(self) -> int:
         return self.ControlGroupBox.frames_to_acquire()
 
-    def file_max_bytes(self) -> np.longlong:
-        return self.FileGroupBox.max_bytes()
+    def file_max_gb(self) -> float:
+        return self.FileGroupBox.max_gb()
 
     def filename(self) -> str:
         return self.FileGroupBox.filename()
 
     def display_frame(self, frame: np.ndarray):
+        """Display a 3D frame using the display widgets."""
         fov = np.array(self.scan_pattern().fov) * 10**-3
         fov = np.concatenate([[self._settings_dialog.spinAxialPixelSize.value() * self.roi_size() * 10**-6], fov])
         self.DisplayWidget.display_frame(frame, fov=fov)

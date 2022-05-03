@@ -88,7 +88,7 @@ struct StateMsg {
 	ScanPattern* scanpattern;
 	const char* file_name;
 	int file_type;
-	long long max_bytes;
+	float max_gb;
 	int n_frames_to_acquire;
 };
 
@@ -252,7 +252,7 @@ inline void plan_acq_copy(bool* image_mask)
 					}
 					else  // Block has ended
 					{
-						// printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
+						printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
 						blocks_in_buffer.push_back(std::tuple<int, int>{ offset * aline_size, size * aline_size });
 						offset = -1;
 						size = 0;
@@ -289,6 +289,7 @@ inline void recv_msg()
 			{
 				restart = true;
 				stop_scanning();
+				current_state = state.load();  // Get our state again (will be READY if stop_scanning was successful)
 			}
 			if (current_state == STATE_READY || current_state == STATE_OPEN)
 			{
@@ -494,11 +495,11 @@ inline void recv_msg()
 			{
 				if (msg.n_frames_to_acquire > -1)
 				{
-					start_streaming(msg.file_name, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, aline_size, alines_in_image, msg.n_frames_to_acquire);
+					start_streaming(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size, alines_in_image, msg.n_frames_to_acquire);
 				}
 				else
 				{
-					start_streaming(msg.file_name, msg.max_bytes, (FileStreamType)msg.file_type, processed_image_buffer, aline_size, alines_in_image);
+					start_streaming(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size, alines_in_image);
 				}
 				state.store(STATE_ACQUIRIING);
 				delete[] msg.file_name;
@@ -590,7 +591,7 @@ void _main()
 						{
 							memcpy(raw_frame_roi + buffer_copy_p, locked_out_addr + std::get<0>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) * sizeof(uint16_t));
  							buffer_copy_p += std::get<1>(roi_cpy_map[i_buf][j]);
-							printf("Copying %i voxels (%i A-lines) from offset %i to buffer at position %i (%i A-lines) of %i\n", std::get<1>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) / aline_size, std::get<0>(roi_cpy_map[i_buf][j]), buffer_copy_p, buffer_copy_p / aline_size, alines_in_image * aline_size);
+							// printf("Copying %i voxels (%i A-lines) from buffer %i, offset %i to buffer at position %i (%i A-lines) of %i\n", std::get<1>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) / aline_size, i_buf, std::get<0>(roi_cpy_map[i_buf][j]), buffer_copy_p, buffer_copy_p / aline_size, alines_in_image * aline_size);
 						}
 					}
 					else
@@ -679,7 +680,7 @@ void _main()
 				{
 					spins += 1;
 				}
-				printf("fastnisdoct: A-line processing pool finished with frame %i. Spun %i times.\n", cumulative_frame_number, spins);
+				// printf("fastnisdoct: A-line processing pool finished with frame %i. Spun %i times.\n", cumulative_frame_number, spins);
 
 				// printf("A-line averaging: %i/%i, B-line averaging: %i/%i, Frame averaging %i\n", n_aline_repeat, a_rpt_proc_flag, n_bline_repeat, b_rpt_proc_flag, n_frame_avg);
 
@@ -871,14 +872,14 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_start_raw_acquisition(
 		const char* file,
-		long long max_bytes,
+		float max_gb,
 		int n_frames_to_acquire
 	)
 	{
 		StateMsg msg;
 		msg.file_name = new char[512];
 		memcpy((void*)msg.file_name, file, strlen(file) * sizeof(char) + 1);
-		msg.max_bytes = max_bytes;
+		msg.max_gb = max_gb;
 		msg.file_type = FSTREAM_TYPE_RAW;
 		msg.n_frames_to_acquire = n_frames_to_acquire;
 		msg.flag = MSG_START_ACQUISITION;

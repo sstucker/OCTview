@@ -33,7 +33,7 @@ class NIOCTController:
                                                       c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c_double_p,
                                                       c_double_p, c_double_p, c_double_p, c.c_long, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
-        self._lib.nisdoct_start_raw_acquisition.argtypes = [c.c_char_p, c.c_longlong, c.c_int]
+        self._lib.nisdoct_start_raw_acquisition.argtypes = [c.c_char_p, c.c_float, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
         self._lib.nisdoct_grab_spectrum.argtypes = [c_float_p]
 
@@ -189,19 +189,19 @@ class NIOCTController:
         """Stops scanning."""
         self._lib.nisdoct_stop_scan()
 
-    def start_acquisition(self, file: str, max_bytes: np.longlong, frames_to_acquire: int = -1):
+    def start_acquisition(self, file: str, max_gb: float, frames_to_acquire: int = -1):
         """Starts streaming arrays to disk at the path supplied by file.
 
         Only successful if the controller is scanning.
 
         Args:
             file: Path on disk.
-            max_bytes: Maximum size of each file before starting a new one.
+            max_gb: Maximum number of gigabytes to write to a single file before starting a new one.
             frames_to_acquire: The number of frames to acquire. If -1, acquisition continues until `stop_acquisition` is called.
         """
         self._lib.nisdoct_start_raw_acquisition(
             bytes(file, encoding='utf8'),
-            np.longlong(max_bytes),
+            float(max_gb),
             int(frames_to_acquire)
         )
 
