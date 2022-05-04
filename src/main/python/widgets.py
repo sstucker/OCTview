@@ -531,12 +531,12 @@ class ScanDisplayWindow(QFrame):
 
         exp = np.zeros(len(pattern.x)).astype(np.int32)
         exp[pattern.line_trigger.astype(bool)] = 1
-        x_pts = pattern.x
-        y_pts = pattern.y
+        x_pts = pattern.positions[:, 0]
+        y_pts = pattern.positions[:, 1]
         self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=1, color='#FEFEFE'),
                                 antialias=True, autodownsample=True, skipFiniteCheck=True)
-        self._scan_points_item.setData(x=x_pts, y=y_pts, connect=exp,
-                                       pen=pyqtgraph.mkPen(width=1, color='r', capstyle='round'), antialias=True,
+        self._scan_points_item.setData(x=x_pts, y=y_pts,
+                                       pen=None, symbol='o', symbolSize=2, antialias=False,
                                        autodownsample=True, skipFiniteCheck=True)
 
         self.show()
@@ -546,7 +546,6 @@ class FileGroupBox(QGroupBox, UiWidget):
 
     def __init__(self):
         super().__init__()
-        # self.setFixedSize(self.minimumSize())
 
         self._directory: str = os.getcwd()
         self._file_name: str = 'default_trial_name'
@@ -556,15 +555,19 @@ class FileGroupBox(QGroupBox, UiWidget):
 
         self.buttonBrowse.pressed.connect(self._browseForDirectory)
 
+        # TODO implement filetype...
+        self.comboFileType.setVisible(False)
+        self.labelFileType.setVisible(False)
+        self.checkMetadata.setVisible(False)
+
     def _browseForDirectory(self):
-        self._directory = str(QFileDialog.getExistingDirectory(self, "Select Experiment Directory", self._directory))
-        self.lineDirectory.setText(self._directory)
+        self.lineDirectory.setText(str(QFileDialog.getExistingDirectory(self, "Select Experiment Directory", self.lineDirectory.text())))
 
     def directory(self) -> str:
-        return self.lineDirectory.text()
+        return os.path.normpath(self.lineDirectory.text())
 
     def trial(self) -> str:
-        return self.lineFileName.text()
+        return "".join(c for c in self.lineFileName.text() if c.isalnum() or c in "_- ")
 
     def filename(self):
         return os.path.join(self.directory(), self.trial())
@@ -630,10 +633,6 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.groupFrameProcessing.setEnabled(not scanning)
         self.groupARepeatProcessing.setEnabled(not scanning)
         self.groupBRepeatProcessing.setEnabled(not scanning)
-        self.checkFFT.setEnabled(not scanning)
-
-    def enabled(self):
-        return self.isChecked()
 
     def background_subtraction(self):
         return self.checkMeanSpectrumSubtraction.isChecked()
@@ -685,7 +684,7 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
     def __init__(self, wavelengths, yrange=[0, 4096]):
         super().__init__()
 
-        self.resize(100, 200)
+        self.resize(200, 100)
         # self.setFixedSize(self.minimumSize())
 
         self._wavelengths = wavelengths
@@ -753,11 +752,10 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
     def __init__(self, title=None, hslider=False, vslider=False):
         super().__init__()
 
-        # self.setFixedSize(self.minimumSize())
-        # self.resize(100, 100)
-
         self._plot = self.addPlot()
         self.setFixedSize(360, 360)
+
+        self._slice_not_set = True
 
         self._plot.setAspectLocked(True)
         self._plot.showGrid(x=True, y=True)
@@ -793,8 +791,6 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self._sf = [1, 1]
         self._data_shape = [0, 0]
 
-        self._setSlice()
-
     def setVSliderHidden(self, hidden: bool):
         if self._vslider is not None:
             if hidden:
@@ -814,17 +810,21 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         sfx = (1 / self._data_shape[0]) * dx
         sfy = (1 / self._data_shape[1]) * dy
         self._sf = [sfx, sfy]
+        # print('Scaling image with shape', self._data_shape, 'by', self._sf)
         if self._vslider is not None:
             self._vslider.setBounds([0, self._sf[0] * self._data_shape[0]])
         if self._hslider is not None:
             self._hslider.setBounds([0, self._sf[1] * self._data_shape[1]])
-        self._image.scale(sfx, sfy)
+        self._image.scale(self._sf[0], self._sf[1])
 
     def updateData(self, image, fov=None):
         self._data_shape = image.shape
         if fov is not None:
             self.setAspect(fov[0], fov[1])
         self._image.setImage(image)
+        if self._slice_not_set:
+            self._setSlice()
+            self._slice_not_set = False
 
     def _setSlice(self):
         if self._hslider is not None:
@@ -865,6 +865,8 @@ class DisplayWidget(QWidget, UiWidget):
         self.checkEnfaceProjection.toggled.connect(self._enfaceProjectionCheckChanged)
         self.checkBScanProjection.toggled.connect(self._updateEnfaceSliders)
         self.radioViewX.toggled.connect(self._updateEnfaceSliders)
+        self._updateEnfaceSliders()
+        self._enfaceProjectionCheckChanged()
 
     def _enfaceProjectionCheckChanged(self):
         self._bscan.setHSliderHidden(self.checkEnfaceProjection.isChecked())
@@ -932,6 +934,7 @@ class SpectrumWidget(QWidget, UiWidget):
     def __init__(self):
         super().__init__()
         replaceWidget(self.SpectrumPlotWidget, SpectrumPlotWidget(np.arange(0, 2048)))
+        self.setMaximumHeight(200)
 
     def plot(self, spectrum: np.ndarray):
         self.SpectrumPlotWidget.plot(spectrum)
@@ -991,7 +994,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.ControlGroupBox = self.centralWidget.ControlGroupBox
 
         self.statusBar().setSizeGripEnabled(False)
-        self.setFixedSize(self.minimumSize())
+        self.setMaximumSize(self.minimumSize())
 
         self.ScanGroupBox.changed.connect(self._showRepeatProcessing)
 
@@ -1012,19 +1015,19 @@ class MainWindow(QMainWindow, UiWidget):
         self.ProcessingGroupBox.changed.connect(lambda: self.processing_changed.emit(self.unprocessed_frame_size(), self.processed_frame_size()))
         self._showRepeatProcessing()
 
-    def loadConfiguration(self, file=None):
-        if file is None:
-            file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
+    def loadConfiguration(self, cfg_file=None):
+        if cfg_file is None:
+            cfg_file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
                                                "OCTview configuration file (*.oct)")[0]
-        if os.path.exists(file):
-            self.loadStateFromJson(file)
+        if os.path.exists(cfg_file):
+            self.loadStateFromJson(cfg_file)
             self.launch.emit()
 
     def saveConfiguration(self):
-        file = QFileDialog.getSaveFileName(self, "Save Configuration File", OCTview.config_resource_location,
+        cfg_file = QFileDialog.getSaveFileName(self, "Save Configuration File", OCTview.config_resource_location,
                                            "OCTview configuration file (*.oct)")[0]
-        if len(file) > 0:
-            self.writeStateToJson(file)
+        if len(cfg_file) > 0:
+            self.writeStateToJson(cfg_file)
 
     # Overload
     def closeEvent(self, event):

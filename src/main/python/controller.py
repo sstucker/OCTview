@@ -125,13 +125,15 @@ class NIOCTController:
             line_rate (int): Line rate. Should be evenly divisible into `signal_output_rate`.
         """
         a_rpt_proc_flag = 0
+        if aline_repeat_processing == 'average' or aline_repeat_processing == 1:
+            a_rpt_proc_flag = 1
+        elif aline_repeat_processing == 'difference' or aline_repeat_processing == 2:
+            a_rpt_proc_flag = 2
         b_rpt_proc_flag = 0
-        for rpt_proc, flag in zip((aline_repeat_processing, bline_repeat_processing),
-                                  (a_rpt_proc_flag, a_rpt_proc_flag)):
-            if rpt_proc == 'average' or rpt_proc == 1:
-                flag = 1
-            elif rpt_proc == 'difference' or rpt_proc == 2:
-                flag = 2
+        if bline_repeat_processing == 'average' or aline_repeat_processing == 1:
+            b_rpt_proc_flag = 1
+        elif bline_repeat_processing == 'difference' or aline_repeat_processing == 2:
+            b_rpt_proc_flag = 2
         if roi_size is None:
             roi_size = aline_size
         self._lib.nisdoct_configure_image(

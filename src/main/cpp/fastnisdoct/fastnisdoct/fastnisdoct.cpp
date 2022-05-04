@@ -42,9 +42,9 @@ DEFINE_ENUM_FLAG_OPERATORS(OCTState);
 
 enum RepeatProcessingType
 {
-	REPEAT_PROCESSING_NONE = 1,
-	REPEAT_PROCESSING_MEAN = 2,
-	REPEAT_PROCESSING_DIFF = 3
+	REPEAT_PROCESSING_NONE = 0,
+	REPEAT_PROCESSING_MEAN = 1,
+	REPEAT_PROCESSING_DIFF = 2
 };
 DEFINE_ENUM_FLAG_OPERATORS(RepeatProcessingType);
 
@@ -104,7 +104,7 @@ std::atomic_int state = STATE_UNOPENED;
 int32_t alines_in_scan = 0;  // Number of A-lines in the scan of a single frame prior to the discarding of non image-forming A-lines.
 int32_t alines_in_image = 0;  // Number of A-lines included in the image. alines_in_scan - alines_in_image A-lines are discarded.
 
-int64_t preprocessed_frame_size = 0;  // Total number of voxels in the entire frame of raw spectra
+int64_t preprocessed_alines_size = 0;  // Total number of voxels in the entire frame of raw spectra
 int64_t processed_alines_size = 0;  // Number of complex-valued voxels in the frame after A-line processing has been carried out. Includes repeated A-lines, B-lines and frames.
 int64_t processed_frame_size = 0;  // Number of complex-valued voxels in the frame after inter A-line processing has been carried out: No repeats.
 
@@ -152,6 +152,12 @@ bool interp = false;  // If true, first order linear interpolation is used to ap
 double interpdk = 0.0;  // Coefficient of first order linear-in-wavelength approximation.
 
 
+inline void stop_acquisition()
+{
+	stop_streaming();
+	state.store(STATE_SCANNING);
+}
+
 inline void start_scanning()
 {
 	aline_proc_pool->start();
@@ -172,6 +178,10 @@ inline void stop_scanning()
 {
 	if (ni::stop_scan() == 0)
 	{
+		if (state.load() == STATE_ACQUIRIING)
+		{
+
+		}
 		if (state.load() == STATE_SCANNING)
 		{
 			printf("fastnisdoct: Stopping scan!\n");
@@ -252,7 +262,7 @@ inline void plan_acq_copy(bool* image_mask)
 					}
 					else  // Block has ended
 					{
-						printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
+						// printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
 						blocks_in_buffer.push_back(std::tuple<int, int>{ offset * aline_size, size * aline_size });
 						offset = -1;
 						size = 0;
@@ -354,13 +364,13 @@ inline void recv_msg()
 				}
 
 				// -- Allocate processing buffers if they have changed size --------------------------------------------------------------------------
-				if (msg.aline_size * msg.alines_in_image != preprocessed_frame_size)
+				if (msg.aline_size * msg.alines_in_image != preprocessed_alines_size)
 				{
-					preprocessed_frame_size = msg.aline_size * msg.alines_in_image;
+					preprocessed_alines_size = msg.aline_size * msg.alines_in_image;
 					delete[] raw_frame_roi;
 					delete[] raw_frame_roi_new;
-					raw_frame_roi = new uint16_t[preprocessed_frame_size];
-					raw_frame_roi_new = new uint16_t[preprocessed_frame_size];
+					raw_frame_roi = new uint16_t[preprocessed_alines_size];
+					raw_frame_roi_new = new uint16_t[preprocessed_alines_size];
 				}
 				
 				// Allocate rings
@@ -375,11 +385,11 @@ inline void recv_msg()
 
 				// Processed frame size is smaller than processed A-lines size if A-lines or frames are combined via averaging or differencing
 				processed_frame_size = processed_alines_size;
-				if (a_rpt_proc_flag > REPEAT_PROCESSING_NONE)
+				if (msg.a_rpt_proc_flag > REPEAT_PROCESSING_NONE)
 				{
 					processed_frame_size /= msg.n_aline_repeat;
 				}
-				if (b_rpt_proc_flag > REPEAT_PROCESSING_NONE)
+				if (msg.b_rpt_proc_flag > REPEAT_PROCESSING_NONE)
 				{
 					processed_frame_size /= msg.n_bline_repeat;
 				}
@@ -390,7 +400,7 @@ inline void recv_msg()
 				b_rpt_proc_flag = msg.b_rpt_proc_flag;
 
 				printf("fastnisdoct: Image configured: Number of A-lines: %i\n", alines_in_image);
-				printf("fastnisdoct: Image configured: raw frame size: %i, processed frame size: %i\n", preprocessed_frame_size, processed_frame_size);
+				printf("fastnisdoct: Image configured: raw frame size: %i, processed frame size: %i\n", preprocessed_alines_size, processed_frame_size);
 
 				// -- Predetermine indices to minimize copy operations  --------------------------------------------------------------------------
 				plan_acq_copy(msg.image_mask);
@@ -419,13 +429,11 @@ inline void recv_msg()
 				{
 					state.store(STATE_READY);
 				}
-
 			}
 			else
 			{
 				printf("fastnisdoct: Cannot configure image! Not OPEN or READY.\n");
 			}
-
 			if (restart)
 			{
 				start_scanning();
@@ -436,7 +444,6 @@ inline void recv_msg()
 			printf("fastnisdoct: MSG_CONFIGURE_PROCESSING received\n");
 			if (image_configured)  // Image must be configured before processing can be configured
 			{
-
 				if (state.load() != STATE_SCANNING)  // If not scanning, update everything and reinitialize the A-line ThreadPool and processing buffers
 				{
 					state.store(STATE_OPEN);
@@ -510,8 +517,7 @@ inline void recv_msg()
 			printf("fastnisdoct: MSG_STOP_ACQUISITION received\n");
 			if (state.load() == STATE_ACQUIRIING)
 			{
-				stop_streaming();
-				state.store(STATE_SCANNING);
+				stop_acquisition();
 			}
 		}
 	}
@@ -536,6 +542,11 @@ void _main()
 	state.store(STATE_OPEN);
 	while (main_running)
 	{
+		if (state.load() == STATE_ACQUIRIING && is_streaming() == false)  // If acquisition has finished, stop
+		{
+			state = STATE_SCANNING;
+			stop_scanning();
+		}
 		recv_msg();
 		auto current_state = state.load();
 		if (current_state == STATE_UNOPENED || current_state == STATE_OPEN || current_state == STATE_READY)

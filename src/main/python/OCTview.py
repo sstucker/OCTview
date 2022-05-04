@@ -65,7 +65,7 @@ class _AppContext(ApplicationContext):
         # Load the window's state from .last JSON
         # Will emit all the signals but we have not connected them yet
 
-        self.window.loadConfiguration(file=os.path.join(self.config_resource_location, '.last'))
+        self.window.loadConfiguration(cfg_file=os.path.join(self.config_resource_location, '.last'))
 
         # ... Do anything else before backend setup
 

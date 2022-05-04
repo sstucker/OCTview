@@ -84,7 +84,6 @@ public:
 			}
 			fout.write((char*)f, n);
 			to_be_written -= n;
-			printf("To be written %li\n", to_be_written);
 		}
 		if (!fout) {
 			std::cout << "Failed to write to file: " << strerror(errno) << '\n';
@@ -106,6 +105,7 @@ public:
 
 std::thread _thread;
 std::atomic_bool _running = ATOMIC_VAR_INIT(false);
+std::atomic_bool _finished = ATOMIC_VAR_INIT(true);
 CircAcqBuffer<fftwf_complex>* _buffer;
 
 char _file_name[ 512 ];
@@ -136,12 +136,13 @@ void _fstream()
 
 	int frames_in_current_file = 0;
 	int file_name_inc = 0;
+	int n_streamed = 0;
 
 	// Get (a)head of buffer
 	int latest_frame_n = _buffer->get_count() + 1;
 
 	// Stream continuously to various files or until _n_to_stream is reached
-	while (_running.load())
+	while (_running.load() && (_n_to_stream > n_streamed || _n_to_stream == -1))
 	{
 		n_got = _buffer->lock_out_wait(latest_frame_n, &frame);
 		if (latest_frame_n == n_got)
@@ -170,11 +171,12 @@ void _fstream()
 					// Append to file
 					writer->writeFrame(frame, _alines_per_frame * (long)_aline_size * sizeof(fftwf_complex));
 					frames_in_current_file += 1;
+					n_streamed += 1;
 				}
 				else if (frames_in_current_file < _n_to_stream)  // Streaming n
 				{
 					writer->writeFrame(frame, _alines_per_frame * (long)_aline_size * sizeof(fftwf_complex));
-					frames_in_current_file += 1;
+					n_streamed += 1;
 				}
 				else
 				{
@@ -208,6 +210,7 @@ void _fstream()
 		writer->close();
 	}
 	delete writer;
+	_finished = true;
 }
 
 
@@ -222,7 +225,7 @@ inline int _start
 	int n_to_stream
 )
 {
-	if (_running.load())
+	if (_running.load() || !_finished.load())
 	{
 		return -1;
 	}
@@ -237,6 +240,11 @@ inline int _start
 	_running = true;
 	printf("Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
 	_thread = std::thread(&_fstream);  // Start the thread
+}
+
+bool is_streaming()
+{
+	return _running.load();
 }
 
 int start_streaming
