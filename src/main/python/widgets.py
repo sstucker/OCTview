@@ -649,17 +649,13 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
             return self._null_window
 
     def a_repeat_processing(self):
-        if self.radioARepeatNone.isChecked():
-            return None
-        elif self.radioARepeatAverage.isChecked():
+        if self.radioARepeatAverage.isChecked():
             return 'average'
         else:
             return None
 
     def b_repeat_processing(self):
-        if self.radioBRepeatNone.isChecked():
-            return None
-        elif self.radioBRepeatAverage.isChecked():
+        if self.radioBRepeatAverage.isChecked():
             return 'average'
         elif self.radioBRepeatDifference.isChecked():
             return 'difference'
@@ -829,8 +825,8 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         else:
             n = image.size
         # pyqtgraph auto levels doesn't work for images >= 2**16
-        self._image.setImage(image, levels=[np.nanmin(np.random.choice(image.flatten(), n)),
-                                            np.nanmax(np.random.choice(image.flatten(), n))])
+        self._image.setImage(image, levels=[np.nanmin(image),
+                                            np.nanmax(image)])
         if self._slice_not_set:
             self._setSlice()
             self._slice_not_set = False
@@ -1127,10 +1123,16 @@ class MainWindow(QMainWindow, UiWidget):
         return self.ProcessingGroupBox.apodization_window()(self.aline_size())
 
     def aline_repeat_processing(self) -> str:
-        return self.ProcessingGroupBox.a_repeat_processing()
+        if self.scan_pattern().aline_repeat > 1:
+            return self.ProcessingGroupBox.a_repeat_processing()
+        else:
+            return 0
 
     def bline_repeat_processing(self) -> str:
-        return self.ProcessingGroupBox.b_repeat_processing()
+        if self.scan_pattern().bline_repeat > 1:
+            return self.ProcessingGroupBox.b_repeat_processing()
+        else:
+            return 0
 
     def frame_averaging(self) -> int:
         return self.ProcessingGroupBox.frame_averaging()
@@ -1220,12 +1222,15 @@ class MainWindow(QMainWindow, UiWidget):
         """Display a 3D frame using the display widgets."""
         fov = np.array(self.scan_pattern().fov) * 10**-3
         fov = np.concatenate([[self._settings_dialog.spinAxialPixelSize.value() * self.roi_size() * 10**-6], fov])
-        self.DisplayWidget.display_frame(frame, fov=fov)
+        t = Thread(target=self.DisplayWidget.display_frame, args=(frame, fov))
+        t.start()
+        # self.DisplayWidget.display_frame(frame, fov=fov)
 
     def display_spectrum(self, spectrum: np.ndarray):
         self.SpectrumWidget.plot(spectrum)
 
     def trigger_gain(self) -> float:
+        return self._settings_dialog.spinTriggerGain.value()
         return self._settings_dialog.spinTriggerGain.value()
 
     def scan_scale_factors(self) -> (float, float):

@@ -213,7 +213,7 @@ inline void set_up_processing_pool()
 	else
 	{
 		if ((aline_proc_pool->aline_size != aline_size) || (aline_proc_pool->number_of_alines != alines_in_image) ||
-			(aline_proc_pool->roi_offset != roi_offset) || (aline_proc_pool->roi_size != -roi_size))
+			(aline_proc_pool->roi_offset != roi_offset) || (aline_proc_pool->roi_size != roi_size))
 		{
 			delete aline_proc_pool;
 			aline_proc_pool = new AlineProcessingPool(aline_size, alines_in_image, roi_offset, roi_size, true);
@@ -305,10 +305,6 @@ inline void recv_msg()
 					printf("Allocating A-line-sized processing buffers with size %i\n", msg.aline_size);
 
 					// Allocate processing buffers
-					delete[] apodization_window;
-					apodization_window = new float[msg.aline_size];
-					memset(apodization_window, 1, msg.aline_size * sizeof(float));
-
 					delete[] background_spectrum;
 					delete[] background_spectrum_new;
 					background_spectrum = new float[msg.aline_size];
@@ -437,42 +433,36 @@ inline void recv_msg()
 		else if (msg.flag & MSG_CONFIGURE_PROCESSING)
 		{
 			printf("fastnisdoct: MSG_CONFIGURE_PROCESSING received\n");
-			if (image_configured)  // Image must be configured before processing can be configured
+			auto current_state = state.load();
+			if (current_state == STATE_ACQUIRIING)
 			{
-				if (state.load() != STATE_SCANNING)  // If not scanning, update everything and reinitialize the A-line ThreadPool and processing buffers
+				printf("fastnisdoct: Cannot configure processing during acquisition.\n");
+			}
+			else
+			{
+				processing_configured = false;
+
+				subtract_background = msg.subtract_background;
+				interp = msg.interp;
+				interpdk = msg.interpdk;
+				n_frame_avg = msg.n_frame_avg;
+
+				// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
+				delete[] apodization_window;
+				apodization_window = new float[msg.aline_size];
+				memcpy(apodization_window, msg.apod_window, msg.aline_size * sizeof(float));
+				delete[] msg.apod_window;
+				
+				// Can only attempt to set up processing pool if image params have been defined already. Otherwise pool gets set up then
+				if (image_configured)
 				{
-					state.store(STATE_OPEN);
-					processing_configured = false;
-
-					subtract_background = msg.subtract_background;
-					interp = msg.interp;
-					interpdk = msg.interpdk;
-					n_frame_avg = msg.n_frame_avg;
-
-					// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
-					memcpy(apodization_window, msg.apod_window, msg.aline_size * sizeof(float));
-					delete[] msg.apod_window;
-					
 					set_up_processing_pool();
-
 					processing_configured = true;
-					if (ready_to_scan() && state == STATE_OPEN)
-					{
-						state.store(STATE_READY);
-					}
 				}
-				else if (state.load() == STATE_ACQUIRIING)
+				// Transition to READY if necessary
+				if (ready_to_scan() && state == STATE_OPEN)
 				{
-					printf("fastnisdoct: Cannot configure processing duration acquisition.\n");
-				}
-				else  // If SCANNING, make real-time adjustments to apod window, background subtraction option, interpolation
-				{
-					subtract_background = msg.subtract_background;
-					interp = msg.interp;
-					interpdk = msg.interpdk;
-
-					// Apod window signal gets copied for safety(?)
-					memcpy(apodization_window, msg.apod_window, aline_size * sizeof(float));
+					state.store(STATE_READY);
 				}
 			}
 		}
@@ -705,13 +695,13 @@ void _main()
 								r[1] = 0;
 								for (int k = 0; k < n_aline_repeat; k++)
 								{
-									// printf("Getting sum from image[%i, %i]\n", b * alines_per_bline + x * n_aline_repeat + k, z);
+									// printf("A-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline + x * n_aline_repeat + k, z);
 									r[0] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][0];
 									r[1] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][1];
 								}
 								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_aline_repeat;
 								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_aline_repeat;
-								// printf("Assigning sum to image[%i, %i]\n", b * alines_per_bline_now + x, z);
+								// printf("A-line averaging: Assigning sum to image[%i, %i]\n", b * alines_per_bline_now + x, z);
 							}
 						}
 					}
@@ -737,9 +727,9 @@ void _main()
 									r[0] += processed_alines_addr[(b * alines_per_bline_now + x + k * alines_per_bline_now) * roi_size + z][0];
 									r[1] += processed_alines_addr[(b * alines_per_bline_now + x + k * alines_per_bline_now) * roi_size + z][1];
 								}
-								processed_alines_addr[(b * alines_per_bline_now / n_bline_repeat + x) * roi_size + z][0] = r[0] / n_bline_repeat;
-								processed_alines_addr[(b * alines_per_bline_now / n_bline_repeat + x) * roi_size + z][1] = r[1] / n_bline_repeat;
-								// printf("B-line averaging: assigning sum to image[%i, %i]\n", b * alines_per_bline_now / n_bline_repeat + x, z);
+								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_bline_repeat;
+								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_bline_repeat;
+								// printf("--->\nB-line averaging: assigning sum to image[%i, %i]\n\n", b * alines_per_bline_now + x, z);
 							}
 						}
 					}
