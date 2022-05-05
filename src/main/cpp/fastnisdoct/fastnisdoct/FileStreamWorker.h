@@ -49,12 +49,15 @@ private:
 
 public:
 
+	long long total_bytes_written;
+
 	void open(const char* name) override
 	{
 		fout.open(name, std::ios::out | std::ios::binary);
 		if (!fout) {
 			std::cout << "Failed to open file: " << strerror(errno) << '\n';
 		}
+		total_bytes_written = 0;
 	}
 
 	bool is_open() override
@@ -73,16 +76,20 @@ public:
 		QueryPerformanceCounter(&start);  // Time the frame processing to make sure we should be able to keep up
 
 		long to_be_written = frame_size;
+		long written = 0;
 		while (to_be_written > 0)
 		{
 			long n;
-			if (to_be_written >= WRITE_CHUNK_SIZE)
-				n = WRITE_CHUNK_SIZE;
+			if (to_be_written >= (long)WRITE_CHUNK_SIZE)
+			{
+				n = (long)WRITE_CHUNK_SIZE;
+			}
 			else
 			{
-				n = WRITE_CHUNK_SIZE - to_be_written;
+				n = to_be_written;
 			}
-			fout.write((char*)f, n);
+			fout.write((char*)f + written, n);
+			written += n;
 			to_be_written -= n;
 		}
 		if (!fout) {
@@ -93,10 +100,12 @@ public:
 		interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
 
 		printf("Wrote %li bytes to disk elapsed %f, %f GB/s, \n", frame_size, interval, ((double)frame_size / (double)BYTES_PER_GB) / (double)interval);
+		total_bytes_written += written;  // Increment file object's counter
 	}
 
 	void close() override
 	{
+		fout.flush();
 		fout.close();
 	}
 
@@ -117,12 +126,12 @@ int _aline_size;
 long _alines_per_frame;
 float _file_max_gb;
 int _n_to_stream;
+long _frame_size_bytes;
 
 
 void _fstream()
 {
-
-	int max_frames_per_file = (long long)(_file_max_gb * BYTES_PER_GB) / (long long)(_aline_size * _alines_per_frame * (int)sizeof(fftwf_complex));
+	int max_frames_per_file = (long long)((float)_file_max_gb * (float)BYTES_PER_GB) / _frame_size_bytes;
 	if (max_frames_per_file < 1)
 	{
 		max_frames_per_file = 1;
@@ -138,11 +147,11 @@ void _fstream()
 	int file_name_inc = 0;
 	int n_streamed = 0;
 
-	// Get (a)head of buffer
-	int latest_frame_n = _buffer->get_count() + 1;
+	// Get ahead of buffer to let galvos settle
+	int latest_frame_n = _buffer->get_count() + 5;
 
 	// Stream continuously to various files or until _n_to_stream is reached
-	while (_running.load() && (_n_to_stream > n_streamed || _n_to_stream == -1))
+	while (_running.load() && ((_n_to_stream > n_streamed) || (_n_to_stream == -1)))
 	{
 		n_got = _buffer->lock_out_wait(latest_frame_n, &frame);
 		if (latest_frame_n == n_got)
@@ -166,16 +175,11 @@ void _fstream()
 			}
 			else  // If file is open
 			{
-				if (_n_to_stream == -1)  // Indefinite stream
+				if ((_n_to_stream == -1) || (frames_in_current_file < _n_to_stream))  // Indefinite stream
 				{
 					// Append to file
-					writer->writeFrame(frame, _alines_per_frame * (long)_aline_size * sizeof(fftwf_complex));
+					writer->writeFrame(frame, _frame_size_bytes);
 					frames_in_current_file += 1;
-					n_streamed += 1;
-				}
-				else if (frames_in_current_file < _n_to_stream)  // Streaming n
-				{
-					writer->writeFrame(frame, _alines_per_frame * (long)_aline_size * sizeof(fftwf_complex));
 					n_streamed += 1;
 				}
 				else
@@ -214,10 +218,15 @@ void _fstream()
 }
 
 
+bool is_streaming()
+{
+	return _running.load() && !_finished.load();
+}
+
 inline int _start
 (
 	const char* fname,
-	int max_gb,
+	float max_gb,
 	FileStreamType ftype,
 	CircAcqBuffer<fftwf_complex>* buffer,
 	int aline_size,
@@ -225,32 +234,32 @@ inline int _start
 	int n_to_stream
 )
 {
-	if (_running.load() || !_finished.load())
+	if (is_streaming())
 	{
 		return -1;
 	}
-
+	if (_thread.joinable())
+	{
+		_thread.join();
+	}
+	_finished = false;
+	_running = true;
 	memcpy(_file_name, fname, strlen(fname) * sizeof(char) + 1);  // Copy string to module-managed buffer
 	_file_max_gb = max_gb;
 	_file_type = ftype;
 	_buffer = buffer;
 	_aline_size = aline_size;
 	_alines_per_frame = alines_per_frame;
+	_frame_size_bytes = aline_size * alines_per_frame * sizeof(fftwf_complex);
 	_n_to_stream = n_to_stream;
-	_running = true;
 	printf("Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
 	_thread = std::thread(&_fstream);  // Start the thread
-}
-
-bool is_streaming()
-{
-	return _running.load();
 }
 
 int start_streaming
 (
 	const char* fname,
-	long max_gb,
+	float max_gb,
 	FileStreamType ftype,
 	CircAcqBuffer<fftwf_complex>* buffer,
 	int aline_size,

@@ -178,27 +178,20 @@ inline void stop_scanning()
 {
 	if (ni::stop_scan() == 0)
 	{
-		if (state.load() == STATE_ACQUIRIING)
+		printf("fastnisdoct: Stopping scan!\n");
+		aline_proc_pool->terminate();
+		// Empty out the display queues
+		fftwf_complex* ip;
+		while (image_display_queue.dequeue(ip))
 		{
-
+			fftwf_free(ip);
 		}
-		if (state.load() == STATE_SCANNING)
+		float* sp;
+		while (spectrum_display_queue.dequeue(sp))
 		{
-			printf("fastnisdoct: Stopping scan!\n");
-			aline_proc_pool->terminate();
-			// Empty out the display queues
-			fftwf_complex* ip;
-			while (image_display_queue.dequeue(ip))
-			{
-				fftwf_free(ip);
-			}
-			float* sp;
-			while (spectrum_display_queue.dequeue(sp))
-			{
-				delete[] sp;
-			}
-			state.store(STATE_READY);
+			delete[] sp;
 		}
+		state.store(STATE_READY);
 	}
 	else
 	{
@@ -262,7 +255,7 @@ inline void plan_acq_copy(bool* image_mask)
 					}
 					else  // Block has ended
 					{
-						// printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
+						printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
 						blocks_in_buffer.push_back(std::tuple<int, int>{ offset * aline_size, size * aline_size });
 						offset = -1;
 						size = 0;
@@ -354,6 +347,8 @@ inline void recv_msg()
 					aline_size = msg.aline_size;
 					alines_in_scan = msg.alines_in_scan;
 					alines_in_image = msg.alines_in_image;
+					printf("A-lines in scan: %i\n", alines_in_scan);
+					printf("A-lines in image: %i\n", alines_in_image);
 					alines_per_bline = msg.alines_per_bline;
 					alines_per_buffer = msg.alines_per_buffer;
 				}
@@ -695,12 +690,62 @@ void _main()
 
 				// printf("A-line averaging: %i/%i, B-line averaging: %i/%i, Frame averaging %i\n", n_aline_repeat, a_rpt_proc_flag, n_bline_repeat, b_rpt_proc_flag, n_frame_avg);
 
-				// Perform A-line averaging or differencing
-				// Perform B-line averaging or differencing
+				fftwf_complex r;
+				int alines_per_bline_now;  // A-lines per B-line following A-line repeat processing
+				if (a_rpt_proc_flag > REPEAT_PROCESSING_NONE)  // A-line averaging
+				{
+					alines_per_bline_now = alines_per_bline / n_aline_repeat;
+					for (int b = 0; b < alines_in_image / alines_per_bline; b++)  // For each B-line in the preprocessed frames
+					{
+						for (int x = 0; x < alines_per_bline_now; x++)  // For each A-line in the reduced B-line
+						{
+							for (int z = 0; z < roi_size; z++)
+							{
+								r[0] = 0;
+								r[1] = 0;
+								for (int k = 0; k < n_aline_repeat; k++)
+								{
+									// printf("Getting sum from image[%i, %i]\n", b * alines_per_bline + x * n_aline_repeat + k, z);
+									r[0] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][0];
+									r[1] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][1];
+								}
+								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_aline_repeat;
+								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_aline_repeat;
+								// printf("Assigning sum to image[%i, %i]\n", b * alines_per_bline_now + x, z);
+							}
+						}
+					}
+				}
+				else
+				{
+					// If A-line repeats are left in the frame for B-line processing
+					alines_per_bline_now = alines_per_bline;
+				}
+				if (b_rpt_proc_flag > REPEAT_PROCESSING_NONE)  // B-line averaging
+				{
+					for (int b = 0; b < alines_in_image / alines_per_bline / n_bline_repeat; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
+					{
+						for (int x = 0; x < alines_per_bline_now; x++)  // For each element of each B-line
+						{
+							for (int z = 0; z < roi_size; z++)
+							{
+								r[0] = 0;
+								r[1] = 0;
+								for (int k = 0; k < n_bline_repeat; k++)
+								{
+									// printf("B-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline_now + x + k * alines_per_bline_now, z);
+									r[0] += processed_alines_addr[(b * alines_per_bline_now + x + k * alines_per_bline_now) * roi_size + z][0];
+									r[1] += processed_alines_addr[(b * alines_per_bline_now + x + k * alines_per_bline_now) * roi_size + z][1];
+								}
+								processed_alines_addr[(b * alines_per_bline_now / n_bline_repeat + x) * roi_size + z][0] = r[0] / n_bline_repeat;
+								processed_alines_addr[(b * alines_per_bline_now / n_bline_repeat + x) * roi_size + z][1] = r[1] / n_bline_repeat;
+								// printf("B-line averaging: assigning sum to image[%i, %i]\n", b * alines_per_bline_now / n_bline_repeat + x, z);
+							}
+						}
+					}
+				}
+				
 				// Perform frame averaging
-
-				// if (state.load() == STATE_ACQUIRING)
-				//		enqueue the frame with the StreamWorker
 
 				// Buffer an image for output to GUI
 				if (!image_display_queue.full())

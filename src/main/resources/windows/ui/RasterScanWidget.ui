@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>393</width>
-    <height>264</height>
+    <width>507</width>
+    <height>267</height>
    </rect>
   </property>
   <layout class="QGridLayout" name="gridLayout">
@@ -189,14 +189,11 @@
      </item>
      <item row="3" column="1">
       <widget class="QFrame" name="frameXProfile">
-       <layout class="QVBoxLayout" name="FastAxisProfile">
+       <layout class="QHBoxLayout" name="horizontalLayout">
         <item>
-         <widget class="QRadioButton" name="radioXSaw">
+         <widget class="QRadioButton" name="radioXStep">
           <property name="text">
-           <string>Sawtooth</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
+           <string>Step</string>
           </property>
           <property name="autoExclusive">
            <bool>true</bool>
@@ -204,9 +201,12 @@
          </widget>
         </item>
         <item>
-         <widget class="QRadioButton" name="radioXStep">
+         <widget class="QRadioButton" name="radioXSaw">
           <property name="text">
-           <string>Stepped</string>
+           <string>Saw</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
           </property>
           <property name="autoExclusive">
            <bool>true</bool>
@@ -338,14 +338,11 @@
      </item>
      <item row="3" column="1">
       <widget class="QFrame" name="frameYProfile">
-       <layout class="QVBoxLayout" name="SlowAxisProfile">
+       <layout class="QHBoxLayout" name="horizontalLayout_2">
         <item>
-         <widget class="QRadioButton" name="radioYSaw">
+         <widget class="QRadioButton" name="radioYStep">
           <property name="text">
-           <string>Sawtooth</string>
-          </property>
-          <property name="checked">
-           <bool>true</bool>
+           <string>Step</string>
           </property>
           <property name="autoExclusive">
            <bool>true</bool>
@@ -353,9 +350,12 @@
          </widget>
         </item>
         <item>
-         <widget class="QRadioButton" name="radioYStep">
+         <widget class="QRadioButton" name="radioYSaw">
           <property name="text">
-           <string>Stepped</string>
+           <string>Saw</string>
+          </property>
+          <property name="checked">
+           <bool>true</bool>
           </property>
           <property name="autoExclusive">
            <bool>true</bool>

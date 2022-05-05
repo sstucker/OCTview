@@ -196,22 +196,6 @@
        </widget>
       </item>
       <item>
-       <widget class="QRadioButton" name="radioARepeatDifference">
-        <property name="enabled">
-         <bool>true</bool>
-        </property>
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="text">
-         <string>Difference</string>
-        </property>
-       </widget>
-      </item>
-      <item>
        <widget class="QRadioButton" name="radioARepeatAverage">
         <property name="enabled">
          <bool>true</bool>

@@ -32,21 +32,22 @@
    <bool>false</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="3" column="1" colspan="2">
-    <widget class="QWidget" name="ScanWidget" native="true"/>
+   <item row="2" column="1" colspan="2">
+    <widget class="Line" name="line2">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
+   </item>
+   <item row="4" column="1" colspan="2">
+    <widget class="Line" name="line">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+    </widget>
    </item>
    <item row="5" column="1" colspan="2">
     <layout class="QGridLayout" name="grid1">
-     <item row="0" column="3" rowspan="2">
-      <widget class="QPushButton" name="pushPreview">
-       <property name="toolTip">
-        <string>Display the scan pattern positions and signals</string>
-       </property>
-       <property name="text">
-        <string>Display</string>
-       </property>
-      </widget>
-     </item>
      <item row="0" column="0">
       <widget class="QLineEdit" name="linePatternRate">
        <property name="sizePolicy">
@@ -54,6 +55,9 @@
          <horstretch>0</horstretch>
          <verstretch>0</verstretch>
         </sizepolicy>
+       </property>
+       <property name="autoFillBackground">
+        <bool>false</bool>
        </property>
        <property name="readOnly">
         <bool>true</bool>
@@ -69,19 +73,8 @@
      </item>
     </layout>
    </item>
-   <item row="2" column="1" colspan="2">
-    <widget class="Line" name="line2">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
-   </item>
-   <item row="4" column="1" colspan="2">
-    <widget class="Line" name="line">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-    </widget>
+   <item row="3" column="1" colspan="2">
+    <widget class="QWidget" name="ScanWidget" native="true"/>
    </item>
    <item row="1" column="1" colspan="2">
     <layout class="QGridLayout" name="grid2">
@@ -119,7 +112,7 @@
        <property name="sizeHint" stdset="0">
         <size>
          <width>0</width>
-         <height>12</height>
+         <height>4</height>
         </size>
        </property>
       </spacer>
@@ -248,6 +241,16 @@
       <widget class="QLabel" name="labelXOffset">
        <property name="text">
         <string>X offset</string>
+       </property>
+      </widget>
+     </item>
+     <item row="4" column="3">
+      <widget class="QPushButton" name="pushPreview">
+       <property name="toolTip">
+        <string>Display the scan pattern positions and signals</string>
+       </property>
+       <property name="text">
+        <string>Display</string>
        </property>
       </widget>
      </item>

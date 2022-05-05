@@ -16,6 +16,8 @@ import copy
 
 import OCTview
 
+MAX_2D_IMAGE_SIZE = 128 * 128
+
 
 def replaceWidget(old_widget: QWidget, new_widget: QWidget):
     """Replace a widget with another."""
@@ -318,7 +320,6 @@ class RasterScanWidget(ScanWidget, UiWidget):
         if self.checkARepeat.isChecked():
             self.checkBidirectional.setChecked(False)
             self.spinARepeat.setEnabled(True)
-            self.radioXStep.setChecked(True)
         else:
             self.spinARepeat.setEnabled(False)
 
@@ -418,6 +419,8 @@ class ScanGroupBox(QGroupBox, UiWidget):
         return self.pattern().frame_trigger
 
     def zroi(self):
+        self.spinZBottom.setMinimum(self.spinZTop.value() + 1)
+        self.spinZTop.setMaximum(self.spinZBottom.value() - 1)
         return self.spinZTop.value(), self.spinZBottom.value()
 
     def pattern(self):
@@ -619,15 +622,10 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
 
     def setARepeatProcessingDisplay(self, rpt: int):
         self.groupARepeatProcessing.setVisible(rpt > 1)
-        self.radioARepeatDifference.setVisible(rpt == 2)
-        if not rpt == 2 and self.radioARepeatDifference.isChecked():
-            self.radioARepeatNone.setChecked(True)
 
     def setBRepeatProcessingDisplay(self, rpt: int):
         self.groupBRepeatProcessing.setVisible(rpt > 1)
         self.radioBRepeatDifference.setVisible(rpt == 2)
-        if not rpt == 2 and self.radioARepeatDifference.isChecked():
-            self.radioBRepeatNone.setChecked(True)
 
     def toggleScanningMode(self, scanning: bool):
         self.groupFrameProcessing.setEnabled(not scanning)
@@ -655,8 +653,6 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
             return None
         elif self.radioARepeatAverage.isChecked():
             return 'average'
-        elif self.radioARepeatDifference.isChecked():
-            return 'difference'
         else:
             return None
 
@@ -753,7 +749,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         super().__init__()
 
         self._plot = self.addPlot()
-        self.setFixedSize(360, 360)
+        self.setFixedSize(340, 340)
 
         self._slice_not_set = True
 
@@ -791,6 +787,9 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self._sf = [1, 1]
         self._data_shape = [0, 0]
 
+    def unset(self):
+        self._slice_not_set = True
+
     def setVSliderHidden(self, hidden: bool):
         if self._vslider is not None:
             if hidden:
@@ -806,7 +805,10 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
                 self._hslider.show()
 
     def setAspect(self, dx, dy):
-        self._image.scale(1 / self._sf[0], 1 / self._sf[1])  # Undo any previous scaling
+        try:
+            self._image.scale(1 / self._sf[0], 1 / self._sf[1])  # Undo any previous scaling
+        except (ZeroDivisionError, RuntimeWarning):
+            pass
         sfx = (1 / self._data_shape[0]) * dx
         sfy = (1 / self._data_shape[1]) * dy
         self._sf = [sfx, sfy]
@@ -821,7 +823,14 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self._data_shape = image.shape
         if fov is not None:
             self.setAspect(fov[0], fov[1])
-        self._image.setImage(image)
+
+        if image.size > 64 * 64:
+            n = int(image.size / 4)  # TODO make this smarter
+        else:
+            n = image.size
+        # pyqtgraph auto levels doesn't work for images >= 2**16
+        self._image.setImage(image, levels=[np.nanmin(np.random.choice(image.flatten(), n)),
+                                            np.nanmax(np.random.choice(image.flatten(), n))])
         if self._slice_not_set:
             self._setSlice()
             self._slice_not_set = False
@@ -864,7 +873,7 @@ class DisplayWidget(QWidget, UiWidget):
 
         self.checkEnfaceProjection.toggled.connect(self._enfaceProjectionCheckChanged)
         self.checkBScanProjection.toggled.connect(self._updateEnfaceSliders)
-        self.radioViewX.toggled.connect(self._updateEnfaceSliders)
+        self.radioViewY.toggled.connect(self._updateEnfaceSliders)
         self._updateEnfaceSliders()
         self._enfaceProjectionCheckChanged()
 
@@ -876,7 +885,7 @@ class DisplayWidget(QWidget, UiWidget):
     def _updateEnfaceSliders(self):
         self.radioBScanMax.setEnabled(self.checkBScanProjection.isChecked())
         self.radioBScanMean.setEnabled(self.checkBScanProjection.isChecked())
-        if self.radioViewY.isChecked():
+        if self.radioViewX.isChecked():
             self._enface.setVSliderHidden(True)
             self._enface.setHSliderHidden(self.checkBScanProjection.isChecked())
         else:
@@ -892,6 +901,8 @@ class DisplayWidget(QWidget, UiWidget):
         """
         # print('Enface', self._enface.hslice, self._enface.vslice)
         # print('B-Scan', self._bscan.hslice, self._bscan.vslice)
+        if frame.ndim < 3:
+            raise IndexError("Only 3D frames can be displayed by DisplayWidget")
         if self.tabDisplay.currentIndex() == 0:  # If in 2D slicing mode
             if self.checkEnfaceProjection.isChecked():
                 if self.radioEnfaceMax.isChecked():
@@ -903,14 +914,19 @@ class DisplayWidget(QWidget, UiWidget):
             if self.checkDb.isChecked():
                 f = 20 * np.log10(f)
             self._enface.updateData(f, fov=(fov[1], fov[2]))
-            if self.radioViewY.isChecked():
+            if self.radioViewX.isChecked():
                 if self.checkBScanProjection.isChecked():
                     if self.radioBScanMax.isChecked():
                         f = np.max(np.abs(frame), axis=2)
                     else:
                         f = np.mean(np.abs(frame), axis=2)
                 else:
-                    f = np.abs(frame[:, :, self._enface.hslice])
+                    try:
+                        f = np.abs(frame[:, :, self._enface.hslice])
+                    except IndexError:
+                        f = np.abs(frame[:, :, 0])
+                        self._enface.unset()
+
                 dim = (fov[1], fov[0])
             else:  # if X
                 if self.checkBScanProjection.isChecked():
@@ -919,14 +935,18 @@ class DisplayWidget(QWidget, UiWidget):
                     else:
                         f = np.mean(np.abs(frame), axis=1)
                 else:
-                    f = np.abs(frame[:, self._enface.vslice, :])
+                    try:
+                        f = np.abs(frame[:, self._enface.vslice, :])
+                    except IndexError:
+                        f = np.abs(frame[:, 0, :])
+                        self._enface.unset()
                 dim = (fov[2], fov[0])
             if self.checkDb.isChecked():
                 f = 20 * np.log10(f)
             self._bscan.updateData(np.rot90(f), fov=dim)
         elif self.tabDisplay.currentIndex() == 1:  # If in volumetric render mode
             self._volume.updateData(np.abs(frame))
-        pyqtgraph.QtGui.QApplication.processEvents()
+        # pyqtgraph.QtGui.QApplication.processEvents()
 
 
 class SpectrumWidget(QWidget, UiWidget):

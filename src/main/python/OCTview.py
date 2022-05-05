@@ -6,6 +6,7 @@ import numpy as np
 import qdarkstyle
 from PyQt5.QtWidgets import QSplashScreen
 from PyQt5.QtCore import QTimer, Qt
+from PyQt5.QtGui import QFont
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
 
 from controller import NIOCTController
@@ -83,6 +84,7 @@ class _AppContext(ApplicationContext):
             self.app.setStyleSheet(qdarkstyle.load_stylesheet())
         else:
             self.app.setStyleSheet('')
+        self.app.setFont(QFont("Microsoft Sans Serif", 8))
 
         # Connect MainWindow interaction signals to backend interface
         self.window.scan.connect(self._start_scanning)
@@ -168,20 +170,11 @@ class _AppContext(ApplicationContext):
 
             scan_frame_trig = pat.frame_trigger * self.window.trigger_gain()
             scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
-            #
-            # t_frame_trig_start = np.where(scan_line_trig > 0)[0][0]
-            # t_frame_trig_end = np.where(scan_line_trig > 0)[0][-1]
 
-            # scan_frame_trig[t_frame_trig_start:t_frame_trig_end] = self.window.trigger_gain()
-            # scan_frame_trig[t_frame_trig_start-1:t_frame_trig_start+4] = self.window.trigger_gain()
-            #
             scan_line_trig = np.zeros(len(scan_line_trig)).astype(np.float64)
-            # scan_line_trig[0::2] = self.window.trigger_gain()
 
             # import matplotlib.pyplot as plt
-            # plt.plot(scan_line_trig)
-            # plt.plot(scan_frame_trig)
-            # plt.plot(scan_x)
+            # plt.stem(pat.image_mask)
             # plt.show()
 
             all_samples = np.concatenate([scan_y, scan_x])
