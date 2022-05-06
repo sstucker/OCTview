@@ -122,17 +122,17 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
-       <widget class="QLabel" name="labelYChName">
-        <property name="text">
-         <string>Y galvo</string>
-        </property>
-       </widget>
-      </item>
       <item row="0" column="1">
        <widget class="QLineEdit" name="lineXChName">
         <property name="text">
          <string>Dev1/ao1</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="labelYChName">
+        <property name="text">
+         <string>Y galvo</string>
         </property>
        </widget>
       </item>
@@ -150,20 +150,6 @@
         </property>
        </widget>
       </item>
-      <item row="4" column="0">
-       <widget class="QLabel" name="labelStartTrigChName">
-        <property name="text">
-         <string>Start trigger</string>
-        </property>
-       </widget>
-      </item>
-      <item row="3" column="0">
-       <widget class="QLabel" name="labelFrameTrigChName">
-        <property name="text">
-         <string>Frame trigger</string>
-        </property>
-       </widget>
-      </item>
       <item row="2" column="1">
        <widget class="QLineEdit" name="lineLineTrigChName">
         <property name="text">
@@ -172,16 +158,16 @@
        </widget>
       </item>
       <item row="3" column="1">
-       <widget class="QLineEdit" name="lineFrameTrigChName">
-        <property name="text">
-         <string>Dev1/ao3</string>
-        </property>
-       </widget>
-      </item>
-      <item row="4" column="1">
        <widget class="QLineEdit" name="lineStartTrigChName">
         <property name="text">
          <string>Dev1/ao4</string>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="labelStartTrigChName">
+        <property name="text">
+         <string>Start trigger</string>
         </property>
        </widget>
       </item>

@@ -801,10 +801,10 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
                 self._hslider.show()
 
     def setAspect(self, dx, dy):
-        try:
-            self._image.scale(1 / self._sf[0], 1 / self._sf[1])  # Undo any previous scaling
-        except (ZeroDivisionError, RuntimeWarning):
-            pass
+        if self._sf[0] <= 0 or self._sf[1] <= 0:
+            self._sf[0] = 1
+            self._sf[1] = 1
+        self._image.scale(1 / self._sf[0], 1 / self._sf[1])  # Undo any previous scaling
         sfx = (1 / self._data_shape[0]) * dx
         sfy = (1 / self._data_shape[1]) * dy
         self._sf = [sfx, sfy]
@@ -1203,9 +1203,6 @@ class MainWindow(QMainWindow, UiWidget):
     def analog_output_line_trig_ch_name(self) -> str:
         return self._settings_dialog.lineLineTrigChName.text()
 
-    def analog_output_frame_trig_ch_name(self) -> str:
-        return self._settings_dialog.lineFrameTrigChName.text()
-
     def analog_output_start_trig_ch_name(self) -> str:
         return self._settings_dialog.lineStartTrigChName.text()
 
@@ -1222,9 +1219,9 @@ class MainWindow(QMainWindow, UiWidget):
         """Display a 3D frame using the display widgets."""
         fov = np.array(self.scan_pattern().fov) * 10**-3
         fov = np.concatenate([[self._settings_dialog.spinAxialPixelSize.value() * self.roi_size() * 10**-6], fov])
-        t = Thread(target=self.DisplayWidget.display_frame, args=(frame, fov))
-        t.start()
-        # self.DisplayWidget.display_frame(frame, fov=fov)
+        # t = Thread(target=self.DisplayWidget.display_frame, args=(frame, fov))
+        # t.start()
+        self.DisplayWidget.display_frame(frame, fov=fov)
 
     def display_spectrum(self, spectrum: np.ndarray):
         self.SpectrumWidget.plot(spectrum)

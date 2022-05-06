@@ -65,7 +65,6 @@ struct StateMsg {
 	const char* ao_x_ch;
 	const char* ao_y_ch;
 	const char* ao_lt_ch;
-	const char* ao_ft_ch;
 	const char* ao_st_ch;
 	int aline_size;
 	int64_t alines_in_scan;
@@ -478,7 +477,14 @@ inline void recv_msg()
 		else if (msg.flag & MSG_STOP_SCAN)
 		{
 			printf("fastnisdoct: MSG_STOP_SCAN received\n");
-			stop_scanning();
+			if (state.load() == STATE_ACQUIRIING)
+			{
+				stop_acquisition();
+			}
+			if (state.load() == STATE_SCANNING) 
+			{
+				stop_scanning();
+			}
 		}
 		else if (msg.flag & MSG_START_ACQUISITION)
 		{
@@ -513,6 +519,8 @@ std::thread main_t;
 void _main()
 {
 	// Initializations
+
+	bool scanning_successfully;
 
 	LARGE_INTEGER frequency;
 	LARGE_INTEGER start;
@@ -605,7 +613,7 @@ void _main()
 					cumulative_buffer_number += 1;
 					i_buf++;
 					// printf("Got frame %i of %i. Total frames: %i\n", i_buf, buffers_per_frame, cumulative_buffer_number);
-
+					scanning_successfully = true;
 				}
 				else  // If frame not grabbed properly
 				{
@@ -616,145 +624,169 @@ void _main()
 						printf("fastnisdoct: Failed to release buffer!\n");
 						ni::print_error_msg();
 					}
+					scanning_successfully = false;
+					break;
 				}
 
 			}  // Buffers per frame
 
-			// Sum for average background spectrum (to be used with next scan)
-			if (subtract_background)
+			if (scanning_successfully)
 			{
-				for (int i = 0; i < alines_in_image; i++)
+				// Sum for average background spectrum (to be used with next scan)
+				if (subtract_background)
 				{
-					for (int j = 0; j < aline_size; j++)
+					for (int i = 0; i < alines_in_image; i++)
 					{
-						background_spectrum_new[j] += raw_frame_roi_new[aline_size * i + j];
-					}
-				}
-			}
-
-			if (subtract_background)
-			{
-				// Normalize the background spectrum
-				float norm = 1.0 / alines_in_image;
-				for (int j = 0; j < aline_size; j++)
-				{
-					background_spectrum_new[j] *= norm;
-				}
-
-				// Pointer swap new background buffer in
-				float* tmp = background_spectrum;
-				background_spectrum = background_spectrum_new;
-				background_spectrum_new = tmp;
-			}
-			else
-			{
-				memset(background_spectrum, 0, aline_size * sizeof(float));
-			}
-
-			// Pointer swap new grab buffer buffer in
-			uint16_t* tmp = raw_frame_roi;
-			raw_frame_roi = raw_frame_roi_new;
-			raw_frame_roi_new = tmp;
-
-			// Buffer a spectrum for output to GUI
-			if (!spectrum_display_queue.full())
-			{
-				float* spectrum_buffer = new float[aline_size];  // Will be freed by grab_frame or cleanup
-				for (int i = 0; i < aline_size; i++)
-				{
-					spectrum_buffer[i] = raw_frame_roi[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
-				}
-				spectrum_display_queue.enqueue(spectrum_buffer);
-			}
-
-			// If there is already a processed buffer
-			if (cumulative_frame_number > 0)
-			{
-				// Wait for async job to finish. If the above is false, we haven't started one yet
-				int spins = 0;
-				while (!aline_proc_pool->is_finished())
-				{
-					spins += 1;
-				}
-				// printf("fastnisdoct: A-line processing pool finished with frame %i. Spun %i times.\n", cumulative_frame_number, spins);
-
-				// printf("A-line averaging: %i/%i, B-line averaging: %i/%i, Frame averaging %i\n", n_aline_repeat, a_rpt_proc_flag, n_bline_repeat, b_rpt_proc_flag, n_frame_avg);
-
-				fftwf_complex r;
-				int alines_per_bline_now;  // A-lines per B-line following A-line repeat processing
-				if (a_rpt_proc_flag > REPEAT_PROCESSING_NONE)  // A-line averaging
-				{
-					alines_per_bline_now = alines_per_bline / n_aline_repeat;
-					for (int b = 0; b < alines_in_image / alines_per_bline; b++)  // For each B-line in the preprocessed frames
-					{
-						for (int x = 0; x < alines_per_bline_now; x++)  // For each A-line in the reduced B-line
+						for (int j = 0; j < aline_size; j++)
 						{
-							for (int z = 0; z < roi_size; z++)
-							{
-								r[0] = 0;
-								r[1] = 0;
-								for (int k = 0; k < n_aline_repeat; k++)
-								{
-									// printf("A-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline + x * n_aline_repeat + k, z);
-									r[0] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][0];
-									r[1] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][1];
-								}
-								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_aline_repeat;
-								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_aline_repeat;
-								// printf("A-line averaging: Assigning sum to image[%i, %i]\n", b * alines_per_bline_now + x, z);
-							}
+							background_spectrum_new[j] += raw_frame_roi_new[aline_size * i + j];
 						}
 					}
+				}
+
+				if (subtract_background)
+				{
+					// Normalize the background spectrum
+					float norm = 1.0 / alines_in_image;
+					for (int j = 0; j < aline_size; j++)
+					{
+						background_spectrum_new[j] *= norm;
+					}
+
+					// Pointer swap new background buffer in
+					float* tmp = background_spectrum;
+					background_spectrum = background_spectrum_new;
+					background_spectrum_new = tmp;
 				}
 				else
 				{
-					// If A-line repeats are left in the frame for B-line processing
-					alines_per_bline_now = alines_per_bline;
+					memset(background_spectrum, 0, aline_size * sizeof(float));
 				}
-				if (b_rpt_proc_flag > REPEAT_PROCESSING_NONE)  // B-line averaging
+
+				// Pointer swap new grab buffer buffer in
+				uint16_t* tmp = raw_frame_roi;
+				raw_frame_roi = raw_frame_roi_new;
+				raw_frame_roi_new = tmp;
+
+				// Buffer a spectrum for output to GUI
+				if (!spectrum_display_queue.full())
 				{
-					for (int b = 0; b < alines_in_image / alines_per_bline / n_bline_repeat; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
+					float* spectrum_buffer = new float[aline_size];  // Will be freed by grab_frame or cleanup
+					for (int i = 0; i < aline_size; i++)
 					{
-						for (int x = 0; x < alines_per_bline_now; x++)  // For each element of each B-line
+						spectrum_buffer[i] = raw_frame_roi[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
+					}
+					spectrum_display_queue.enqueue(spectrum_buffer);
+				}
+
+				// If there is already a processed buffer
+				if (cumulative_frame_number > 0)
+				{
+					// Wait for async job to finish. If the above is false, we haven't started one yet
+					int spins = 0;
+					while (!aline_proc_pool->is_finished())
+					{
+						spins += 1;
+					}
+					// printf("fastnisdoct: A-line processing pool finished with frame %i. Spun %i times.\n", cumulative_frame_number, spins);
+
+					// printf("A-line averaging: %i/%i, B-line averaging: %i/%i, Frame averaging %i\n", n_aline_repeat, a_rpt_proc_flag, n_bline_repeat, b_rpt_proc_flag, n_frame_avg);
+
+					// printf("Alines per B-line: %i\n", alines_per_bline);
+
+					fftwf_complex r;
+					int alines_per_bline_now;  // A-lines per B-line following A-line repeat processing
+					if (a_rpt_proc_flag == REPEAT_PROCESSING_MEAN && n_aline_repeat > 1)  // A-line averaging
+					{
+						alines_per_bline_now = alines_per_bline / n_aline_repeat;
+						for (int b = 0; b < alines_in_image / alines_per_bline; b++)  // For each B-line in the preprocessed frames
 						{
-							for (int z = 0; z < roi_size; z++)
+							for (int x = 0; x < alines_per_bline_now; x++)  // For each A-line in the reduced B-line
 							{
-								r[0] = 0;
-								r[1] = 0;
-								for (int k = 0; k < n_bline_repeat; k++)
+								for (int z = 0; z < roi_size; z++)
 								{
-									// printf("B-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline_now + x + k * alines_per_bline_now, z);
-									r[0] += processed_alines_addr[(b * alines_per_bline_now + x + k * alines_per_bline_now) * roi_size + z][0];
-									r[1] += processed_alines_addr[(b * alines_per_bline_now + x + k * alines_per_bline_now) * roi_size + z][1];
+									r[0] = 0;
+									r[1] = 0;
+									for (int k = 0; k < n_aline_repeat; k++)
+									{
+										// printf("A-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline + x * n_aline_repeat + k, z);
+										r[0] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][0];
+										r[1] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][1];
+									}
+									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_aline_repeat;
+									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_aline_repeat;
+									// printf("A-line averaging: Assigning sum to image[%i, %i]\n", b * alines_per_bline_now + x, z);
 								}
-								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_bline_repeat;
-								processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_bline_repeat;
-								// printf("--->\nB-line averaging: assigning sum to image[%i, %i]\n\n", b * alines_per_bline_now + x, z);
 							}
 						}
 					}
+					else
+					{
+						// If A-line repeats are left in the frame for B-line processing
+						alines_per_bline_now = alines_per_bline;
+					}
+					// printf("A-lines in B-line now: %i\n", alines_per_bline_now);
+
+					if (b_rpt_proc_flag == REPEAT_PROCESSING_MEAN && n_bline_repeat > 1)  // B-line averaging
+					{
+						for (int b = 0; b < alines_in_image / alines_per_bline / n_bline_repeat; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
+						{
+							for (int x = 0; x < alines_per_bline_now; x++)  // For each element of each B-line
+							{
+								for (int z = 0; z < roi_size; z++)
+								{
+									r[0] = 0;
+									r[1] = 0;
+									for (int k = 0; k < n_bline_repeat; k++)
+									{
+										// printf("B-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline_now * n_bline_repeat + x + k * alines_per_bline_now, z);
+										r[0] += processed_alines_addr[(b * alines_per_bline_now * n_bline_repeat + x + k * alines_per_bline_now) * roi_size + z][0];
+										r[1] += processed_alines_addr[(b * alines_per_bline_now * n_bline_repeat + x + k * alines_per_bline_now) * roi_size + z][1];
+									}
+									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_bline_repeat;
+									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_bline_repeat;
+									// printf("--->\nB-line averaging: assigning sum to image[%i, %i]\n\n", b * alines_per_bline_now + x, z);
+								}
+							}
+						}
+					}
+					else if (b_rpt_proc_flag == REPEAT_PROCESSING_DIFF && n_bline_repeat == 2)
+					{
+						for (int b = 0; b < alines_in_image / alines_per_bline / n_bline_repeat; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
+						{
+							for (int x = 0; x < alines_per_bline_now; x++)  // For each element of each B-line
+							{
+								// printf("B-line differencing: setting [%i] equal to [%i] - [%i]\n", (b * alines_per_bline_now + x), (b * alines_per_bline_now * 2 + x), (b * alines_per_bline_now * 2 + x + alines_per_bline_now));
+								for (int z = 0; z < roi_size; z++)
+								{
+									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = processed_alines_addr[(b * alines_per_bline_now * 2 + x) * roi_size + z][0] - processed_alines_addr[(b * alines_per_bline_now * 2 + x + alines_per_bline_now) * roi_size + z][0];
+									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = processed_alines_addr[(b * alines_per_bline_now * 2 + x) * roi_size + z][1] - processed_alines_addr[(b * alines_per_bline_now * 2 + x + alines_per_bline_now) * roi_size + z][1];
+								}
+							}
+						}
+					}
+
+					// Perform frame averaging
+
+					// Buffer an image for output to GUI
+					if (!image_display_queue.full())
+					{
+						fftwf_complex* image_buffer = fftwf_alloc_complex(processed_frame_size);  // Will be freed by grab_frame or cleanup
+						memcpy(image_buffer, processed_alines_addr, processed_frame_size * sizeof(fftwf_complex));
+						image_display_queue.enqueue(image_buffer);
+					}
+
+					QueryPerformanceCounter(&end);
+					interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
+
+					processed_image_buffer->release_head();
+
+					printf("Processed frame %i elapsed %f, %f Hz, \n", cumulative_frame_number - 1, interval, 1.0 / interval);
+
 				}
-				
-				// Perform frame averaging
 
-				// Buffer an image for output to GUI
-				if (!image_display_queue.full())
-				{
-					fftwf_complex* image_buffer = fftwf_alloc_complex(processed_frame_size);  // Will be freed by grab_frame or cleanup
-					memcpy(image_buffer, processed_alines_addr, processed_frame_size * sizeof(fftwf_complex));
-					image_display_queue.enqueue(image_buffer);
-				}
-
-				QueryPerformanceCounter(&end);
-				interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
-
-				processed_image_buffer->release_head();
-
-				printf("Processed frame %i elapsed %f, %f Hz, \n", cumulative_frame_number - 1, interval, 1.0 / interval);
-
+				cumulative_frame_number++;
 			}
-
-			cumulative_frame_number++;
 
 		}
 		// printf("fastnisdoct: Main loop running. State %i\n", state.load());
@@ -771,8 +803,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		const char* ao_x_ch,
 		const char* ao_y_ch,
 		const char* ao_lt_ch,
-		const char* ao_ft_ch,
-		const char* ao_st_ch,
 		int number_of_buffers
 	)
 	{
@@ -781,15 +811,13 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		printf("fastnisdoct: X channel ID: %s\n", ao_x_ch);
 		printf("fastnisdoct: Y channel ID: %s\n", ao_y_ch);
 		printf("fastnisdoct: Line trig channel ID: %s\n", ao_lt_ch);
-		printf("fastnisdoct: Frame trig channel ID: %s\n", ao_ft_ch);
-		printf("fastnisdoct: Start trig channel ID: %s\n", ao_st_ch);
 
 		// If you don't use these strings here, dynamically put them somewhere until you do--their values are undefined once Python scope changes
 
 		if (ni::imaq_open(cam_name) == 0)
 		{
 			printf("fastnisdoct: NI IMAQ interface opened.\n");
-			if (ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch, ao_ft_ch, ao_st_ch) == 0)
+			if (ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch) == 0)
 			{
 				printf("fastnisdoct: NI DAQmx interface opened.\n");
 				frames_to_buffer = number_of_buffers;
@@ -844,7 +872,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		double* x_scan_signal,
 		double* y_scan_signal,
 		double* line_trigger_scan_signal,
-		double* frame_trigger_scan_signal,
 		int64_t n_samples_per_signal,
 		int signal_output_rate,
 		int line_rate
@@ -871,12 +898,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.b_rpt_proc_flag = b_rpt_proc_flag;
 		msg.roi_offset = roi_offset;
 		msg.roi_size = roi_size;
-		msg.scanpattern = new ScanPattern(
-			x_scan_signal, y_scan_signal,
-			line_trigger_scan_signal, frame_trigger_scan_signal,
-			n_samples_per_signal, signal_output_rate, line_rate
-		);
-
+		msg.scanpattern = new ScanPattern(x_scan_signal, y_scan_signal, line_trigger_scan_signal, n_samples_per_signal, signal_output_rate, line_rate);
 		msg.flag = MSG_CONFIGURE_IMAGE;
 		msg_queue.enqueue(msg);
 	}

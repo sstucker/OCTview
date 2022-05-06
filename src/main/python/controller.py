@@ -27,11 +27,10 @@ class NIOCTController:
         """
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
-        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p,
-                                           c.c_int]
+        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_int]
         self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_long,
                                                       c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c_double_p,
-                                                      c_double_p, c_double_p, c_double_p, c.c_long, c.c_int]
+                                                      c_double_p, c_double_p, c.c_long, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
         self._lib.nisdoct_start_raw_acquisition.argtypes = [c.c_char_p, c.c_float, c.c_int]
         self._lib.nisdoct_grab_frame.argtypes = [c_complex64_p]
@@ -47,8 +46,6 @@ class NIOCTController:
              ao_ch_x_name,
              ao_ch_y_name,
              ao_ch_lt_name,
-             ao_ch_ft_name,
-             ao_ch_st_name,
              number_of_buffers
              ):
         """Open the interface. To change these values, the interface must be closed and then opened again.
@@ -58,8 +55,6 @@ class NIOCTController:
             ao_ch_x_name (str): NI-DAQ analog out channel identifier to be used for X galvo output
             ao_ch_y_name (str): NI-DAQ analog out channel identifier to be used for Y galvo output
             ao_ch_lt_name (str): NI-DAQ analog out channel identifier to be used for camera triggering
-            ao_ch_ft_name (str): NI-DAQ analog out channel identifier to be used for frame grab triggering
-            ao_ch_st_name (str): NI-DAQ analog out channel identifier to be used to trigger other devices on imaging start
             number_of_buffers (int): The number of buffers to allocate for image acquisition and processing. Larger
                 values make acquisition more robust to dropped frames but increase memory overhead.
         """
@@ -68,8 +63,6 @@ class NIOCTController:
             bytes(ao_ch_x_name, encoding='utf8'),
             bytes(ao_ch_y_name, encoding='utf8'),
             bytes(ao_ch_lt_name, encoding='utf8'),
-            bytes(ao_ch_ft_name, encoding='utf8'),
-            bytes(ao_ch_st_name, encoding='utf8'),
             int(number_of_buffers)
         )
 
@@ -87,7 +80,6 @@ class NIOCTController:
             x_scan_signal: np.ndarray,
             y_scan_signal: np.ndarray,
             line_trigger_scan_signal: np.ndarray,
-            frame_trigger_scan_signal: np.ndarray,
             signal_output_rate: int,
             line_rate: int,
             aline_repeat: int,
@@ -120,7 +112,6 @@ class NIOCTController:
             x_scan_signal (np.ndarray): X galvo drive signal.
             y_scan_signal (np.ndarray): Y galvo drive signal.
             line_trigger_scan_signal (np.ndarray): Camera A-line exposure trigger signal.
-            frame_trigger_scan_signal (np.ndarray): Frame grabber trigger signal.
             signal_output_rate (int): Sample generation rate.
             line_rate (int): Line rate. Should be evenly divisible into `signal_output_rate`.
         """
@@ -130,9 +121,9 @@ class NIOCTController:
         elif aline_repeat_processing == 'difference' or aline_repeat_processing == 2:
             a_rpt_proc_flag = 2
         b_rpt_proc_flag = 0
-        if bline_repeat_processing == 'average' or aline_repeat_processing == 1:
+        if bline_repeat_processing == 'average' or bline_repeat_processing == 1:
             b_rpt_proc_flag = 1
-        elif bline_repeat_processing == 'difference' or aline_repeat_processing == 2:
+        elif bline_repeat_processing == 'difference' or bline_repeat_processing == 2:
             b_rpt_proc_flag = 2
         if roi_size is None:
             roi_size = aline_size
@@ -152,7 +143,6 @@ class NIOCTController:
             np.array(x_scan_signal).astype(np.float64),
             np.array(y_scan_signal).astype(np.float64),
             np.array(line_trigger_scan_signal).astype(np.float64),
-            np.array(frame_trigger_scan_signal).astype(np.float64),
             np.long(len(x_scan_signal)),
             np.long(signal_output_rate),
             int(line_rate)

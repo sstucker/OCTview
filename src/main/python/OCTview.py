@@ -44,10 +44,11 @@ class _AppContext(ApplicationContext):
         self._timer_update_scan_pattern = QTimer()
         self._ctr_update_scan_pattern = 0
 
-        # Record these sizes to optimize calls to interface
+        # Record these sizes to decide how to call backend
         self._uncropped_frame_size = 0
         self._unprocessed_frame_size = 0
         self._processed_frame_size = 0
+        self._bline_proc_mode = 0
 
         # Repeated update execution keeps GUI in step with controller
         self._update_timer = QTimer()
@@ -126,8 +127,8 @@ class _AppContext(ApplicationContext):
                 for x in range(self.window.scan_pattern().dimensions[0]):
                     for y in range(self.window.scan_pattern().dimensions[1]):
                         self._image_buffer[:, x, y] = self._grab_buffer[
-                            self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()
-                        ]
+                                                      self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()
+                                                      ]
                         i += 1
                 self.window.display_frame(self._image_buffer)
         if self._spectrum_buffer is not None:
@@ -147,8 +148,6 @@ class _AppContext(ApplicationContext):
             self.window.analog_output_galvo_x_ch_name(),
             self.window.analog_output_galvo_y_ch_name(),
             self.window.analog_output_line_trig_ch_name(),
-            self.window.analog_output_frame_trig_ch_name(),
-            self.window.analog_output_start_trig_ch_name(),
             self.window.number_of_image_buffers()
         )
 
@@ -165,18 +164,15 @@ class _AppContext(ApplicationContext):
             pat = self.window.scan_pattern()
             scan_x = pat.x * self.window.scan_scale_factors()[0]
             scan_y = pat.y * self.window.scan_scale_factors()[1]
-
             scan_line_trig = pat.line_trigger * self.window.trigger_gain()
-
-            scan_frame_trig = pat.frame_trigger * self.window.trigger_gain()
-            scan_frame_trig = np.zeros(len(scan_frame_trig)).astype(np.float64)
-
-            scan_line_trig = np.zeros(len(scan_line_trig)).astype(np.float64)
-
-            # import matplotlib.pyplot as plt
+            import matplotlib.pyplot as plt
+            # plt.subplot(2, 1, 1)
+            # plt.plot(scan_x)
+            # plt.plot(scan_y)
+            # plt.plot(scan_line_trig)
+            # plt.subplot(2, 1, 2)
             # plt.stem(pat.image_mask)
             # plt.show()
-
             all_samples = np.concatenate([scan_y, scan_x])
             print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:',
                   self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
@@ -185,12 +181,11 @@ class _AppContext(ApplicationContext):
                 alines_in_scan=pat.points_in_scan,
                 image_mask=pat.image_mask,
                 alines_in_image=pat.points_in_image,
-                alines_per_bline=pat.dimensions[0],
+                alines_per_bline=pat.dimensions[0] * pat.aline_repeat * pat.bline_repeat,
                 alines_per_buffer=self.window.alines_per_buffer(),
                 x_scan_signal=scan_x,
                 y_scan_signal=scan_y,
                 line_trigger_scan_signal=scan_line_trig,
-                frame_trigger_scan_signal=scan_frame_trig,
                 signal_output_rate=pat.sample_rate,
                 line_rate=pat.max_trigger_rate,
                 aline_repeat=pat.aline_repeat,
@@ -207,10 +202,11 @@ class _AppContext(ApplicationContext):
             self._image_buffer = np.zeros(processed_shape, dtype=np.complex64)
             self._grab_buffer = np.zeros(self._processed_frame_size, dtype=np.complex64)
             self._spectrum_buffer = np.zeros(self.window.aline_size(), dtype=np.float32)
+            self._bline_proc_mode = self.window.bline_repeat_processing()
 
     def _configure_processing(self, unprocessed_frame_size: int, processed_frame_size: int):
         # Because some changes to processing are really changes to the IMAGE at the controller level, do this check
-        if self._unprocessed_frame_size != unprocessed_frame_size or self._processed_frame_size != processed_frame_size:
+        if self._unprocessed_frame_size != unprocessed_frame_size or self._processed_frame_size != processed_frame_size or self._bline_proc_mode != self.window.bline_repeat_processing():
             print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._unprocessed_frame_size, unprocessed_frame_size,
                                                                    self._processed_frame_size, processed_frame_size))
             self._configure_image()

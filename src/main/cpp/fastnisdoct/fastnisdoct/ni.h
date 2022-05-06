@@ -58,7 +58,7 @@ public:
 	int sample_rate;
 	int line_rate;
 
-	ScanPattern(double* x, double* y, double* line_trigger, double* frame_trigger, int n, int sample_rate, int line_rate)
+	ScanPattern(double* x, double* y, double* line_trigger, int n, int sample_rate, int line_rate)
 	{
 		this->x = new double[n];
 		memcpy(this->x, x, sizeof(double) * n);
@@ -68,9 +68,6 @@ public:
 
 		this->line_trigger = new double[n];
 		memcpy(this->line_trigger, line_trigger, sizeof(double) * n);
-
-		this->frame_trigger = new double[n];
-		memcpy(this->frame_trigger, frame_trigger, sizeof(double) * n);
 
 		this->n = n;
 		this->sample_rate = sample_rate;
@@ -82,7 +79,6 @@ public:
 		delete[] this->x;
 		delete[] this->y;
 		delete[] this->line_trigger;
-		delete[] this->frame_trigger;
 	}
 
 };
@@ -107,6 +103,7 @@ inline void print_daqmx_error_msg(int error_code)
 
 inline int configure_scan_timing(ScanPattern* pattern)
 {
+	/*
 	uInt32 timebase = 0;
 
 	uInt32 samp_clk_low = 0;
@@ -140,6 +137,10 @@ inline int configure_scan_timing(ScanPattern* pattern)
 	DAQmxGetSampClkTerm(scan_task, buf, 512);
 	printf("Configured sample clock timing with source src %s.\n", buf);
 	print_daqmx_error_msg(err);
+	*/
+	err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
+	err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
+	err = DAQmxCfgSampClkTiming(scan_task, NULL, (double)pattern->sample_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, pattern->n);
 
 	return err;
 }
@@ -249,16 +250,13 @@ namespace ni
 	int daq_open(
 		const char* aoScanX,
 		const char* aoScanY,
-		const char* aoLineTrigger,
-		const char* aoFrameTrigger,
-		const char* aoStartTrigger
+		const char* aoLineTrigger
 	)
 	{
 		err = DAQmxCreateTask("scan", &scan_task);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanX, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanY, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoLineTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
-		err = DAQmxCreateAOVoltageChan(scan_task, aoFrameTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
 		if (err != 0)
 		{
 			return err;
@@ -286,15 +284,17 @@ namespace ni
 
 	int start_scan()
 	{
+		/*
 		err = imgPulseStart(sample_clk, session_id);
 		err = imgPulseStart(line_clk, session_id);
 		err = imgPulseStart(pattern_clk, session_id);
-		err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
-		err = DAQmxStartTask(scan_task);
+		*/
+		err = imgSessionStartAcquisition(session_id);
 		if (err == 0)
 		{
-			err = imgSessionStartAcquisition(session_id);
+			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
+			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
+			err = DAQmxStartTask(scan_task);
 			if (err == 0)
 			{
 				printf("Started scan!\n");
@@ -308,9 +308,11 @@ namespace ni
 	{
 		err = imgSessionStopAcquisition(session_id);
 		err = DAQmxStopTask(scan_task);
+		/*
 		err = imgPulseStop(pattern_clk);
 		err = imgPulseStart(line_clk, session_id);
 		err = imgPulseStop(sample_clk);
+		*/
 		if (err == 0)
 		{
 			return 0;
@@ -356,12 +358,11 @@ namespace ni
 		if (pattern->n != scansig_n)  // If buffer size needs to change
 		{
 			delete[] concatenated_scansig;
-			concatenated_scansig = new float64[4 * pattern->n];
+			concatenated_scansig = new float64[3 * pattern->n];
 		}
 		memcpy(concatenated_scansig + 0, pattern->x, sizeof(float64) * pattern->n);
 		memcpy(concatenated_scansig + pattern->n, pattern->y, sizeof(float64) * pattern->n);
 		memcpy(concatenated_scansig + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
-		memcpy(concatenated_scansig + 3 * pattern->n, pattern->frame_trigger, sizeof(float64) * pattern->n);
 
 		bool32 is_it = false;
 		DAQmxIsTaskDone(scan_task, &is_it);
