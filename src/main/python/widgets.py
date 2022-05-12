@@ -17,7 +17,7 @@ import copy
 import OCTview
 
 MAX_2D_IMAGE_SIZE = 128 * 128
-
+MAX_ALINES_IN_SINGLE_BUFFER = 128 * 128
 
 def replaceWidget(old_widget: QWidget, new_widget: QWidget):
     """Replace a widget with another."""
@@ -205,8 +205,10 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.checkBidirectional.stateChanged.connect(self._checkBidirectionalChanged)
         self.checkARepeat.stateChanged.connect(self._checkARepeatChanged)
         self.checkBRepeat.stateChanged.connect(self._checkBRepeatChanged)
-        self.spinACount.valueChanged.connect(self._xValueChanged)
-        self.spinROIWidth.valueChanged.connect(self._xValueChanged)
+        self.spinACount.valueChanged.connect(self._valueChanged)
+        self.spinROIWidth.valueChanged.connect(self._valueChanged)
+        self.spinBCount.valueChanged.connect(self._valueChanged)
+        self.spinROIHeight.valueChanged.connect(self._valueChanged)
         self.radioXSaw.toggled.connect(self._profileChanged)
 
         self._settings_dialog = RasterScanDialog()
@@ -274,7 +276,10 @@ class RasterScanWidget(ScanWidget, UiWidget):
         return int(self._settings_dialog.spinMaxLineRate.value())  # Hz
 
     def blines_triggered(self) -> bool:
-        return self._settings_dialog.radioTriggerBlines.isChecked()
+        if self._settings_dialog.radioTriggerAuto.isChecked():
+            return self.pattern().points_in_image > MAX_ALINES_IN_SINGLE_BUFFER
+        else:
+            return self._settings_dialog.radioTriggerBlines.isChecked()
 
     def a_repeats(self):
         if self.checkARepeat.isChecked():
@@ -303,6 +308,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
         else:
             self.spinBCount.setEnabled(True)
             self.labelBCount.setEnabled(True)
+        self._valueChanged()
 
     def _checkBidirectionalChanged(self):
         if self.checkBidirectional.isChecked():
@@ -330,7 +336,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
         else:
             self.spinBRepeat.setEnabled(False)
 
-    def _xValueChanged(self):
+    def _valueChanged(self):
         if self.checkSquareScan.isChecked():
             self.spinBCount.setValue(self.spinACount.value())
         if self.checkEqualAspect.isChecked():
@@ -558,11 +564,6 @@ class FileGroupBox(QGroupBox, UiWidget):
 
         self.buttonBrowse.pressed.connect(self._browseForDirectory)
 
-        # TODO implement filetype...
-        self.comboFileType.setVisible(False)
-        self.labelFileType.setVisible(False)
-        self.checkMetadata.setVisible(False)
-
     def _browseForDirectory(self):
         self.lineDirectory.setText(str(QFileDialog.getExistingDirectory(self, "Select Experiment Directory", self.lineDirectory.text())))
 
@@ -578,8 +579,8 @@ class FileGroupBox(QGroupBox, UiWidget):
     def save_metadata(self):
         return self.checkMetadata.isChecked()
 
-    def filetype(self):
-        return self.comboFileType.currentIndex()
+    def save_processed(self) -> bool:
+        return self.radioProcessed.isChecked()
 
     def max_gb(self) -> float:
         txt = self.comboFileSize.currentText()
@@ -801,13 +802,13 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
                 self._hslider.show()
 
     def setAspect(self, dx, dy):
-        if self._sf[0] <= 0 or self._sf[1] <= 0:
-            self._sf[0] = 1
-            self._sf[1] = 1
         self._image.scale(1 / self._sf[0], 1 / self._sf[1])  # Undo any previous scaling
         sfx = (1 / self._data_shape[0]) * dx
         sfy = (1 / self._data_shape[1]) * dy
-        self._sf = [sfx, sfy]
+        if sfx <= 0 or sfy <= 0:
+            self._sf = [1.0, 1.0]
+        else:
+            self._sf = [sfx, sfy]
         # print('Scaling image with shape', self._data_shape, 'by', self._sf)
         if self._vslider is not None:
             self._vslider.setBounds([0, self._sf[0] * self._data_shape[0]])
@@ -1021,6 +1022,7 @@ class MainWindow(QMainWindow, UiWidget):
         self.actionSave_Configuration.triggered.connect(self.saveConfiguration)
         self.actionLoad_Configuration.triggered.connect(self.loadConfiguration)
         self.actionSettings.triggered.connect(self._settings_dialog.showDialog)
+        self._settings_dialog.changed.connect(self.launch.emit)
 
         self.ControlGroupBox.scan.connect(self._scan)
         self.ControlGroupBox.acquire.connect(self._acquire)
@@ -1159,13 +1161,14 @@ class MainWindow(QMainWindow, UiWidget):
 
         TODO: verify (by asking backend) that this is the real size to avoid buffer overruns
         """
-        n = 1
+        pat = self.scan_pattern()
+        n = pat.dimensions[0]
         if self.aline_repeat_processing() is None:
-            n *= self.scan_pattern().aline_repeat
+            n *= pat.aline_repeat
         aline_n = self.aline_size()
         if self.bline_repeat_processing() is None:
-            n *= self.scan_pattern().bline_repeat
-        return self.roi_size(), n * self.scan_pattern().dimensions[0], self.scan_pattern().dimensions[1]
+            n *= pat.bline_repeat
+        return self.roi_size(), n, pat.dimensions[1]
 
     def scan_pattern(self) -> LineScanPattern:
         return self.ScanGroupBox.pattern()
@@ -1215,12 +1218,13 @@ class MainWindow(QMainWindow, UiWidget):
     def filename(self) -> str:
         return self.FileGroupBox.filename()
 
+    def save_processed_data(self) -> bool:
+        return self.FileGroupBox.save_processed()
+
     def display_frame(self, frame: np.ndarray):
         """Display a 3D frame using the display widgets."""
         fov = np.array(self.scan_pattern().fov) * 10**-3
         fov = np.concatenate([[self._settings_dialog.spinAxialPixelSize.value() * self.roi_size() * 10**-6], fov])
-        # t = Thread(target=self.DisplayWidget.display_frame, args=(frame, fov))
-        # t.start()
         self.DisplayWidget.display_frame(frame, fov=fov)
 
     def display_spectrum(self, spectrum: np.ndarray):

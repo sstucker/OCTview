@@ -32,7 +32,7 @@ enum OCTState
 	STATE_OPEN = 2,
 	STATE_READY = 3,
 	STATE_SCANNING = 4,
-	STATE_ACQUIRIING = 5,
+	STATE_ACQUIRING = 5,
 	STATE_BUSY = 6,
 	STATE_ERROR = 7
 
@@ -89,6 +89,7 @@ struct StateMsg {
 	int file_type;
 	float max_gb;
 	int n_frames_to_acquire;
+	bool save_processed;
 };
 
 spsc_bounded_queue_t<StateMsg> msg_queue(32);
@@ -111,14 +112,15 @@ int32_t alines_per_buffer = 0;  // Number of A-lines in each IMAQ buffer. If les
 int32_t buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
 int32_t alines_per_bline = 0; // Number of A-lines which make up a B-line of the image. Used to divide processing labor.
 
-CircAcqBuffer<fftwf_complex>* processed_image_buffer = NULL;  // Ring buffer which frames are written to prior to export.
+CircAcqBuffer<uint16_t>* spectral_image_buffer = NULL;  // Spectral frames are copied to this buffer for export.
+CircAcqBuffer<fftwf_complex>* processed_image_buffer = NULL;  // Spatial frames are written into this buffer for export.
 int frames_to_buffer = 0;  // Amount of buffer memory to allocate per the size of a frame
 
 // TODO replace with CircAcqBuffers or otherwise preallocate display buffers
 
 // Small queues, main loop should only spend time copying to the display buffers if the GUI is ready 
-spsc_bounded_queue_t<fftwf_complex*> image_display_queue(4);  // Queue of pointers to images for display. Copy to client buffer and then delete after dequeue.
-spsc_bounded_queue_t<float*> spectrum_display_queue(4);  // Queue of pointers to spectra for display. Copy to client buffer and then delete after dequeue.
+spsc_bounded_queue_t<fftwf_complex*> image_display_queue(2);  // Queue of pointers to images for display. Copy to client buffer and then delete after dequeue.
+spsc_bounded_queue_t<float*> spectrum_display_queue(2);  // Queue of pointers to spectra for display. Copy to client buffer and then delete after dequeue.
 
 uint16_t* raw_frame_roi = NULL;  // Frame which the contents of IMAQ buffers are copied into prior to processing if buffers_per_frame > 1
 uint16_t* raw_frame_roi_new = NULL;
@@ -150,10 +152,16 @@ bool subtract_background = false;  // If true, the average spectrum of the previ
 bool interp = false;  // If true, first order linear interpolation is used to approximate a linear-in-wavelength spectrum.
 double interpdk = 0.0;  // Coefficient of first order linear-in-wavelength approximation.
 
+float frame_processing_period = 0;  // Time taken to process latest frame
+
+bool saving_processed;
+FileStreamWorker<uint16_t> spectral_frame_streamer;
+FileStreamWorker<fftwf_complex> processed_frame_streamer;
 
 inline void stop_acquisition()
 {
-	stop_streaming();
+	processed_frame_streamer.stop();
+	spectral_frame_streamer.stop();
 	state.store(STATE_SCANNING);
 }
 
@@ -223,7 +231,6 @@ inline void set_up_processing_pool()
 	printf("fastnisdoct: Processing pool does not need to be recreated.\n");
 }
 
-
 // Iterate over image_mask and reduce it to a vector containing copy offsets and sizes per each acquisition buffer.
 inline void plan_acq_copy(bool* image_mask)
 {
@@ -282,7 +289,7 @@ inline void recv_msg()
 			printf("fastnisdoct: MSG_CONFIGURE_IMAGE received\n");
 			bool restart = false;  // Set true if scan should be started after configuration
 			auto current_state = state.load();
-			if (current_state == STATE_ACQUIRIING)
+			if (current_state == STATE_ACQUIRING)
 			{
 				printf("Cannot configure image during acquisition!\n");
 				return;
@@ -361,6 +368,8 @@ inline void recv_msg()
 					delete[] raw_frame_roi_new;
 					raw_frame_roi = new uint16_t[preprocessed_alines_size];
 					raw_frame_roi_new = new uint16_t[preprocessed_alines_size];
+					delete spectral_image_buffer;
+					spectral_image_buffer = new CircAcqBuffer<uint16_t>(frames_to_buffer, preprocessed_alines_size);
 				}
 				
 				// Allocate rings
@@ -433,7 +442,7 @@ inline void recv_msg()
 		{
 			printf("fastnisdoct: MSG_CONFIGURE_PROCESSING received\n");
 			auto current_state = state.load();
-			if (current_state == STATE_ACQUIRIING)
+			if (current_state == STATE_ACQUIRING)
 			{
 				printf("fastnisdoct: Cannot configure processing during acquisition.\n");
 			}
@@ -477,7 +486,7 @@ inline void recv_msg()
 		else if (msg.flag & MSG_STOP_SCAN)
 		{
 			printf("fastnisdoct: MSG_STOP_SCAN received\n");
-			if (state.load() == STATE_ACQUIRIING)
+			if (state.load() == STATE_ACQUIRING)
 			{
 				stop_acquisition();
 			}
@@ -491,22 +500,38 @@ inline void recv_msg()
 			printf("fastnisdoct: MSG_START_ACQUISITION received\n");
 			if (state.load() == STATE_SCANNING)
 			{
-				if (msg.n_frames_to_acquire > -1)
+				if (msg.save_processed)
 				{
-					start_streaming(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size, alines_in_image, msg.n_frames_to_acquire);
+					saving_processed = true;
+					if (msg.n_frames_to_acquire > -1)
+					{
+						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size * alines_in_image, msg.n_frames_to_acquire);
+					}
+					else
+					{
+						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size * alines_in_image);
+					}
 				}
 				else
 				{
-					start_streaming(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size, alines_in_image);
+					saving_processed = false;
+					if (msg.n_frames_to_acquire > -1)
+					{
+						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer, preprocessed_alines_size, msg.n_frames_to_acquire);
+					}
+					else
+					{
+						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer, preprocessed_alines_size);
+					}
 				}
-				state.store(STATE_ACQUIRIING);
+				state.store(STATE_ACQUIRING);
 				delete[] msg.file_name;
 			}
 		}
 		else if (msg.flag & MSG_STOP_ACQUISITION)
 		{
 			printf("fastnisdoct: MSG_STOP_ACQUISITION received\n");
-			if (state.load() == STATE_ACQUIRIING)
+			if (state.load() == STATE_ACQUIRING)
 			{
 				stop_acquisition();
 			}
@@ -525,7 +550,6 @@ void _main()
 	LARGE_INTEGER frequency;
 	LARGE_INTEGER start;
 	LARGE_INTEGER end;
-	double interval;
 
 	QueryPerformanceFrequency(&frequency);
 
@@ -535,7 +559,7 @@ void _main()
 	state.store(STATE_OPEN);
 	while (main_running)
 	{
-		if (state.load() == STATE_ACQUIRIING && is_streaming() == false)  // If acquisition has finished, stop
+		if (state.load() == STATE_ACQUIRING && processed_frame_streamer.is_streaming() == false)  // If acquisition has finished, stop
 		{
 			state = STATE_SCANNING;
 			stop_scanning();
@@ -578,7 +602,7 @@ void _main()
 					
 					if (examined != cumulative_buffer_number)
 					{
-						printf("Expected %i, got %i... Missed frames.\n", cumulative_buffer_number, examined);
+						printf("Expected %i, got %i... Dropped frames.\n", cumulative_buffer_number, examined);
 						cumulative_buffer_number = examined;
 					}
 
@@ -629,6 +653,17 @@ void _main()
 				}
 
 			}  // Buffers per frame
+
+			if (!saving_processed && current_state == STATE_ACQUIRING)
+			{
+				uint16_t* spectral_dst = spectral_image_buffer->lock_out_head();
+				memcpy(spectral_dst, raw_frame_roi, preprocessed_alines_size * sizeof(uint16_t));
+				spectral_image_buffer->release_head();
+				if (image_display_queue.full())
+				{
+					continue;
+				}
+			}
 
 			if (scanning_successfully)
 			{
@@ -777,20 +812,28 @@ void _main()
 					}
 
 					QueryPerformanceCounter(&end);
-					interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
+					frame_processing_period = (float)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
 
 					processed_image_buffer->release_head();
 
-					printf("Processed frame %i elapsed %f, %f Hz, \n", cumulative_frame_number - 1, interval, 1.0 / interval);
-
+					if (cumulative_frame_number % 256 == 0)
+					{
+						printf("Processed frame %i elapsed %f, %f Hz, \n", cumulative_frame_number - 1, frame_processing_period, 1.0 / frame_processing_period);
+					}
 				}
-
 				cumulative_frame_number++;
 			}
-
 		}
 		// printf("fastnisdoct: Main loop running. State %i\n", state.load());
-		fflush(stdout);
+		// fflush(stdout);
+	}
+	if (state.load() == STATE_ACQUIRING)
+	{
+		stop_acquisition();
+	}
+	if (state.load() == STATE_SCANNING)
+	{
+		stop_scanning();
 	}
 }
 
@@ -851,6 +894,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		delete[] background_spectrum;
 		delete[] background_spectrum_new;
 		delete processed_image_buffer;
+		delete spectral_image_buffer;
 		delete apodization_window;
 		delete[] raw_frame_roi;
 		delete[] raw_frame_roi_new;
@@ -938,10 +982,11 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg_queue.enqueue(msg);
 	}
 
-	__declspec(dllexport) void nisdoct_start_raw_acquisition(
+	__declspec(dllexport) void nisdoct_start_bin_acquisition(
 		const char* file,
 		float max_gb,
-		int n_frames_to_acquire
+		int n_frames_to_acquire,
+		bool save_processed
 	)
 	{
 		StateMsg msg;
@@ -950,6 +995,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.max_gb = max_gb;
 		msg.file_type = FSTREAM_TYPE_RAW;
 		msg.n_frames_to_acquire = n_frames_to_acquire;
+		msg.save_processed = save_processed;
 		msg.flag = MSG_START_ACQUISITION;
 		msg_queue.enqueue(msg);
 	}
@@ -978,13 +1024,13 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) bool nisdoct_acquiring()
 	{
-		return (state.load() == STATE_ACQUIRIING);
+		return (state.load() == STATE_ACQUIRING);
 	}
 
 	__declspec(dllexport) int nisdoct_grab_frame(fftwf_complex* dst)
 	{
 		auto current_state = state.load();
-		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING)
+		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRING)
 		{
 			fftwf_complex* f = NULL;
 			if (image_display_queue.dequeue(f))
@@ -1008,7 +1054,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	__declspec(dllexport) int nisdoct_grab_spectrum(float* dst)
 	{
 		auto current_state = state.load();
-		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRIING)
+		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRING)
 		{
 			float* s = NULL;
 			if (spectrum_display_queue.dequeue(s))

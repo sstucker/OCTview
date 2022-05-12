@@ -204,6 +204,7 @@ namespace ni
 	{
 		err = imgClose(session_id, TRUE);
 		err = imgClose(interface_id, TRUE);
+		imaq_buffer_cleanup();
 		return err;
 	}
 

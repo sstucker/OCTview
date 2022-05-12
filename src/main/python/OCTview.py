@@ -29,11 +29,6 @@ class _AppContext(ApplicationContext):
 
         self.app.setAttribute(Qt.AA_EnableHighDpiScaling)
 
-        # Assigned on run
-        self.window = None  # Qt window
-        self.controller = None  # Backend. This AppContext instance mediates their communication
-
-    def run(self):
         # Debounce timers
         self._timer_configure_image = QTimer()
         self._ctr_configure_image = 0
@@ -60,32 +55,46 @@ class _AppContext(ApplicationContext):
         self._image_buffer = None
         self._spectrum_buffer = None
 
-        self.window = MainWindow()
-        self.window.setWindowTitle(self.name + ' v' + self.version)
-        self.window.resize(250, 150)
+        # Assigned on run
+        self.window = None  # Qt window
+        self.controller = None  # Backend. This AppContext instance mediates their communication
 
-        # Load the window's state from .last JSON
-        # Will emit all the signals but we have not connected them yet
+        self._first_setup = True  # Set false after init
 
-        self.window.loadConfiguration(cfg_file=os.path.join(self.config_resource_location, '.last'))
-
-        # ... Do anything else before backend setup
-
-        self._launch()
-
+    def run(self):
+        self._setup_window()
+        # ... Do anything else before initial backend setup
+        self._setup_backend()
+        self._first_setup = False
         return self.app.exec_()
 
     def _launch(self):
-        # Configure/reconfigure GUI, load backend
+        self._setup_window()
+        self._setup_backend()
 
-        if self.window is None:
-            sys.exit('Failed to load GUI.')
+    def _setup_window(self):
+        self.window = MainWindow()
 
-        if self.window.darkTheme:
+        # Load the window's state from .last JSON
+        # Will emit all the signals but we have not connected them yet
+        if self._first_setup:
+            self.window.loadConfiguration(cfg_file=os.path.join(self.config_resource_location, '.last'))
+            self.window.setWindowTitle(self.name + ' v' + self.version)
+            self.app.setFont(QFont("Microsoft Sans Serif", 8))
+            self.window.show()
+
+        if self.window.darkTheme():
             self.app.setStyleSheet(qdarkstyle.load_stylesheet())
         else:
             self.app.setStyleSheet('')
-        self.app.setFont(QFont("Microsoft Sans Serif", 8))
+
+    def _setup_backend(self):
+        """Load or reload the backend and connect it to the GUI"""
+
+        self._update_timer.stop()
+
+        if not self._first_setup:
+            self._close_controller()
 
         # Connect MainWindow interaction signals to backend interface
         self.window.scan.connect(self._start_scanning)
@@ -101,8 +110,6 @@ class _AppContext(ApplicationContext):
         self._configure_image()
         self._configure_processing(self.window.unprocessed_frame_size(), self.window.processed_frame_size())
         self._update_timer.start(100)  # 10 Hz
-
-        self.window.show()
 
     def _update(self):
         state = self.controller.state
@@ -122,14 +129,7 @@ class _AppContext(ApplicationContext):
     def _display_update(self):
         if self._grab_buffer is not None and self._image_buffer is not None:
             if self.controller.grab_frame(self._grab_buffer) > -1:
-                # print('Copying to display buffer with shape', np.shape(self._image_buffer))
-                i = 0
-                for x in range(self.window.scan_pattern().dimensions[0]):
-                    for y in range(self.window.scan_pattern().dimensions[1]):
-                        self._image_buffer[:, x, y] = self._grab_buffer[
-                                                      self.window.roi_size() * i:self.window.roi_size() * i + self.window.roi_size()
-                                                      ]
-                        i += 1
+                self._image_buffer = np.reshape(self._grab_buffer, self.window.image_dimensions(), order='F')
                 self.window.display_frame(self._image_buffer)
         if self._spectrum_buffer is not None:
             if self.controller.grab_spectrum(self._spectrum_buffer) > -1:
@@ -242,7 +242,8 @@ class _AppContext(ApplicationContext):
         self.controller.start_acquisition(
             self.window.filename(),
             self.window.file_max_gb(),
-            self.window.frames_to_acquire()
+            self.window.frames_to_acquire(),
+            self.window.save_processed_data()
         )
 
     def _stop(self):

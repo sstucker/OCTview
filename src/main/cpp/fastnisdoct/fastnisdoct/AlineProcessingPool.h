@@ -23,6 +23,64 @@ struct aline_processing_job_msg {
 typedef spsc_bounded_queue_t<aline_processing_job_msg> JobQueue; 
 
 
+inline void process_alines(
+	fftwf_complex* dst,
+	uint16_t* src,
+	int aline_size,  // Size of each A-line
+	int number_of_alines,  // The total number of A-lines
+	int roi_offset,  // The offset from the start of the spatial A-line to begin the axial ROI
+	int roi_size,  // The number of voxels in the axial ROI
+	fftwf_plan* fft_plan,  // FFTW plan
+	WavenumberInterpolationPlan* interp_plan,  // Precalculated interpolation operator
+	float* background_spectrum,  // Fixed pattern background spectrum to be subtracted 
+	float* apod_window,  // Spectral shaping window to be multiplied
+	void* fft_buffer,  // Buffer used for in-place FFT prior to cropping to the destination buffer
+	float *interp_buffer  // Buffer used for A-line interpolation
+)
+{
+	// Subtract background spectrum
+	for (int i = 0; i < number_of_alines; i++)
+	{
+		for (int j = 0; j < aline_size; j++)
+		{
+			interp_buffer[j] = src[i * aline_size + j];  // Convert raw spectral data to float
+			interp_buffer[j] -= background_spectrum[j];  // Subtract background/DC spectrum (will be zero if disabled)
+		}
+		// Apply wavenumber-linearization interpolation
+		if (interp_plan != NULL)
+		{
+			interpdk_execute(interp_plan, interp_buffer, (float*)fft_buffer + i * aline_size);
+		}
+		else
+		{
+			memcpy((float*)fft_buffer + i * aline_size, interp_buffer, aline_size * sizeof(float));
+		}
+		// Multiply by apodization window
+		for (int j = 0; j < aline_size; j++)
+		{
+			((float*)fft_buffer)[i * aline_size + j] *= apod_window[j];  // Will be 1 if disabled
+		}
+	}
+
+	// FFT
+	if (fft_plan != NULL)
+	{
+		fftwf_execute_dft_r2c(*(fft_plan), (float*)fft_buffer, (fftwf_complex*)fft_buffer);
+	}
+	// Cropping ROI and copying to output address
+	for (int i = 0; i < number_of_alines; i++)
+	{
+		memcpy(dst + i * roi_size, (fftwf_complex*)fft_buffer + i * (aline_size / 2 + 1) + roi_offset, roi_size * sizeof(fftwf_complex));
+	}
+	// Normalize FFT result
+	for (int i = 0; i < number_of_alines * roi_size; i++)
+	{
+		dst[i][0] /= aline_size;
+		dst[i][1] /= aline_size;
+	}
+}
+
+
 void aline_processing_worker(
 	std::atomic_bool* running,  // Flag set by pool object which terminates thread
 	JobQueue* queue,  // Pool object enqueues jobs here
@@ -31,12 +89,11 @@ void aline_processing_worker(
 	int roi_offset,  // The offset from the start of the spatial A-line to begin the axial ROI
 	int roi_size,  // The number of voxels in the axial ROI
 	fftwf_plan* fft_plan,  // If NULL, no FFT and no axial cropping is performed.
-	void* fft_buffer  // Buffer used for in-place FFT prior to cropping to the destination buffer
+	void* fft_buffer,  // Buffer used for in-place FFT prior to cropping to the destination buffer
+	float* interp_buffer // A-line sized buffer used for interpolation result
 )
 {
 	int spatial_aline_size = aline_size / 2 + 1;
-
-	float* interp_buffer = new float[aline_size];  // Single A-line sized buffer
 
 	printf("Worker %i launched. Params: A-line size %i, Number of A-lines %i, Z ROI [%i %i]\n", std::this_thread::get_id(), aline_size, number_of_alines, roi_offset, roi_size);
 
@@ -46,46 +103,20 @@ void aline_processing_worker(
 		if (queue->dequeue(msg))
 		{
 
-			// Subtract background spectrum
-			for (int i = 0; i < number_of_alines; i++)
-			{
-				for (int j = 0; j < aline_size; j++)
-				{
-					interp_buffer[j] = msg.src_frame[i * aline_size + j];  // Convert raw spectral data to float
-					interp_buffer[j] -= -msg.background_spectrum[j];  // Subtract background/DC spectrum (will be zero if disabled)
-				}
-				// Apply wavenumber-linearization interpolation
-				if (msg.interp_plan != NULL)
-				{
-					interpdk_execute(msg.interp_plan, interp_buffer, (float*)fft_buffer + i * aline_size);
-				}
-				else
-				{
-					memcpy((float*)fft_buffer + i * aline_size, interp_buffer, aline_size * sizeof(float));
-				}
-				// Multiply by apodization window
-				for (int j = 0; j < aline_size; j++)
-				{
-					((float*)fft_buffer)[i * aline_size + j] *= msg.apod_window[j];  // Will be 1 if disabled
-				}
-			}
-
-			// FFT
-			if (msg.fft_plan != NULL)
-			{
-				fftwf_execute_dft_r2c(*(msg.fft_plan), (float*)fft_buffer, (fftwf_complex*)fft_buffer);
-			}
-			// Cropping ROI and copying to output address
-			for (int i = 0; i < number_of_alines; i++)
-			{
-				memcpy(msg.dst_frame + i * roi_size, (fftwf_complex*)fft_buffer + i * spatial_aline_size + roi_offset, roi_size * sizeof(fftwf_complex));
-			}
-			// Normalize FFT result
-			for (int i = 0; i < number_of_alines * roi_size; i++)
-			{
-				msg.dst_frame[i][0] /= aline_size;
-				msg.dst_frame[i][1] /= aline_size;
-			}
+			process_alines(
+				msg.dst_frame,
+				msg.src_frame, 
+				aline_size,
+				number_of_alines,
+				roi_offset,
+				roi_size,
+				fft_plan,
+				msg.interp_plan,
+				msg.background_spectrum,
+				msg.apod_window,
+				fft_buffer,
+				interp_buffer
+			);
 			// printf("Worker %i finished writing to %p, about to increment barrier which is currently %i\n", std::this_thread::get_id(), msg.dst_frame, msg.barrier->load());
 			msg.barrier->fetch_add(1);
 		}
@@ -95,8 +126,6 @@ void aline_processing_worker(
 			// printf("Worker %i polled an empty queue.\n", std::this_thread::get_id());
 		}
 	}
-
-	delete[] interp_buffer;
 
 	printf("Worker %i terminated.\n", std::this_thread::get_id());
 }
@@ -116,6 +145,7 @@ private:
 	fftwf_plan fft_plan;  // 32-bit FFTW DFT plan. NULL if disabled.
 
 	void* fft_buffer;  // Buffer for the real-to-complex FFT before cropping
+	float* interp_buffer;
 
 public:
 
@@ -157,23 +187,30 @@ public:
 
 		total_alines = number_of_alines;
 
-		if (number_of_alines > 1024)
+		if (number_of_alines > 512)
 		{
-			number_of_workers = std::thread::hardware_concurrency();
+			if (number_of_alines < 4096)
+			{
+				number_of_workers = 4;
+			}
+			if (number_of_alines < 1024)
+			{
+				number_of_workers = 2;
+			}
+			else
+			{
+				number_of_workers = std::thread::hardware_concurrency();
+			}
+			// Ensure number of threads is compatible with the number of A-lines. Worst case only 1 thread will be used.
+			while ((number_of_alines % number_of_workers != 0) && (number_of_workers > 1))
+			{
+				number_of_workers -= 1;
+			}
 		}
-		else if (number_of_alines > 512)
-		{
-			number_of_workers = std::thread::hardware_concurrency() / 4;
-		}
-		else
+		else  // Do the work in the calling thread if the job is sufficiently small
 		{
 			number_of_workers = 1;
-		}
-
-		// Ensure number of threads is compatible with the number of A-lines. Worst case only 1 thread will be used.
-		while ((number_of_alines % number_of_workers != 0) && (number_of_workers > 1))
-		{
-			number_of_workers -= 1;
+			alines_per_worker = total_alines;
 		}
 
 		alines_per_worker = total_alines / number_of_workers;
@@ -191,6 +228,7 @@ public:
 		fft_buffer = fftwf_alloc_real(fft_buffer_size);
 		// The trasform will be in place, so the buffer will contain first real data and then complex
 		printf("Allocated FFTW transform buffer.\n");
+		interp_buffer = new float[aline_size * number_of_workers];  // Single A-line sized buffer
 
 		fftwf_import_wisdom_from_filename(".fftwf_wisdom");
 		fftwf_set_timelimit(10.0);
@@ -212,6 +250,7 @@ public:
 		{
 			terminate();
 		}
+		delete[] interp_buffer;
 		fftwf_free(fft_buffer);
 		fftwf_destroy_plan(fft_plan);
 		fftwf_cleanup();
@@ -246,18 +285,26 @@ public:
 					fflush(stdout);
 				}
 			}
-			for (int i = 0; i < queues.size(); i++)
+			if (number_of_workers > 1)
 			{
-				// printf("Enqueuing job in JobQueue at %p\n", queues[i]);
-				aline_processing_job_msg job;
-				job.dst_frame = dst_frame + i * this->roi_size * this->alines_per_worker;
-				job.src_frame = src_frame + i * this->aline_size * this->alines_per_worker;
-				job.barrier = &_barrier;
-				job.interp_plan = interpdk_plan_p;
-				job.apod_window = apodization_window;
-				job.background_spectrum = background_spectrum;
-				job.fft_plan = &fft_plan;
-				queues[i]->enqueue(job);
+				for (int i = 0; i < queues.size(); i++)
+				{
+					// printf("Enqueuing job in JobQueue at %p\n", queues[i]);
+					aline_processing_job_msg job;
+					job.dst_frame = dst_frame + i * this->roi_size * this->alines_per_worker;
+					job.src_frame = src_frame + i * this->aline_size * this->alines_per_worker;
+					job.barrier = &_barrier;
+					job.interp_plan = interpdk_plan_p;
+					job.apod_window = apodization_window;
+					job.background_spectrum = background_spectrum;
+					job.fft_plan = &fft_plan;
+					queues[i]->enqueue(job);
+				}
+			}
+			else
+			{
+				process_alines(dst_frame, src_frame, aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, interpdk_plan_p, background_spectrum, apodization_window, fft_buffer, interp_buffer);
+				_barrier++;
 			}
 			return 0;
 		}
@@ -289,13 +336,21 @@ public:
 	// Start the threads
 	void start()
 	{
-		printf("Spawning %i threads on %i cores, each processing %i of %i A-lines\n", number_of_workers, std::thread::hardware_concurrency(), alines_per_worker, total_alines);
 		_running.store(true);
-		for (int i = 0; i < number_of_workers; i++)
+		if (number_of_workers > 1)
 		{
-			queues.push_back(new JobQueue(32));
-			pool.push_back(std::thread(aline_processing_worker, &_running, queues.back(), aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, (float*)fft_buffer + (aline_size * alines_per_worker + 8 * alines_per_worker) * i));
+			printf("Spawning %i threads on %i cores, each processing %i of %i A-lines\n", number_of_workers, std::thread::hardware_concurrency(), alines_per_worker, total_alines);
+			for (int i = 0; i < number_of_workers; i++)
+			{
+				queues.push_back(new JobQueue(32));
+				pool.push_back(std::thread(aline_processing_worker, &_running, queues.back(), aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, (float*)fft_buffer + (aline_size * alines_per_worker + 8 * alines_per_worker) * i, interp_buffer + aline_size * i));
+			}
 		}
+		else
+		{
+			printf("AlineProcessingPool in synchronous mode: Spawning zero new workers.\n");
+		}
+		// else do work in calling thread
 		_barrier.store(number_of_workers);  // Set barrier to "finished" state.
 	}
 
@@ -303,19 +358,22 @@ public:
 	void terminate()
 	{
 		_running = false;
-		for (std::thread & th : pool)
+		if (number_of_workers > 1)
 		{
-			if (th.joinable())
+			for (std::thread & th : pool)
 			{
-				th.join();
+				if (th.joinable())
+				{
+					th.join();
+				}
 			}
+			pool.clear();
+			for (int i = 0; i < number_of_workers; i++)
+			{
+				delete queues[i];
+			}
+			queues.clear();
 		}
-		pool.clear();
-		for (int i = 0; i < number_of_workers; i++)
-		{
-			delete queues[i];
-		}
-		queues.clear();
 	}
 
 };

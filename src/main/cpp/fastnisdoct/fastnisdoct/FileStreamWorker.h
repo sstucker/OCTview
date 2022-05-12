@@ -112,179 +112,185 @@ public:
 };
 
 
-std::thread _thread;
-std::atomic_bool _running = ATOMIC_VAR_INIT(false);
-std::atomic_bool _finished = ATOMIC_VAR_INIT(true);
-CircAcqBuffer<fftwf_complex>* _buffer;
-
-char _file_name[ 512 ];
-int _max_frames_per_file;
-
-FileStreamType _file_type;
-
-int _aline_size;
-long _alines_per_frame;
-float _file_max_gb;
-int _n_to_stream;
-long _frame_size_bytes;
-
-
-void _fstream()
+// Asynchronously stream frames from a CircAcqBuffer to disk
+template <class T>
+class FileStreamWorker
 {
-	int max_frames_per_file = (long long)((float)_file_max_gb * (float)BYTES_PER_GB) / _frame_size_bytes;
-	if (max_frames_per_file < 1)
-	{
-		max_frames_per_file = 1;
-	}
-	int n_got;  // Index of locked out buffer
-	fftwf_complex* frame;  // Pointer to locked out buffer
+	private:
+	
+		std::thread _thread;
+		std::atomic_bool _running = ATOMIC_VAR_INIT(false);
+		std::atomic_bool _finished = ATOMIC_VAR_INIT(true);
+		CircAcqBuffer<T>* _buffer;
 
-	// TODO various types
-	Writer* writer = new RawWriter();
-	const char* suffix = ".bin";
+		char _file_name[512];
+		int _max_frames_per_file;
 
-	int frames_in_current_file = 0;
-	int file_name_inc = 0;
-	int n_streamed = 0;
+		FileStreamType _file_type;
 
-	// Get ahead of buffer to let galvos settle
-	int latest_frame_n = _buffer->get_count() + 5;
+		int _aline_size;
+		long _alines_per_frame;
+		float _file_max_gb;
+		int _n_to_stream;
+		long _frame_size_bytes;
 
-	// Stream continuously to various files or until _n_to_stream is reached
-	while (_running.load() && ((_n_to_stream > n_streamed) || (_n_to_stream == -1)))
-	{
-		n_got = _buffer->lock_out_wait(latest_frame_n, &frame);
-		if (latest_frame_n == n_got)
+		void _fstream()
 		{
-			latest_frame_n += 1;
-
-			if (!writer->is_open())
+			int max_frames_per_file = (long long)((float)_file_max_gb * (float)BYTES_PER_GB) / _frame_size_bytes;
+			if (max_frames_per_file < 1)
 			{
-				// Open file
-				char fname[MAX_PATH];
-				if (file_name_inc == 0)
-				{
-					sprintf_s(fname, "%s%s", _file_name, suffix);
-				}
-				else
-				{
-					sprintf_s(fname, "%s_%04d%s", _file_name, file_name_inc, suffix);
-				}
-				writer->open(fname);
-				frames_in_current_file = 0;
+				max_frames_per_file = 1;
 			}
-			else  // If file is open
+			int n_got;  // Index of locked out buffer
+			T* frame;  // Pointer to locked out buffer
+
+			// TODO various types
+			Writer* writer = new RawWriter();
+			const char* suffix = ".bin";
+
+			int frames_in_current_file = 0;
+			int file_name_inc = 0;
+			int n_streamed = 0;
+
+			// Get ahead of buffer to let galvos settle
+			int latest_frame_n = _buffer->get_count() + 5;
+
+			// Stream continuously to various files or until _n_to_stream is reached
+			while (_running.load() && ((_n_to_stream > n_streamed) || (_n_to_stream == -1)))
 			{
-				if ((_n_to_stream == -1) || (frames_in_current_file < _n_to_stream))  // Indefinite stream
+				n_got = _buffer->lock_out_wait(latest_frame_n, &frame);
+				if (latest_frame_n == n_got)
 				{
-					// Append to file
-					writer->writeFrame(frame, _frame_size_bytes);
-					frames_in_current_file += 1;
-					n_streamed += 1;
-				}
-				else
-				{
-					// Close file, stop streaming
-					printf("Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
-					writer->close();
-				}
-				if (frames_in_current_file == max_frames_per_file)  // If this file cannot get larger, need to start a new one
-				{
-					file_name_inc += 1;
-					if (writer->is_open())
+					latest_frame_n += 1;
+
+					if (!writer->is_open())
 					{
-						printf("Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
-						writer->close();
+						// Open file
+						char fname[MAX_PATH];
+						if (file_name_inc == 0)
+						{
+							sprintf_s(fname, "%s%s", _file_name, suffix);
+						}
+						else
+						{
+							sprintf_s(fname, "%s_%04d%s", _file_name, file_name_inc, suffix);
+						}
+						writer->open(fname);
+						frames_in_current_file = 0;
+					}
+					else  // If file is open
+					{
+						if ((_n_to_stream == -1) || (frames_in_current_file < _n_to_stream))  // Indefinite stream
+						{
+							// Append to file
+							writer->writeFrame(frame, _frame_size_bytes);
+							frames_in_current_file += 1;
+							n_streamed += 1;
+						}
+						else
+						{
+							// Close file, stop streaming
+							printf("Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
+							writer->close();
+						}
+						if (frames_in_current_file == max_frames_per_file)  // If this file cannot get larger, need to start a new one
+						{
+							file_name_inc += 1;
+							if (writer->is_open())
+							{
+								printf("Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
+								writer->close();
+							}
+						}
+
 					}
 				}
+				else  // Dropped frame, since we have fallen behind, get the latest next time
+				{
+					printf("Writer can't keep up! Not writing to file! Dropped frame %i, got %i instead\n", latest_frame_n, n_got);
+					latest_frame_n = _buffer->get_count() + 1;
+				}
+				_buffer->release();
+			}
+			if (writer->is_open())  // The stream has been stopped
+			{
+				// Close file
+				printf("Stream ended: Closing file %s after saving %i frames\n", _file_name, frames_in_current_file);
+				writer->close();
+			}
+			delete writer;
+			_finished = true;
+		}
 
+		inline int _start
+		(
+			const char* fname,
+			float max_gb,
+			FileStreamType ftype,
+			CircAcqBuffer<T>* buffer,
+			long frame_size,
+			int n_to_stream
+		)
+		{
+			if (is_streaming())
+			{
+				return -1;
+			}
+			if (_thread.joinable())
+			{
+				_thread.join();
+			}
+			_finished = false;
+			_running = true;
+			memcpy(_file_name, fname, strlen(fname) * sizeof(char) + 1);  // Copy string to module-managed buffer
+			_file_max_gb = max_gb;
+			_file_type = ftype;
+			_buffer = buffer;
+			_frame_size_bytes = frame_size * sizeof(T);
+			_n_to_stream = n_to_stream;
+			printf("Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
+			_thread = std::thread(&FileStreamWorker::_fstream, this);  // Start the thread
+		}
+
+	public:
+
+		bool is_streaming()
+		{
+			return _running.load() && !_finished.load();
+		}
+
+		int start
+		(
+			const char* fname,
+			float max_gb,
+			FileStreamType ftype,
+			CircAcqBuffer<T>* buffer,
+			long frame_size
+		)
+		{
+			return _start(fname, max_gb, ftype, buffer, frame_size, -1);
+		}
+
+		int start
+		(
+			const char* fname,
+			float max_gb,
+			FileStreamType ftype,
+			CircAcqBuffer<T>* buffer,
+			long frame_size,
+			int n_to_stream
+		)
+		{
+			return _start(fname, max_gb, ftype, buffer, frame_size, n_to_stream);
+		}
+
+		void stop()
+		{
+			if (_running)
+			{
+				_running.store(false);
+				_thread.join();
 			}
 		}
-		else  // Dropped frame, since we have fallen behind, get the latest next time
-		{
-			printf("Writer can't keep up! Not writing to file! Dropped frame %i, got %i instead\n", latest_frame_n, n_got);
-			latest_frame_n = _buffer->get_count() + 1;
-		}
-		_buffer->release();
-	}
-	if (writer->is_open())  // The stream has been stopped
-	{
-		// Close file
-		printf("Stream ended: Closing file %s after saving %i frames\n", _file_name, frames_in_current_file);
-		writer->close();
-	}
-	delete writer;
-	_finished = true;
-}
+};
 
-
-bool is_streaming()
-{
-	return _running.load() && !_finished.load();
-}
-
-inline int _start
-(
-	const char* fname,
-	float max_gb,
-	FileStreamType ftype,
-	CircAcqBuffer<fftwf_complex>* buffer,
-	int aline_size,
-	int alines_per_frame,
-	int n_to_stream
-)
-{
-	if (is_streaming())
-	{
-		return -1;
-	}
-	if (_thread.joinable())
-	{
-		_thread.join();
-	}
-	_finished = false;
-	_running = true;
-	memcpy(_file_name, fname, strlen(fname) * sizeof(char) + 1);  // Copy string to module-managed buffer
-	_file_max_gb = max_gb;
-	_file_type = ftype;
-	_buffer = buffer;
-	_aline_size = aline_size;
-	_alines_per_frame = alines_per_frame;
-	_frame_size_bytes = aline_size * alines_per_frame * sizeof(fftwf_complex);
-	_n_to_stream = n_to_stream;
-	printf("Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
-	_thread = std::thread(&_fstream);  // Start the thread
-}
-
-int start_streaming
-(
-	const char* fname,
-	float max_gb,
-	FileStreamType ftype,
-	CircAcqBuffer<fftwf_complex>* buffer,
-	int aline_size,
-	int alines_per_frame
-)
-{
-	return _start(fname, max_gb, ftype, buffer, aline_size, alines_per_frame, -1);
-}
-
-int start_streaming
-(
-	const char* fname,
-	float max_gb,
-	FileStreamType ftype,
-	CircAcqBuffer<fftwf_complex>* buffer,
-	int aline_size,
-	int alines_per_frame,
-	int n_to_stream
-)
-{
-	return _start(fname, max_gb, ftype, buffer, aline_size, alines_per_frame, n_to_stream);
-}
-
-void stop_streaming()
-{
-	_running.store(false);
-	_thread.join();
-}
