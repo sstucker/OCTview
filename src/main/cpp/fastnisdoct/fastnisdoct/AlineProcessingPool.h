@@ -139,13 +139,13 @@ private:
 	std::atomic_int _barrier;  // Determines when all workers have finished their jobs.
 
 	std::vector<std::thread> pool;  // Vector of worker queues.
-	std::vector<JobQueue*> queues;  // Vector of worker messaging queues.
+	std::vector<std::unique_ptr<JobQueue>> queues;  // Vector of worker messaging queues.
 
 	WavenumberInterpolationPlan interpdk_plan;  // Wavenumber-linearization interpolation plan.
 	fftwf_plan fft_plan;  // 32-bit FFTW DFT plan. NULL if disabled.
 
 	void* fft_buffer;  // Buffer for the real-to-complex FFT before cropping
-	float* interp_buffer;
+	std::unique_ptr<float[]> interp_buffer;
 
 public:
 
@@ -228,7 +228,7 @@ public:
 		fft_buffer = fftwf_alloc_real(fft_buffer_size);
 		// The trasform will be in place, so the buffer will contain first real data and then complex
 		printf("Allocated FFTW transform buffer.\n");
-		interp_buffer = new float[aline_size * number_of_workers];  // Single A-line sized buffer
+		interp_buffer = std::make_unique<float[]>(aline_size * number_of_workers);  // Single A-line sized buffer
 
 		fftwf_import_wisdom_from_filename(".fftwf_wisdom");
 		fftwf_set_timelimit(10.0);
@@ -250,10 +250,8 @@ public:
 		{
 			terminate();
 		}
-		delete[] interp_buffer;
 		fftwf_free(fft_buffer);
 		fftwf_destroy_plan(fft_plan);
-		fftwf_cleanup();
 	}
 
 	// Submit a job to the pool. As only one job can be parallelized at one time by this pool, returns -1 if a job is already underway.
@@ -303,7 +301,7 @@ public:
 			}
 			else
 			{
-				process_alines(dst_frame, src_frame, aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, interpdk_plan_p, background_spectrum, apodization_window, fft_buffer, interp_buffer);
+				process_alines(dst_frame, src_frame, aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, interpdk_plan_p, background_spectrum, apodization_window, fft_buffer, interp_buffer.get());
 				_barrier++;
 			}
 			return 0;
@@ -342,8 +340,8 @@ public:
 			printf("Spawning %i threads on %i cores, each processing %i of %i A-lines\n", number_of_workers, std::thread::hardware_concurrency(), alines_per_worker, total_alines);
 			for (int i = 0; i < number_of_workers; i++)
 			{
-				queues.push_back(new JobQueue(32));
-				pool.push_back(std::thread(aline_processing_worker, &_running, queues.back(), aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, (float*)fft_buffer + (aline_size * alines_per_worker + 8 * alines_per_worker) * i, interp_buffer + aline_size * i));
+				queues.emplace_back( new JobQueue(32) );
+				pool.push_back(std::thread(aline_processing_worker, &_running, queues.back().get(), aline_size, alines_per_worker, roi_offset, roi_size, &fft_plan, (float*)fft_buffer + (aline_size * alines_per_worker + 8 * alines_per_worker) * i, interp_buffer.get() + aline_size * i));
 			}
 		}
 		else
@@ -368,10 +366,6 @@ public:
 				}
 			}
 			pool.clear();
-			for (int i = 0; i < number_of_workers; i++)
-			{
-				delete queues[i];
-			}
 			queues.clear();
 		}
 	}

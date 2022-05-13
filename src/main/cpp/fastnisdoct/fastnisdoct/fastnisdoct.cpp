@@ -93,7 +93,7 @@ struct StateMsg {
 };
 
 spsc_bounded_queue_t<StateMsg> msg_queue(32);
-AlineProcessingPool* aline_proc_pool = NULL;  // Thread pool manager class. Responsible for background subtraction, apodization, interpolation, FFT
+std::unique_ptr<AlineProcessingPool> aline_proc_pool;  // Thread pool manager class. Responsible for background subtraction, apodization, interpolation, FFT
 
 bool image_configured = false;  // Image buffers are allocated
 bool processing_configured = false;  // Plans for interpolation and FFT are ready
@@ -112,8 +112,8 @@ int32_t alines_per_buffer = 0;  // Number of A-lines in each IMAQ buffer. If les
 int32_t buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
 int32_t alines_per_bline = 0; // Number of A-lines which make up a B-line of the image. Used to divide processing labor.
 
-CircAcqBuffer<uint16_t>* spectral_image_buffer = NULL;  // Spectral frames are copied to this buffer for export.
-CircAcqBuffer<fftwf_complex>* processed_image_buffer = NULL;  // Spatial frames are written into this buffer for export.
+std::unique_ptr<CircAcqBuffer<uint16_t>> spectral_image_buffer;  // Spectral frames are copied to this buffer for export.
+std::unique_ptr<CircAcqBuffer<fftwf_complex>> processed_image_buffer;  // Spatial frames are written into this buffer for export.
 int frames_to_buffer = 0;  // Amount of buffer memory to allocate per the size of a frame
 
 // TODO replace with CircAcqBuffers or otherwise preallocate display buffers
@@ -122,18 +122,19 @@ int frames_to_buffer = 0;  // Amount of buffer memory to allocate per the size o
 spsc_bounded_queue_t<fftwf_complex*> image_display_queue(2);  // Queue of pointers to images for display. Copy to client buffer and then delete after dequeue.
 spsc_bounded_queue_t<float*> spectrum_display_queue(2);  // Queue of pointers to spectra for display. Copy to client buffer and then delete after dequeue.
 
-uint16_t* raw_frame_roi = NULL;  // Frame which the contents of IMAQ buffers are copied into prior to processing if buffers_per_frame > 1
-uint16_t* raw_frame_roi_new = NULL;
-bool* discard_mask = NULL;  // Bitmask which reduces number_of_alines_buffered to number_of_alines. Intended to remove unwanted A-lines exposed during flyback, etc.
+// I do not trust std containers for the large arrays
+std::unique_ptr<uint16_t[]> raw_frame_roi;  // Frame which the contents of IMAQ buffers are copied into prior to processing if buffers_per_frame > 1
+std::unique_ptr<uint16_t[]> raw_frame_roi_new;
+std::vector<bool> discard_mask;  // Bitmask which reduces number_of_alines_buffered to number_of_alines. Intended to remove unwanted A-lines exposed during flyback, etc.
 
 std::vector<std::vector<std::tuple<int, int>>> roi_cpy_map; // Variable number of (offset, start) for each buffer. Predetermined and used to optimize copying the ROI.
 
-float* background_spectrum = NULL;  // Subtracted from each spectrum.
-float* background_spectrum_new = NULL;
+std::vector<float> background_spectrum;  // Subtracted from each spectrum.
+std::vector<float> background_spectrum_new;
 
-float* apodization_window = NULL;  // Multiplied by each spectrum.
+std::vector<float> apodization_window;  // Multiplied by each spectrum.
 
-uint16_t* aline_stamp_buffer = NULL; // A-line stamps are copied here. For debugging and latency monitoring
+std::vector<uint16_t> aline_stamp_buffer; // A-line stamps are copied here. For debugging and latency monitoring
 
 int32_t cumulative_buffer_number = 0;  // Number of buffers acquired by IMAQ
 int32_t cumulative_frame_number = 0;  // Number of frames acquired by main
@@ -152,11 +153,12 @@ bool subtract_background = false;  // If true, the average spectrum of the previ
 bool interp = false;  // If true, first order linear interpolation is used to approximate a linear-in-wavelength spectrum.
 double interpdk = 0.0;  // Coefficient of first order linear-in-wavelength approximation.
 
-float frame_processing_period = 0;  // Time taken to process latest frame
+float frame_processing_period = 0.0;  // Time taken to process latest frame
 
 bool saving_processed;
 FileStreamWorker<uint16_t> spectral_frame_streamer;
 FileStreamWorker<fftwf_complex> processed_frame_streamer;
+
 
 inline void stop_acquisition()
 {
@@ -212,8 +214,7 @@ inline void set_up_processing_pool()
 {
 	if (aline_proc_pool == NULL)
 	{
-		delete aline_proc_pool;
-		aline_proc_pool = new AlineProcessingPool(aline_size, alines_in_image, roi_offset, roi_size, true);
+		aline_proc_pool = std::make_unique<AlineProcessingPool>(aline_size, alines_in_image, roi_offset, roi_size, true);
 		printf("fastnisdoct: Processing pool created for the first time.\n");
 		return;
 	}
@@ -222,8 +223,7 @@ inline void set_up_processing_pool()
 		if ((aline_proc_pool->aline_size != aline_size) || (aline_proc_pool->number_of_alines != alines_in_image) ||
 			(aline_proc_pool->roi_offset != roi_offset) || (aline_proc_pool->roi_size != roi_size))
 		{
-			delete aline_proc_pool;
-			aline_proc_pool = new AlineProcessingPool(aline_size, alines_in_image, roi_offset, roi_size, true);
+			aline_proc_pool = std::make_unique<AlineProcessingPool>(aline_size, alines_in_image, roi_offset, roi_size, true);
 			printf("fastnisdoct: Processing pool recreated.\n");
 			return;
 		}
@@ -311,12 +311,10 @@ inline void recv_msg()
 					printf("Allocating A-line-sized processing buffers with size %i\n", msg.aline_size);
 
 					// Allocate processing buffers
-					delete[] background_spectrum;
-					delete[] background_spectrum_new;
-					background_spectrum = new float[msg.aline_size];
-					background_spectrum_new = new float[msg.aline_size];
-					memset(background_spectrum, 0, msg.aline_size * sizeof(float));
-					memset(background_spectrum_new, 0, msg.aline_size * sizeof(float));
+					background_spectrum.reserve(msg.aline_size);
+					background_spectrum_new.reserve(msg.aline_size);
+					std::fill(background_spectrum_new.begin(), background_spectrum_new.end(), 0.0);
+					std::fill(background_spectrum_new.begin(), background_spectrum_new.end(), 0.0);
 				}
 				else
 				{
@@ -325,17 +323,16 @@ inline void recv_msg()
 
 				if (alines_in_scan != msg.alines_in_scan)
 				{
-					delete[] aline_stamp_buffer;
-					aline_stamp_buffer = new uint16_t[msg.alines_in_scan];
+					aline_stamp_buffer.reserve(msg.alines_in_scan);
 				}
 
 				// -- Set up NI image buffers --------------------------------------------------------------------------
 				if ((aline_size != msg.aline_size) || (alines_per_buffer != msg.alines_per_buffer) || (alines_in_scan != msg.alines_in_scan) || (alines_in_image != msg.alines_in_image))  // If acq buffer size has changed
 				{
 					buffers_per_frame = msg.alines_in_scan / msg.alines_per_buffer;
-					if (ni::setup_buffers(msg.aline_size, msg.alines_per_buffer, frames_to_buffer * buffers_per_frame) == 0)
+					if (ni::setup_buffers(msg.aline_size, msg.alines_per_buffer, frames_to_buffer) == 0)
 					{
-						printf("fastnisdoct: %i buffers allocated.\n", frames_to_buffer * buffers_per_frame);
+						printf("fastnisdoct: %i buffers allocated.\n", frames_to_buffer);
 						cumulative_buffer_number = 0;
 						cumulative_frame_number = 0;
 						image_configured = true;
@@ -364,20 +361,16 @@ inline void recv_msg()
 				if (msg.aline_size * msg.alines_in_image != preprocessed_alines_size)
 				{
 					preprocessed_alines_size = msg.aline_size * msg.alines_in_image;
-					delete[] raw_frame_roi;
-					delete[] raw_frame_roi_new;
-					raw_frame_roi = new uint16_t[preprocessed_alines_size];
-					raw_frame_roi_new = new uint16_t[preprocessed_alines_size];
-					delete spectral_image_buffer;
-					spectral_image_buffer = new CircAcqBuffer<uint16_t>(frames_to_buffer, preprocessed_alines_size);
+					raw_frame_roi = std::make_unique<uint16_t[]>(preprocessed_alines_size);
+					raw_frame_roi_new = std::make_unique<uint16_t[]>(preprocessed_alines_size);
+					spectral_image_buffer = std::make_unique<CircAcqBuffer<uint16_t>>(frames_to_buffer, preprocessed_alines_size);
 				}
 				
 				// Allocate rings
 				if (msg.roi_size * msg.alines_in_image != processed_alines_size)
 				{
-					delete processed_image_buffer;
 					processed_alines_size = msg.roi_size * msg.alines_in_image;
-					processed_image_buffer = new CircAcqBuffer<fftwf_complex>(frames_to_buffer, processed_alines_size);
+					processed_image_buffer = std::make_unique<CircAcqBuffer<fftwf_complex>>(frames_to_buffer, processed_alines_size);
 				}
 				roi_offset = msg.roi_offset;
 				roi_size = msg.roi_size;
@@ -456,9 +449,8 @@ inline void recv_msg()
 				n_frame_avg = msg.n_frame_avg;
 
 				// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
-				delete[] apodization_window;
-				apodization_window = new float[msg.aline_size];
-				memcpy(apodization_window, msg.apod_window, msg.aline_size * sizeof(float));
+				apodization_window.reserve(msg.aline_size);
+				apodization_window.insert(apodization_window.end(), msg.apod_window, msg.apod_window + msg.aline_size);
 				delete[] msg.apod_window;
 				
 				// Can only attempt to set up processing pool if image params have been defined already. Otherwise pool gets set up then
@@ -505,11 +497,11 @@ inline void recv_msg()
 					saving_processed = true;
 					if (msg.n_frames_to_acquire > -1)
 					{
-						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size * alines_in_image, msg.n_frames_to_acquire);
+						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer.get(), roi_size * alines_in_image, msg.n_frames_to_acquire);
 					}
 					else
 					{
-						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer, roi_size * alines_in_image);
+						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer.get(), roi_size * alines_in_image);
 					}
 				}
 				else
@@ -517,11 +509,11 @@ inline void recv_msg()
 					saving_processed = false;
 					if (msg.n_frames_to_acquire > -1)
 					{
-						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer, preprocessed_alines_size, msg.n_frames_to_acquire);
+						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer.get(), preprocessed_alines_size, msg.n_frames_to_acquire);
 					}
 					else
 					{
-						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer, preprocessed_alines_size);
+						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer.get(), preprocessed_alines_size);
 					}
 				}
 				state.store(STATE_ACQUIRING);
@@ -583,11 +575,11 @@ void _main()
 			if (cumulative_frame_number > 0)
 			{
 				processed_alines_addr = processed_image_buffer->lock_out_head();  // Lock out the export ring element we are writing to. This is what gets written to disk by a Writer
-				aline_proc_pool->submit(processed_alines_addr, raw_frame_roi, interp, interpdk, apodization_window, background_spectrum);
+				aline_proc_pool->submit(processed_alines_addr, (uint16_t*)raw_frame_roi.get(), interp, interpdk, &apodization_window[0], &background_spectrum[0]);
 			}
 
 			// Set background spectrum to zero. We sum to it while holding each buffer
-			memset(background_spectrum_new, 0, aline_size * sizeof(float));
+			std::fill(background_spectrum_new.begin(), background_spectrum_new.end(), 0.0);
 
 			// Collect IMAQ buffers until whole frame is acquired
 			int i_buf = 0;
@@ -617,14 +609,14 @@ void _main()
 					{
 						for (int j = 0; j < roi_cpy_map[i_buf].size(); j++)
 						{
-							memcpy(raw_frame_roi + buffer_copy_p, locked_out_addr + std::get<0>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) * sizeof(uint16_t));
+							memcpy(raw_frame_roi.get() + buffer_copy_p, locked_out_addr + std::get<0>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) * sizeof(uint16_t));
  							buffer_copy_p += std::get<1>(roi_cpy_map[i_buf][j]);
 							// printf("Copying %i voxels (%i A-lines) from buffer %i, offset %i to buffer at position %i (%i A-lines) of %i\n", std::get<1>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) / aline_size, i_buf, std::get<0>(roi_cpy_map[i_buf][j]), buffer_copy_p, buffer_copy_p / aline_size, alines_in_image * aline_size);
 						}
 					}
 					else
 					{
-						memcpy(raw_frame_roi + buffer_copy_p, locked_out_addr, alines_per_buffer * aline_size * sizeof(uint16_t));
+						memcpy(raw_frame_roi.get() + buffer_copy_p, locked_out_addr, alines_per_buffer * aline_size * sizeof(uint16_t));
 						buffer_copy_p += i_buf * alines_per_buffer * aline_size;
 					}
 
@@ -657,7 +649,7 @@ void _main()
 			if (!saving_processed && current_state == STATE_ACQUIRING)
 			{
 				uint16_t* spectral_dst = spectral_image_buffer->lock_out_head();
-				memcpy(spectral_dst, raw_frame_roi, preprocessed_alines_size * sizeof(uint16_t));
+				memcpy(spectral_dst, raw_frame_roi.get(), preprocessed_alines_size * sizeof(uint16_t));
 				spectral_image_buffer->release_head();
 				if (image_display_queue.full())
 				{
@@ -674,7 +666,7 @@ void _main()
 					{
 						for (int j = 0; j < aline_size; j++)
 						{
-							background_spectrum_new[j] += raw_frame_roi_new[aline_size * i + j];
+							background_spectrum_new[j] += raw_frame_roi_new.get()[aline_size * i + j];
 						}
 					}
 				}
@@ -689,19 +681,15 @@ void _main()
 					}
 
 					// Pointer swap new background buffer in
-					float* tmp = background_spectrum;
-					background_spectrum = background_spectrum_new;
-					background_spectrum_new = tmp;
+					std::swap(background_spectrum, background_spectrum_new);
 				}
 				else
 				{
-					memset(background_spectrum, 0, aline_size * sizeof(float));
+					std::fill(background_spectrum.begin(), background_spectrum.end(), 0.0);
 				}
 
 				// Pointer swap new grab buffer buffer in
-				uint16_t* tmp = raw_frame_roi;
-				raw_frame_roi = raw_frame_roi_new;
-				raw_frame_roi_new = tmp;
+				std::swap(raw_frame_roi, raw_frame_roi_new);
 
 				// Buffer a spectrum for output to GUI
 				if (!spectrum_display_queue.full())
@@ -709,7 +697,7 @@ void _main()
 					float* spectrum_buffer = new float[aline_size];  // Will be freed by grab_frame or cleanup
 					for (int i = 0; i < aline_size; i++)
 					{
-						spectrum_buffer[i] = raw_frame_roi[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
+						spectrum_buffer[i] = raw_frame_roi.get()[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
 					}
 					spectrum_display_queue.enqueue(spectrum_buffer);
 				}
@@ -723,11 +711,6 @@ void _main()
 					{
 						spins += 1;
 					}
-					// printf("fastnisdoct: A-line processing pool finished with frame %i. Spun %i times.\n", cumulative_frame_number, spins);
-
-					// printf("A-line averaging: %i/%i, B-line averaging: %i/%i, Frame averaging %i\n", n_aline_repeat, a_rpt_proc_flag, n_bline_repeat, b_rpt_proc_flag, n_frame_avg);
-
-					// printf("Alines per B-line: %i\n", alines_per_bline);
 
 					fftwf_complex r;
 					int alines_per_bline_now;  // A-lines per B-line following A-line repeat processing
@@ -835,6 +818,8 @@ void _main()
 	{
 		stop_scanning();
 	}
+	printf("Exiting main\n");
+	fflush(stdout);
 }
 
 
@@ -881,7 +866,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	{
 		main_running = false;
 		main_t.join();
-		delete aline_proc_pool;
 		if (ni::daq_close() == 0 && ni::imaq_close() == 0)
 		{
 			printf("NI IMAQ and NI DAQmx interfaces closed.\n");
@@ -891,13 +875,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 			printf("Failed to close NI IMAQ and NI DAQmx interfaces.\n");
 			ni::print_error_msg();
 		}
-		delete[] background_spectrum;
-		delete[] background_spectrum_new;
-		delete processed_image_buffer;
-		delete spectral_image_buffer;
-		delete apodization_window;
-		delete[] raw_frame_roi;
-		delete[] raw_frame_roi_new;
 	}
 
 	__declspec(dllexport) void nisdoct_configure_image(

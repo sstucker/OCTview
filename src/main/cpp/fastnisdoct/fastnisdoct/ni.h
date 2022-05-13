@@ -36,7 +36,7 @@ uint16_t** buffers = NULL;  // Ring buffer elements allocated manually
 
 int dac_rate = -1;  // The output rate of the DAC used to drive the scan pattern
 int line_rate = -1;  // The rate of the line trigger. A multiple of the DAC rate.
-float64* concatenated_scansig;  // Pointer to buffer of scansignals appended end to end
+std::vector<float64> concatenated_scansig;  // Pointer to buffer of scansignals appended end to end
 int32 scansig_n = 0; // Number of samples in each of the 4 scan signals
 int32 samples_written = 0;  // Returned by NI DAQ after samples are written
 
@@ -276,7 +276,6 @@ namespace ni
 	int daq_close()
 	{
 		err = DAQmxClearTask(scan_task);
-		delete[] concatenated_scansig;
 		printf("NI DAQ interface closed.\n");
 		return err;
 	}
@@ -294,7 +293,7 @@ namespace ni
 		if (err == 0)
 		{
 			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
+			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
 			err = DAQmxStartTask(scan_task);
 			if (err == 0)
 			{
@@ -358,12 +357,12 @@ namespace ni
 		// Assign buffers for scan pattern
 		if (pattern->n != scansig_n)  // If buffer size needs to change
 		{
-			delete[] concatenated_scansig;
-			concatenated_scansig = new float64[3 * pattern->n];
+			concatenated_scansig.reserve(3 * pattern->n);
 		}
-		memcpy(concatenated_scansig + 0, pattern->x, sizeof(float64) * pattern->n);
-		memcpy(concatenated_scansig + pattern->n, pattern->y, sizeof(float64) * pattern->n);
-		memcpy(concatenated_scansig + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
+
+		memcpy(&concatenated_scansig[0] + 0, pattern->x, sizeof(float64) * pattern->n);
+		memcpy(&concatenated_scansig[0] + pattern->n, pattern->y, sizeof(float64) * pattern->n);
+		memcpy(&concatenated_scansig[0] + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
 
 		bool32 is_it = false;
 		DAQmxIsTaskDone(scan_task, &is_it);
@@ -383,7 +382,7 @@ namespace ni
 				printf("DAC rate is unchanged: %i\n", dac_rate);
 			}
 			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concatenated_scansig, &samples_written, NULL);
+			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
 		}
 		else
 		{

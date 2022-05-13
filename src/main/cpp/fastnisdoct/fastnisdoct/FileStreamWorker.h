@@ -145,7 +145,7 @@ class FileStreamWorker
 			T* frame;  // Pointer to locked out buffer
 
 			// TODO various types
-			Writer* writer = new RawWriter();
+			std::unique_ptr<Writer> writer = std::make_unique<RawWriter>();
 			const char* suffix = ".bin";
 
 			int frames_in_current_file = 0;
@@ -218,7 +218,6 @@ class FileStreamWorker
 				printf("Stream ended: Closing file %s after saving %i frames\n", _file_name, frames_in_current_file);
 				writer->close();
 			}
-			delete writer;
 			_finished = true;
 		}
 
