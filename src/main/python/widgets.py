@@ -12,6 +12,7 @@ from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindo
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
 from PyScanPatterns.scanpatterns import LineScanPattern, RasterScanPattern
 from threading import Thread, Lock
+from queue import Queue
 import copy
 
 import OCTview
@@ -126,8 +127,10 @@ def _dictize(obj):
 def _get_widget_value(widget: QWidget):
     if type(widget) in [QCheckBox, QRadioButton]:
         return widget.isChecked()
-    elif type(widget) in [QLineEdit, QTextEdit]:
+    elif type(widget) in [QLineEdit]:
         return widget.text()
+    elif type(widget) in [QTextEdit]:
+        return widget.toPlainText()
     elif type(widget) in [QSpinBox, QDoubleSpinBox]:
         return widget.value()
     elif type(widget) in [QComboBox]:
@@ -223,6 +226,19 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self._timer_generate = QTimer()
         self._ctr_generate = 0
 
+        self._pattern_mtx = Lock()
+        self._gen_thread = Thread()
+        self._gen_queue = Queue()
+
+    def _gen_worker(self):
+        while self._gen_queue.qsize() > 0:
+            while self._gen_queue.qsize() > 1:
+                self._gen_queue.get()  # pop first in jobs we don't care about
+            with self._pattern_mtx:
+                self._pattern.generate(**self._gen_queue.get())
+            self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
+        self.pattern_updated.emit()
+
     def generate_pattern(self):
         self._ctr_generate += 1
         self._timer_generate.singleShot(OCTview.CALLBACK_DEBOUNCE_MS, self._generate_pattern)
@@ -230,7 +246,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
     def _generate_pattern(self):
         self._ctr_generate -= 1
         if not self._ctr_generate > 0:
-            self._pattern.generate(**{
+            p = {
                 'alines': self.spinACount.value(),
                 'blines': self.spinBCount.value(),
                 'max_trigger_rate': self.max_line_rate(),
@@ -247,10 +263,12 @@ class RasterScanWidget(ScanWidget, UiWidget):
                 'trigger_blines': self.blines_triggered(),
                 'samples_on': self._settings_dialog.spinSamplesOn.value(),
                 'samples_off': self._settings_dialog.spinSamplesOff.value()
-            })
-            self.parentWidget().linePatternRate.setText(str(self._pattern.pattern_rate)[0:5] + ' Hz')
-            print(self._pattern.__class__.__name__, 'generated!')
-            self.pattern_updated.emit()
+            }
+            self._gen_queue.put(p)
+            if not self._gen_thread.is_alive():
+                self._gen_thread = Thread(target=self._gen_worker)
+                self._gen_thread.start()
+
 
     def fixSize(self, fixed: bool):
         """Disables all widgets that allow the editing of the image size. This cannot be changed during a scan.
@@ -277,7 +295,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
 
     def blines_triggered(self) -> bool:
         if self._settings_dialog.radioTriggerAuto.isChecked():
-            return self.pattern().points_in_image > MAX_ALINES_IN_SINGLE_BUFFER
+            return self.spinACount.value() * self.spinBCount.value() > MAX_ALINES_IN_SINGLE_BUFFER
         else:
             return self._settings_dialog.radioTriggerBlines.isChecked()
 
@@ -347,8 +365,14 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.labelExposureFraction.setEnabled(not self.radioXStep.isChecked())
 
     # Overload
-    def pattern(self):
-        return copy.copy(self._pattern)
+    def pattern(self) -> RasterScanPattern:
+        """Pattern generation occurs in a thread, so we need to get a lock and make a deep copy"""
+        # self._pattern_mtx.acquire(blocking=False)
+        # p = copy.copy(self._pattern)
+        # self._pattern_mtx.release()
+        with self._pattern_mtx:
+            p = copy.copy(self._pattern)
+        return p
 
 
 class LineScanWidget(ScanWidget, UiWidget):
@@ -1246,3 +1270,6 @@ class MainWindow(QMainWindow, UiWidget):
             return int(self.uncropped_frame_size() / self.scan_pattern().dimensions[1])
         else:
             return self.uncropped_frame_size()
+
+    def dll_search_paths(self):
+        return self._settings_dialog.textEditDLLPaths.toPlainText().split(r'\n')

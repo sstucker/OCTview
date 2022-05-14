@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>666</width>
-    <height>488</height>
+    <width>621</width>
+    <height>295</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
+   <item row="1" column="0">
     <widget class="QGroupBox" name="groupCamera">
      <property name="title">
       <string>Camera interface</string>
@@ -99,7 +99,76 @@
          <double>0.010000000000000</double>
         </property>
         <property name="value">
-         <double>14.000000000000000</double>
+         <double>5.600000000000000</double>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item row="5" column="0" colspan="2">
+    <widget class="QDialogButtonBox" name="buttonBox">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="standardButtons">
+      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+     </property>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QGroupBox" name="groupSettings">
+     <property name="title">
+      <string>System settings</string>
+     </property>
+     <layout class="QFormLayout" name="formLayout_3">
+      <item row="1" column="1">
+       <widget class="QFrame" name="frameTheme">
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QRadioButton" name="radioDark">
+           <property name="text">
+            <string>Dark</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="radioLight">
+           <property name="text">
+            <string>Light</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QTextEdit" name="textEditDLLPaths">
+        <property name="toolTip">
+         <string>DLLs in these directories will be loaded on startup. These should point to installations of backend drivers such as IMAQ and NI-DAQmx.</string>
+        </property>
+        <property name="lineWrapMode">
+         <enum>QTextEdit::NoWrap</enum>
+        </property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QLabel" name="labelDLLPaths">
+        <property name="toolTip">
+         <string>DLLs in these directories will be loaded on startup. These should point to installations of backend drivers such as IMAQ and NI-DAQmx.</string>
+        </property>
+        <property name="text">
+         <string>Additional DLL search paths</string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QLabel" name="labelAppearance">
+        <property name="text">
+         <string>Appearance</string>
         </property>
        </widget>
       </item>
@@ -174,52 +243,10 @@
      </layout>
     </widget>
    </item>
-   <item row="2" column="0" colspan="2">
-    <widget class="QGroupBox" name="groupSettings">
-     <property name="title">
-      <string>Global settings</string>
-     </property>
-     <layout class="QFormLayout" name="formLayout_3">
-      <item row="0" column="1">
-       <widget class="QFrame" name="frameTheme">
-        <layout class="QHBoxLayout" name="horizontalLayout">
-         <item>
-          <widget class="QRadioButton" name="radioDark">
-           <property name="text">
-            <string>Dark</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QRadioButton" name="radioLight">
-           <property name="text">
-            <string>Light</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="3" column="0" colspan="2">
-    <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="orientation">
-      <enum>Qt::Horizontal</enum>
-     </property>
-     <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="0" colspan="2">
+   <item row="1" column="1">
     <widget class="QGroupBox" name="groupBox">
      <property name="title">
-      <string>Scan settings</string>
+      <string>Scanner settings</string>
      </property>
      <layout class="QFormLayout" name="formLayout_4">
       <item row="0" column="0">

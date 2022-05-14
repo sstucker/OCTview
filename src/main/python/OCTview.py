@@ -59,9 +59,14 @@ class _AppContext(ApplicationContext):
         self.window = None  # Qt window
         self.controller = None  # Backend. This AppContext instance mediates their communication
 
-        self._first_setup = True  # Set false after init
+        self._first_setup = True  # Set false at end of `run`
 
     def run(self):
+        self.window = MainWindow()
+        self.window.loadConfiguration(cfg_file=os.path.join(self.config_resource_location, '.last'))
+        self.window.launch.connect(self._launch)
+        self.window.setWindowTitle(self.name + ' v' + self.version)
+        self.app.setFont(QFont("Microsoft Sans Serif", 8))
         self._setup_window()
         # ... Do anything else before initial backend setup
         self._setup_backend()
@@ -73,58 +78,49 @@ class _AppContext(ApplicationContext):
         self._setup_backend()
 
     def _setup_window(self):
-        self.window = MainWindow()
-
-        # Load the window's state from .last JSON
-        # Will emit all the signals but we have not connected them yet
-        if self._first_setup:
-            self.window.loadConfiguration(cfg_file=os.path.join(self.config_resource_location, '.last'))
-            self.window.setWindowTitle(self.name + ' v' + self.version)
-            self.app.setFont(QFont("Microsoft Sans Serif", 8))
-            self.window.show()
-
         if self.window.darkTheme():
             self.app.setStyleSheet(qdarkstyle.load_stylesheet())
         else:
             self.app.setStyleSheet('')
+        self.window.show()
 
     def _setup_backend(self):
         """Load or reload the backend and connect it to the GUI"""
-
         self._update_timer.stop()
-
         if not self._first_setup:
             self._close_controller()
-
-        # Connect MainWindow interaction signals to backend interface
-        self.window.scan.connect(self._start_scanning)
-        self.window.acquire.connect(self._start_acquisition)
-        self.window.stop.connect(self._stop)
-        self.window.closed.connect(self._close_controller)
-        self.window.scan_changed.connect(self._configure_image)
-        self.window.processing_changed.connect(self._configure_processing)
-        self.window.launch.connect(self._launch)
-
         # Open controller
-        self._open_controller()
-        self._configure_image()
-        self._configure_processing(self.window.unprocessed_frame_size(), self.window.processed_frame_size())
-        self._update_timer.start(100)  # 10 Hz
+        if self._open_controller():  # If opening the backend succeeds
+
+            # Connect MainWindow interaction signals to backend interface
+            self.window.scan.connect(self._start_scanning)
+            self.window.acquire.connect(self._start_acquisition)
+            self.window.stop.connect(self._stop)
+            self.window.closed.connect(self._close_controller)
+            self.window.scan_changed.connect(self._configure_image)
+            self.window.processing_changed.connect(self._configure_processing)
+
+            self._configure_image()
+            self._configure_processing(self.window.unprocessed_frame_size(), self.window.processed_frame_size())
+            self._update_timer.start(100)  # 10 Hz
+        else:
+            print('Failed to open controller. Try configuring the application.')
 
     def _update(self):
-        state = self.controller.state
-        if state == 'scanning':
-            # print('GUI in scanning state')
-            self.window.set_mode_scanning()
-        elif state == 'acquiring':
-            # print('GUI in acquiring state')
-            self.window.set_mode_acquiring()
-        elif state == 'ready':
-            # print('GUI in ready state')
-            self.window.set_mode_ready()
-        elif state == 'open' or state == 'error' or state == 'unopened':
-            # print('GUI in unready state:', state)
-            self.window.set_mode_not_ready()
+        if self.controller is not None:
+            state = self.controller.state
+            if state == 'scanning':
+                # print('GUI in scanning state')
+                self.window.set_mode_scanning()
+            elif state == 'acquiring':
+                # print('GUI in acquiring state')
+                self.window.set_mode_acquiring()
+            elif state == 'ready':
+                # print('GUI in ready state')
+                self.window.set_mode_ready()
+            elif state == 'open' or state == 'error' or state == 'unopened':
+                # print('GUI in unready state:', state)
+                self.window.set_mode_not_ready()
 
     def _display_update(self):
         if self._grab_buffer is not None and self._image_buffer is not None:
@@ -141,7 +137,16 @@ class _AppContext(ApplicationContext):
 
     def _open_controller(self):
         # Could switch between various backends here if you wanted
-        ctypes.cdll.LoadLibrary(os.path.join(self.lib_resource_location, 'fastnisdoct/libfftw3f-3.dll'))
+        try:
+            for path in self.window.dll_search_paths():
+                for f in os.listdir(path):
+                    if f.endswith('.dll'):
+                        print('Loading', os.path.join(path, f))
+                        ctypes.cdll.LoadLibrary(os.path.join(path, f))
+                ctypes.cdll.LoadLibrary(path)
+                # ctypes.cdll.LoadLibrary(os.path.join(self.lib_resource_location, 'fastnisdoct/libfftw3f-3.dll'))
+        except OSError:
+            return False
         self.controller = NIOCTController(os.path.join(self.lib_resource_location, 'fastnisdoct/fastnisdoct.dll'))
         self.controller.open(
             self.window.camera_device_name(),
@@ -150,9 +155,11 @@ class _AppContext(ApplicationContext):
             self.window.analog_output_line_trig_ch_name(),
             self.window.number_of_image_buffers()
         )
+        return True
 
     def _close_controller(self):
-        self.controller.close()
+        if self.controller is not None:
+            self.controller.close()
 
     def _configure_image(self):
         self._ctr_configure_image += 1
