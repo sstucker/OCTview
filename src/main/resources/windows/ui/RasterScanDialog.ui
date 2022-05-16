@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>492</width>
-    <height>214</height>
+    <width>176</width>
+    <height>78</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,100 +17,7 @@
    <bool>true</bool>
   </property>
   <layout class="QGridLayout" name="gridLayout">
-   <item row="2" column="0">
-    <widget class="QLabel" name="labelSamplesOff">
-     <property name="toolTip">
-      <string>The number of samples to drive low between pulses in the line trigger signal.</string>
-     </property>
-     <property name="text">
-      <string>n-samples trigger low</string>
-     </property>
-    </widget>
-   </item>
-   <item row="0" column="1">
-    <widget class="QDoubleSpinBox" name="spinMaxLineRate">
-     <property name="toolTip">
-      <string>The pulse rate of the line trigger signal. Should not exceed the maximum triggerable rate of the line camera. Governs the DAC clock rate: the period of n-samples high + n-samples low will approximately match this rate.</string>
-     </property>
-     <property name="suffix">
-      <string> Hz</string>
-     </property>
-     <property name="decimals">
-      <number>0</number>
-     </property>
-     <property name="minimum">
-      <double>1.000000000000000</double>
-     </property>
-     <property name="maximum">
-      <double>999000.000000000000000</double>
-     </property>
-     <property name="singleStep">
-      <double>1.000000000000000</double>
-     </property>
-     <property name="value">
-      <double>76263.000000000000000</double>
-     </property>
-    </widget>
-   </item>
-   <item row="1" column="1">
-    <widget class="QSpinBox" name="spinSamplesOn">
-     <property name="toolTip">
-      <string>The number of samples to drive the line trigger pulse high. Can be used for variable exposure cameras.</string>
-     </property>
-     <property name="minimum">
-      <number>1</number>
-     </property>
-    </widget>
-   </item>
-   <item row="3" column="1">
-    <widget class="QFrame" name="frame">
-     <property name="frameShape">
-      <enum>QFrame::StyledPanel</enum>
-     </property>
-     <property name="frameShadow">
-      <enum>QFrame::Raised</enum>
-     </property>
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <widget class="QRadioButton" name="radioTriggerBlines">
-        <property name="toolTip">
-         <string>Each B-line is buffered from the hardware and concatenated to make up a frame.</string>
-        </property>
-        <property name="text">
-         <string>B-lines</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioTriggerFrames">
-        <property name="toolTip">
-         <string>The entire frame is buffered from hardware all at once. Frame grabbers often cannot support very large buffer sizes.</string>
-        </property>
-        <property name="text">
-         <string>Frames</string>
-        </property>
-        <property name="checked">
-         <bool>false</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioTriggerAuto">
-        <property name="toolTip">
-         <string>Frames larger than 50 MB will be buffered by the B-line</string>
-        </property>
-        <property name="text">
-         <string>Auto</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
-   </item>
-   <item row="1" column="0">
+   <item row="0" column="0">
     <widget class="QLabel" name="labelSamplesOn">
      <property name="toolTip">
       <string>The number of samples to drive the line trigger pulse high. Can be used for variable exposure cameras.</string>
@@ -120,17 +27,7 @@
      </property>
     </widget>
    </item>
-   <item row="2" column="1">
-    <widget class="QSpinBox" name="spinSamplesOff">
-     <property name="toolTip">
-      <string>The number of samples to drive low between pulses in the line trigger signal.</string>
-     </property>
-     <property name="minimum">
-      <number>1</number>
-     </property>
-    </widget>
-   </item>
-   <item row="7" column="0" colspan="2">
+   <item row="5" column="0" colspan="2">
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>
@@ -140,20 +37,33 @@
      </property>
     </widget>
    </item>
-   <item row="3" column="0">
-    <widget class="QLabel" name="labelTriggerMode">
-     <property name="text">
-      <string>Trigger/buffer mode</string>
+   <item row="0" column="1">
+    <widget class="QSpinBox" name="spinSamplesOn">
+     <property name="toolTip">
+      <string>The number of samples to drive the line trigger pulse high. Can be used for variable exposure cameras.</string>
+     </property>
+     <property name="minimum">
+      <number>1</number>
      </property>
     </widget>
    </item>
-   <item row="0" column="0">
-    <widget class="QLabel" name="labelMaxLineRate">
+   <item row="1" column="0">
+    <widget class="QLabel" name="labelSamplesOff">
      <property name="toolTip">
-      <string>The pulse rate of the line trigger signal. Should not exceed the maximum triggerable rate of the line camera. Governs the DAC clock rate: the period of n-samples high + n-samples low will approximately match this rate.</string>
+      <string>The number of samples to drive low between pulses in the line trigger signal.</string>
      </property>
      <property name="text">
-      <string>Max line rate</string>
+      <string>n-samples trigger low</string>
+     </property>
+    </widget>
+   </item>
+   <item row="1" column="1">
+    <widget class="QSpinBox" name="spinSamplesOff">
+     <property name="toolTip">
+      <string>The number of samples to drive low between pulses in the line trigger signal.</string>
+     </property>
+     <property name="minimum">
+      <number>1</number>
      </property>
     </widget>
    </item>

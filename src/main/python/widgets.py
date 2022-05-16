@@ -176,6 +176,15 @@ class ScanWidget(QWidget):
     def y(self):
         return self._pattern.y
 
+    def a_repeats(self) -> int:
+        raise NotImplementedError()
+
+    def b_repeats(self) -> int:
+        raise NotImplementedError()
+
+    def total_alines(self) -> int:
+        raise NotImplementedError()
+
     def line_trigger(self):
         return self._pattern.line_trigger
 
@@ -188,10 +197,6 @@ class ScanWidget(QWidget):
     def fixSize(self, fix: bool):
         """Disable all controls that allow the size of the image to be changed."""
         raise NotImplementedError()
-
-    def blines_triggered(self) -> bool:
-        """If True, the second dimension of `pattern.dimensions` is the number of A-lines acquired per frame trigger."""
-        return False
 
 
 class RasterScanWidget(ScanWidget, UiWidget):
@@ -249,7 +254,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
             p = {
                 'alines': self.spinACount.value(),
                 'blines': self.spinBCount.value(),
-                'max_trigger_rate': self.max_line_rate(),
+                'max_trigger_rate': self.parentWidget().parentWidget().parentWidget().max_line_rate(),  # MainWindow
                 # Pattern gen in millimeters
                 'fov': [self.spinROIWidth.value() * 0.001, self.spinROIHeight.value() * 0.001],
                 'flyback_duty': self.spinFlybackDuty.value() / 100,
@@ -260,7 +265,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
                 'bline_repeat': [1, self.spinBRepeat.value()][int(self.checkBRepeat.isChecked())],
                 'bidirectional': self.checkBidirectional.isChecked(),
                 'rotation_rad': self.parentWidget().spinRotation.value() * np.pi / 180,
-                'trigger_blines': self.blines_triggered(),
+                'trigger_blines': self.parentWidget().parentWidget().parentWidget().blines_triggered(),
                 'samples_on': self._settings_dialog.spinSamplesOn.value(),
                 'samples_off': self._settings_dialog.spinSamplesOff.value()
             }
@@ -290,14 +295,8 @@ class RasterScanWidget(ScanWidget, UiWidget):
         self.checkSquareScan.setEnabled(not fixed)
         self.buttonSettings.setEnabled(not fixed)
 
-    def max_line_rate(self) -> int:
-        return int(self._settings_dialog.spinMaxLineRate.value())  # Hz
-
-    def blines_triggered(self) -> bool:
-        if self._settings_dialog.radioTriggerAuto.isChecked():
-            return self.spinACount.value() * self.spinBCount.value() > MAX_ALINES_IN_SINGLE_BUFFER
-        else:
-            return self._settings_dialog.radioTriggerBlines.isChecked()
+    def total_alines(self) -> int:
+        return self.spinACount.value() * self.spinBCount() * self.spinARepeat.value() * self.spinBRepeat.value()
 
     def a_repeats(self):
         if self.checkARepeat.isChecked():
@@ -701,7 +700,7 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
     def __init__(self, wavelengths, yrange=[0, 4096]):
         super().__init__()
 
-        self.resize(200, 100)
+        # self.resize(200, 100)
         # self.setFixedSize(self.minimumSize())
 
         self._wavelengths = wavelengths
@@ -739,7 +738,7 @@ class VolumeWidget(pyqtgraph.opengl.GLViewWidget):
         self._axis = pyqtgraph.opengl.GLAxisItem()
 
         # self.setFixedSize(self.minimumSize())
-        self.resize(100, 100)
+        # self.resize(100, 100)
 
         img = np.random.random([128, 128, 200])
         data = np.empty(img.shape + (4,), dtype=np.ubyte)
@@ -770,7 +769,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         super().__init__()
 
         self._plot = self.addPlot()
-        self.setFixedSize(340, 340)
+        # self.setFixedSize(340, 340)
 
         self._slice_not_set = True
 
@@ -1270,6 +1269,15 @@ class MainWindow(QMainWindow, UiWidget):
             return int(self.uncropped_frame_size() / self.scan_pattern().dimensions[1])
         else:
             return self.uncropped_frame_size()
+
+    def max_line_rate(self) -> int:
+        return int(self._settings_dialog.spinMaxLineRate.value())  # Hz
+
+    def blines_triggered(self) -> bool:
+        if self._settings_dialog.radioTriggerAuto.isChecked():
+            return self.ScanGroupBox.ScanWidget.spinACount.value() * self.ScanGroupBox.ScanWidget.spinBCount.value() > MAX_ALINES_IN_SINGLE_BUFFER
+        else:
+            return self._settings_dialog.radioTriggerBlines.isChecked()
 
     def dll_search_paths(self):
         return self._settings_dialog.textEditDLLPaths.toPlainText().split(r'\n')
