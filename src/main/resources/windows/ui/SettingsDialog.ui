@@ -136,7 +136,7 @@
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <item>
-          <widget class="QCheckBox" name="checkBufferNumberAuto">
+          <widget class="QCheckBox" name="checkNumberOfBuffersAuto">
            <property name="text">
             <string>Automatic</string>
            </property>

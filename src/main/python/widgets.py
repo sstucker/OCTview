@@ -1059,14 +1059,14 @@ class MainWindow(QMainWindow, UiWidget):
     def loadConfiguration(self, cfg_file=None):
         if cfg_file is None:
             cfg_file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
-                                               "OCTview configuration file (*.oct)")[0]
+                                               "OCTview configuration file (*.ini)")[0]
         if os.path.exists(cfg_file):
             self.loadStateFromJson(cfg_file)
             self.launch.emit()
 
     def saveConfiguration(self):
         cfg_file = QFileDialog.getSaveFileName(self, "Save Configuration File", OCTview.config_resource_location,
-                                           "OCTview configuration file (*.oct)")[0]
+                                           "OCTview configuration file (*.ini)")[0]
         if len(cfg_file) > 0:
             self.writeStateToJson(cfg_file)
 
@@ -1075,7 +1075,7 @@ class MainWindow(QMainWindow, UiWidget):
         quit_msg = "Are you sure you want to exit OCTview?"
         reply = QMessageBox.question(self, 'Message', quit_msg, QMessageBox.Yes, QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.writeStateToJson(os.path.join(OCTview.config_resource_location, '.last'))
+            self.writeStateToJson(os.path.join(OCTview.config_resource_location, '.last.ini'))
             self.closed.emit()
             event.accept()
         else:
@@ -1218,7 +1218,21 @@ class MainWindow(QMainWindow, UiWidget):
         return self._settings_dialog.spinAlineSize.value()
 
     def number_of_image_buffers(self) -> int:
+        if self._settings_dialog.checkNumberOfBuffersAuto.isChecked():
+            if self.alines_per_buffer() > 256:
+                return 2
+            elif self.alines_per_buffer() > 128:
+                return 4
+            elif self.alines_per_buffer() > 64:
+                return 8
+            elif self.alines_per_buffer() > 32:
+                return 16
+            elif self.alines_per_buffer() > 16:
+                return 32
+            else:
+                return 64
         return int(self._settings_dialog.spinNumberOfBuffers.value())
+
 
     def analog_output_galvo_x_ch_name(self) -> str:
         return self._settings_dialog.lineXChName.text()
