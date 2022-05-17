@@ -14,7 +14,8 @@ from widgets import MainWindow
 
 CALLBACK_DEBOUNCE_MS = 400
 MAX_DISPLAY_UPDATE_RATE = 20
-
+MAX_2D_IMAGE_SIZE = 128 * 128
+MAX_ALINES_IN_SINGLE_BUFFER = 128 * 128
 
 class _AppContext(ApplicationContext):
 
@@ -137,23 +138,22 @@ class _AppContext(ApplicationContext):
 
     def _open_controller(self):
         # Could switch between various backends here if you wanted
-        try:
-            for path in self.window.dll_search_paths():
-                for f in os.listdir(path):
+        for path in self.window.dll_search_paths():
+            if os.path.exists(path):
+                try:
                     if f.endswith('.dll'):
                         print('Loading', os.path.join(path, f))
                         ctypes.cdll.LoadLibrary(os.path.join(path, f))
-                ctypes.cdll.LoadLibrary(path)
-                # ctypes.cdll.LoadLibrary(os.path.join(self.lib_resource_location, 'fastnisdoct/libfftw3f-3.dll'))
-        except OSError:
-            return False
+                except (OSError, FileNotFoundError):
+                    print('Failed to load library', os.path.join(path, f))
+                for f in os.listdir(path):
+                    pass
         self.controller = NIOCTController(os.path.join(self.lib_resource_location, 'fastnisdoct/fastnisdoct.dll'))
         self.controller.open(
             self.window.camera_device_name(),
             self.window.analog_output_galvo_x_ch_name(),
             self.window.analog_output_galvo_y_ch_name(),
-            self.window.analog_output_line_trig_ch_name(),
-            self.window.number_of_image_buffers()
+            self.window.analog_output_line_trig_ch_name()
         )
         return True
 
@@ -190,6 +190,7 @@ class _AppContext(ApplicationContext):
                 alines_in_image=pat.points_in_image,
                 alines_per_bline=pat.dimensions[0] * pat.aline_repeat * pat.bline_repeat,
                 alines_per_buffer=self.window.alines_per_buffer(),
+                number_of_buffers=self.window.number_of_image_buffers(),
                 x_scan_signal=scan_x,
                 y_scan_signal=scan_y,
                 line_trigger_scan_signal=scan_line_trig,

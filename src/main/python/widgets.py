@@ -17,9 +17,6 @@ import copy
 
 import OCTview
 
-MAX_2D_IMAGE_SIZE = 128 * 128
-MAX_ALINES_IN_SINGLE_BUFFER = 128 * 128
-
 def replaceWidget(old_widget: QWidget, new_widget: QWidget):
     """Replace a widget with another."""
     plotwidget_placeholder_layout = old_widget.parent().layout()
@@ -461,9 +458,6 @@ class ScanGroupBox(QGroupBox, UiWidget):
     def b_repeats(self):
         return self.ScanWidget.b_repeats()
 
-    def blines_triggered(self) -> bool:
-        return self.ScanWidget.blines_triggered()
-
 
 class ControlGroupBox(QGroupBox, UiWidget):
     scan = pyqtSignal()
@@ -631,6 +625,8 @@ class ProcessingGroupBox(QGroupBox, UiWidget):
         self.checkInterpolation.toggled.connect(self._interpToggled)
         self.radioFrameNone.toggled.connect(self._frameProcessingToggled)
 
+        self.groupFrameProcessing.setVisible(False)  # TODO implement frame averaging in the backend
+
         _connect_all_child_widgets_to_slot(self, self.changed.emit)
 
     def _apodToggled(self):
@@ -769,7 +765,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         super().__init__()
 
         self._plot = self.addPlot()
-        # self.setFixedSize(340, 340)
+        self.setFixedSize(340, 340)
 
         self._slice_not_set = True
 
@@ -843,6 +839,10 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self._data_shape = image.shape
         if fov is not None:
             self.setAspect(fov[0], fov[1])
+
+        if np.isnan(np.sum(image)):
+            print('NaN encountered in image enqueued for display')
+            return
 
         if image.size > 64 * 64:
             n = int(image.size / 4)  # TODO make this smarter
@@ -1046,6 +1046,9 @@ class MainWindow(QMainWindow, UiWidget):
         self.actionLoad_Configuration.triggered.connect(self.loadConfiguration)
         self.actionSettings.triggered.connect(self._settings_dialog.showDialog)
         self._settings_dialog.changed.connect(self.launch.emit)
+        self._settings_dialog.checkNumberOfBuffersAuto.toggled.connect(
+            lambda: self._settings_dialog.spinNumberOfBuffers.setEnabled(not self._settings_dialog.checkNumberOfBuffersAuto.isChecked())
+        )
 
         self.ControlGroupBox.scan.connect(self._scan)
         self.ControlGroupBox.acquire.connect(self._acquire)
@@ -1219,20 +1222,22 @@ class MainWindow(QMainWindow, UiWidget):
 
     def number_of_image_buffers(self) -> int:
         if self._settings_dialog.checkNumberOfBuffersAuto.isChecked():
-            if self.alines_per_buffer() > 256:
-                return 2
-            elif self.alines_per_buffer() > 128:
-                return 4
-            elif self.alines_per_buffer() > 64:
-                return 8
-            elif self.alines_per_buffer() > 32:
-                return 16
-            elif self.alines_per_buffer() > 16:
-                return 32
+            if self.alines_per_buffer() > 16384:
+                b = 2
+            elif self.alines_per_buffer() > 8192:
+                b = 4
+            elif self.alines_per_buffer() > 4096:
+                b = 8
+            elif self.alines_per_buffer() > 2048:
+                b = 12
+            elif self.alines_per_buffer() > 1024:
+                b = 14
             else:
-                return 64
-        return int(self._settings_dialog.spinNumberOfBuffers.value())
-
+                b = 16
+        else:
+            b = int(self._settings_dialog.spinNumberOfBuffers.value())
+        print('A-lines per buffer', self.alines_per_buffer(), '-- buffers', b)
+        return b
 
     def analog_output_galvo_x_ch_name(self) -> str:
         return self._settings_dialog.lineXChName.text()
@@ -1277,7 +1282,7 @@ class MainWindow(QMainWindow, UiWidget):
 
     def alines_per_buffer(self) -> int:
         """The number of A-lines per frame trigger pulse."""
-        if self.ScanGroupBox.blines_triggered():
+        if self.blines_triggered():
             assert self.uncropped_frame_size() % self.scan_pattern().dimensions[1] == 0,\
                 'Total A-lines triggered not evenly divisible by number of B-lines'
             return int(self.uncropped_frame_size() / self.scan_pattern().dimensions[1])
@@ -1289,9 +1294,9 @@ class MainWindow(QMainWindow, UiWidget):
 
     def blines_triggered(self) -> bool:
         if self._settings_dialog.radioTriggerAuto.isChecked():
-            return self.ScanGroupBox.ScanWidget.spinACount.value() * self.ScanGroupBox.ScanWidget.spinBCount.value() > MAX_ALINES_IN_SINGLE_BUFFER
+            return self.ScanGroupBox.ScanWidget.spinACount.value() * self.ScanGroupBox.ScanWidget.spinBCount.value() > OCTview.MAX_ALINES_IN_SINGLE_BUFFER
         else:
             return self._settings_dialog.radioTriggerBlines.isChecked()
 
     def dll_search_paths(self):
-        return self._settings_dialog.textEditDLLPaths.toPlainText().split(r'\n')
+        return list(filter(lambda p: len(p) < 1, self._settings_dialog.textEditDLLPaths.toPlainText().split(r'\n')))

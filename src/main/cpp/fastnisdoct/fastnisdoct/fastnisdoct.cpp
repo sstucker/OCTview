@@ -261,7 +261,7 @@ inline void plan_acq_copy(bool* image_mask)
 					}
 					else  // Block has ended
 					{
-						printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
+						// printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
 						blocks_in_buffer.push_back(std::tuple<int, int>{ offset * aline_size, size * aline_size });
 						offset = -1;
 						size = 0;
@@ -327,9 +327,10 @@ inline void recv_msg()
 				}
 
 				// -- Set up NI image buffers --------------------------------------------------------------------------
-				if ((aline_size != msg.aline_size) || (alines_per_buffer != msg.alines_per_buffer) || (alines_in_scan != msg.alines_in_scan) || (alines_in_image != msg.alines_in_image))  // If acq buffer size has changed
+				if ((aline_size != msg.aline_size) || (alines_per_buffer != msg.alines_per_buffer) || (alines_in_scan != msg.alines_in_scan) || (alines_in_image != msg.alines_in_image) || (frames_to_buffer != msg.number_of_buffers))  // If acq buffer size has changed
 				{
 					buffers_per_frame = msg.alines_in_scan / msg.alines_per_buffer;
+					frames_to_buffer = msg.number_of_buffers;
 					if (ni::setup_buffers(msg.aline_size, msg.alines_per_buffer, frames_to_buffer) == 0)
 					{
 						printf("fastnisdoct: %i buffers allocated.\n", frames_to_buffer);
@@ -830,8 +831,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		const char* cam_name,
 		const char* ao_x_ch,
 		const char* ao_y_ch,
-		const char* ao_lt_ch,
-		int number_of_buffers
+		const char* ao_lt_ch
 	)
 	{
 		printf("fastnisdoct: Opening NI hardware interface:\n");
@@ -848,7 +848,6 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 			if (ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch) == 0)
 			{
 				printf("fastnisdoct: NI DAQmx interface opened.\n");
-				frames_to_buffer = number_of_buffers;
 				main_running = true;
 				main_t = std::thread(&_main);
 				return;
@@ -866,6 +865,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 	{
 		main_running = false;
 		main_t.join();
+		printf("Joined main thread.\n");
 		if (ni::daq_close() == 0 && ni::imaq_close() == 0)
 		{
 			printf("NI IMAQ and NI DAQmx interfaces closed.\n");
@@ -884,6 +884,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int64_t alines_in_image,
 		int64_t alines_per_bline,
 		int64_t alines_per_buffer,
+		int number_of_buffers,
 		int n_aline_repeat,
 		int n_bline_repeat,
 		RepeatProcessingType a_rpt_proc_flag,
@@ -913,6 +914,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.alines_in_image = alines_in_image;
 		msg.alines_per_bline = alines_per_bline;
 		msg.alines_per_buffer = alines_per_buffer;
+		msg.number_of_buffers = number_of_buffers;
 		msg.n_aline_repeat = n_aline_repeat;
 		msg.n_bline_repeat = n_bline_repeat;
 		msg.a_rpt_proc_flag = a_rpt_proc_flag;

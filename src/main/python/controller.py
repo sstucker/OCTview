@@ -27,8 +27,8 @@ class NIOCTController:
         """
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
-        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_int]
-        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_long,
+        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
+        self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_long, c.c_int,
                                                       c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c_double_p,
                                                       c_double_p, c_double_p, c.c_long, c.c_int]
         self._lib.nisdoct_configure_processing.argtypes = [c.c_bool, c.c_bool, c.c_double, c_float_p, c.c_int, c.c_int]
@@ -46,7 +46,6 @@ class NIOCTController:
              ao_ch_x_name,
              ao_ch_y_name,
              ao_ch_lt_name,
-             number_of_buffers
              ):
         """Open the interface. To change these values, the interface must be closed and then opened again.
 
@@ -55,15 +54,12 @@ class NIOCTController:
             ao_ch_x_name (str): NI-DAQ analog out channel identifier to be used for X galvo output
             ao_ch_y_name (str): NI-DAQ analog out channel identifier to be used for Y galvo output
             ao_ch_lt_name (str): NI-DAQ analog out channel identifier to be used for camera triggering
-            number_of_buffers (int): The number of buffers to allocate for image acquisition and processing. Larger
-                values make acquisition more robust to dropped frames but increase memory overhead.
         """
         self._lib.nisdoct_open(
             bytes(camera_name, encoding='utf8'),
             bytes(ao_ch_x_name, encoding='utf8'),
             bytes(ao_ch_y_name, encoding='utf8'),
             bytes(ao_ch_lt_name, encoding='utf8'),
-            int(number_of_buffers)
         )
 
     def close(self):
@@ -77,6 +73,7 @@ class NIOCTController:
             alines_in_image: int,
             alines_per_bline: int,
             alines_per_buffer: int,
+            number_of_buffers: int,
             x_scan_signal: np.ndarray,
             y_scan_signal: np.ndarray,
             line_trigger_scan_signal: np.ndarray,
@@ -101,6 +98,8 @@ class NIOCTController:
             alines_in_image (int): The total A-lines copied to the image.
             alines_per_bline (int): Size of each B-line subdivision of the acquisition frame.
             alines_per_buffer (int): Each grab buffer will be sized to contain this many A-lines.
+            number_of_buffers (int): Number of buffer frames to allocate. Faster, smaller acquisitions will benefit
+                from larger number of buffers. Allocation is limited by RAM.
             aline_repeat (int): if > 1, number of repeated successive A-lines in the scan. Defined by the scan pattern.
             bline_repeat (int): if > 1, number of repeated successive B-lines in the scan. Defined by the scan pattern.
             aline_repeat_processing (str): Defines processing to be carried out on repeated A-lines. Can be None or
@@ -134,6 +133,7 @@ class NIOCTController:
             np.long(alines_in_image),
             np.long(alines_per_bline),
             np.long(alines_per_buffer),
+            int(number_of_buffers),
             int(aline_repeat),
             int(bline_repeat),
             int(a_rpt_proc_flag),
