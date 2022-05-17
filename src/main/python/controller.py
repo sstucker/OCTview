@@ -73,7 +73,7 @@ class NIOCTController:
             alines_in_image: int,
             alines_per_bline: int,
             alines_per_buffer: int,
-            number_of_buffers: int,
+            frames_to_buffer: int,
             x_scan_signal: np.ndarray,
             y_scan_signal: np.ndarray,
             line_trigger_scan_signal: np.ndarray,
@@ -98,7 +98,7 @@ class NIOCTController:
             alines_in_image (int): The total A-lines copied to the image.
             alines_per_bline (int): Size of each B-line subdivision of the acquisition frame.
             alines_per_buffer (int): Each grab buffer will be sized to contain this many A-lines.
-            number_of_buffers (int): Number of buffer frames to allocate. Faster, smaller acquisitions will benefit
+            frames_to_buffer (int): Number of frames worth of buffer memory to allocate. Faster, smaller acquisitions will benefit
                 from larger number of buffers. Allocation is limited by RAM.
             aline_repeat (int): if > 1, number of repeated successive A-lines in the scan. Defined by the scan pattern.
             bline_repeat (int): if > 1, number of repeated successive B-lines in the scan. Defined by the scan pattern.
@@ -133,7 +133,7 @@ class NIOCTController:
             np.long(alines_in_image),
             np.long(alines_per_bline),
             np.long(alines_per_buffer),
-            int(number_of_buffers),
+            int(frames_to_buffer),
             int(aline_repeat),
             int(bline_repeat),
             int(a_rpt_proc_flag),

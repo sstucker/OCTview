@@ -1220,23 +1220,22 @@ class MainWindow(QMainWindow, UiWidget):
     def aline_size(self) -> int:
         return self._settings_dialog.spinAlineSize.value()
 
-    def number_of_image_buffers(self) -> int:
+    def frames_to_buffer(self) -> int:
         if self._settings_dialog.checkNumberOfBuffersAuto.isChecked():
-            if self.alines_per_buffer() > 16384:
+            fsize = self.uncropped_frame_size()
+            if fsize > 65536:
                 b = 2
-            elif self.alines_per_buffer() > 8192:
+            elif fsize > 16384:
                 b = 4
-            elif self.alines_per_buffer() > 4096:
+            elif fsize > 4096:
                 b = 8
-            elif self.alines_per_buffer() > 2048:
-                b = 12
-            elif self.alines_per_buffer() > 1024:
-                b = 14
-            else:
+            elif fsize > 2048:
                 b = 16
+            else:
+                b = 32
         else:
             b = int(self._settings_dialog.spinNumberOfBuffers.value())
-        print('A-lines per buffer', self.alines_per_buffer(), '-- buffers', b)
+        print('A-lines per frame', fsize, '-- buffers', b)
         return b
 
     def analog_output_galvo_x_ch_name(self) -> str:

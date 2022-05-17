@@ -74,7 +74,7 @@ struct StateMsg {
 	int64_t alines_per_bline;
 	int n_aline_repeat;
 	int n_bline_repeat;
-	int number_of_buffers;
+	int frames_to_buffer;
 	int roi_offset;
 	int roi_size;
 	bool subtract_background;
@@ -99,6 +99,8 @@ bool image_configured = false;  // Image buffers are allocated
 bool processing_configured = false;  // Plans for interpolation and FFT are ready
 bool scan_defined = false;  // DAC is primed for output
 
+std::atomic_bool scan_interrupt_ = false;  // Event that is armed by STOP_SCAN which forces the scanner out of a long acquisition cycle
+
 std::atomic_int state = STATE_UNOPENED;
 
 int32_t alines_in_scan = 0;  // Number of A-lines in the scan of a single frame prior to the discarding of non image-forming A-lines.
@@ -118,9 +120,12 @@ int frames_to_buffer = 0;  // Amount of buffer memory to allocate per the size o
 
 // TODO replace with CircAcqBuffers or otherwise preallocate display buffers
 
-// Small queues, main loop should only spend time copying to the display buffers if the GUI is ready 
-spsc_bounded_queue_t<fftwf_complex*> image_display_queue(2);  // Queue of pointers to images for display. Copy to client buffer and then delete after dequeue.
-spsc_bounded_queue_t<float*> spectrum_display_queue(2);  // Queue of pointers to spectra for display. Copy to client buffer and then delete after dequeue.
+// Main loop should only spend time copying to the display buffers if the GUI is ready 
+std::atomic_bool image_display_buffer_refresh = true;  // If True, grab returns -1 but main loop copies new frame in and flips the bit
+std::unique_ptr<fftwf_complex[]> image_display_buffer;
+
+std::atomic_bool spectrum_display_buffer_refresh = true;
+std::unique_ptr<float[]> spectrum_display_buffer;
 
 // I do not trust std containers for the large arrays
 std::unique_ptr<uint16_t[]> raw_frame_roi;  // Frame which the contents of IMAQ buffers are copied into prior to processing if buffers_per_frame > 1
@@ -189,17 +194,6 @@ inline void stop_scanning()
 	{
 		printf("fastnisdoct: Stopping scan!\n");
 		aline_proc_pool->terminate();
-		// Empty out the display queues
-		fftwf_complex* ip;
-		while (image_display_queue.dequeue(ip))
-		{
-			fftwf_free(ip);
-		}
-		float* sp;
-		while (spectrum_display_queue.dequeue(sp))
-		{
-			delete[] sp;
-		}
 		state.store(STATE_READY);
 	}
 	else
@@ -327,13 +321,13 @@ inline void recv_msg()
 				}
 
 				// -- Set up NI image buffers --------------------------------------------------------------------------
-				if ((aline_size != msg.aline_size) || (alines_per_buffer != msg.alines_per_buffer) || (alines_in_scan != msg.alines_in_scan) || (alines_in_image != msg.alines_in_image) || (frames_to_buffer != msg.number_of_buffers))  // If acq buffer size has changed
+				if ((aline_size != msg.aline_size) || (alines_per_buffer != msg.alines_per_buffer) || (alines_in_scan != msg.alines_in_scan) || (alines_in_image != msg.alines_in_image) || (frames_to_buffer != msg.frames_to_buffer))  // If acq buffer size has changed
 				{
 					buffers_per_frame = msg.alines_in_scan / msg.alines_per_buffer;
-					frames_to_buffer = msg.number_of_buffers;
-					if (ni::setup_buffers(msg.aline_size, msg.alines_per_buffer, frames_to_buffer) == 0)
+					frames_to_buffer = msg.frames_to_buffer;
+					if (ni::setup_buffers(msg.aline_size, msg.alines_per_buffer, buffers_per_frame * frames_to_buffer) == 0)
 					{
-						printf("fastnisdoct: %i buffers allocated.\n", frames_to_buffer);
+						printf("fastnisdoct: %i buffers allocated with %i A-lines per buffer, %i buffers per frame.\n", buffers_per_frame * frames_to_buffer, msg.alines_per_buffer, buffers_per_frame);
 						cumulative_buffer_number = 0;
 						cumulative_frame_number = 0;
 						image_configured = true;
@@ -351,6 +345,9 @@ inline void recv_msg()
 					printf("A-lines in image: %i\n", alines_in_image);
 					alines_per_bline = msg.alines_per_bline;
 					alines_per_buffer = msg.alines_per_buffer;
+
+					spectrum_display_buffer = std::make_unique<float[]>(aline_size);
+
 				}
 				else
 				{
@@ -386,6 +383,8 @@ inline void recv_msg()
 				{
 					processed_frame_size /= msg.n_bline_repeat;
 				}
+
+				image_display_buffer = std::make_unique<fftwf_complex[]>(processed_frame_size);
 
 				n_aline_repeat = msg.n_aline_repeat;
 				n_bline_repeat = msg.n_bline_repeat;
@@ -570,12 +569,14 @@ void _main()
 		}
 		else  // if SCANNING or ACQUIRING
 		{
+
+			processed_alines_addr = processed_image_buffer->lock_out_head();  // Lock out the export ring element we are writing to. This is what gets written to disk by a Writer
+
 			QueryPerformanceCounter(&start);  // Time the frame processing to make sure we should be able to keep up
 
 			// Send async job to AlineProcessingPool unless we have not grabbed a frame yet
 			if (cumulative_frame_number > 0)
 			{
-				processed_alines_addr = processed_image_buffer->lock_out_head();  // Lock out the export ring element we are writing to. This is what gets written to disk by a Writer
 				aline_proc_pool->submit(processed_alines_addr, (uint16_t*)raw_frame_roi.get(), interp, interpdk, &apodization_window[0], &background_spectrum[0]);
 			}
 
@@ -588,6 +589,14 @@ void _main()
 			int buffer_copy_p = 0;
 			while (i_buf < buffers_per_frame)
 			{
+
+				if (scan_interrupt_.load())
+				{
+					scan_interrupt_.store(false);
+					scanning_successfully = false;
+					break;
+				}
+
 				// Lock out frame with IMAQ function
 				int examined = ni::examine_buffer(&locked_out_addr, cumulative_buffer_number);
 				if (examined > -1)
@@ -652,10 +661,6 @@ void _main()
 				uint16_t* spectral_dst = spectral_image_buffer->lock_out_head();
 				memcpy(spectral_dst, raw_frame_roi.get(), preprocessed_alines_size * sizeof(uint16_t));
 				spectral_image_buffer->release_head();
-				if (image_display_queue.full())
-				{
-					continue;
-				}
 			}
 
 			if (scanning_successfully)
@@ -693,14 +698,13 @@ void _main()
 				std::swap(raw_frame_roi, raw_frame_roi_new);
 
 				// Buffer a spectrum for output to GUI
-				if (!spectrum_display_queue.full())
+				if (spectrum_display_buffer_refresh.load())
 				{
-					float* spectrum_buffer = new float[aline_size];  // Will be freed by grab_frame or cleanup
 					for (int i = 0; i < aline_size; i++)
 					{
-						spectrum_buffer[i] = raw_frame_roi.get()[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
+						spectrum_display_buffer[i] = raw_frame_roi.get()[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
 					}
-					spectrum_display_queue.enqueue(spectrum_buffer);
+					spectrum_display_buffer_refresh.store(false);
 				}
 
 				// If there is already a processed buffer
@@ -788,17 +792,14 @@ void _main()
 					// Perform frame averaging
 
 					// Buffer an image for output to GUI
-					if (!image_display_queue.full())
+					if (image_display_buffer_refresh.load())
 					{
-						fftwf_complex* image_buffer = fftwf_alloc_complex(processed_frame_size);  // Will be freed by grab_frame or cleanup
-						memcpy(image_buffer, processed_alines_addr, processed_frame_size * sizeof(fftwf_complex));
-						image_display_queue.enqueue(image_buffer);
+						memcpy(image_display_buffer.get(), processed_alines_addr, processed_frame_size * sizeof(fftwf_complex));
+						image_display_buffer_refresh.store(false);
 					}
 
 					QueryPerformanceCounter(&end);
 					frame_processing_period = (float)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
-
-					processed_image_buffer->release_head();
 
 					if (cumulative_frame_number % 256 == 0)
 					{
@@ -807,6 +808,7 @@ void _main()
 				}
 				cumulative_frame_number++;
 			}
+			processed_image_buffer->release_head();
 		}
 		// printf("fastnisdoct: Main loop running. State %i\n", state.load());
 		// fflush(stdout);
@@ -884,7 +886,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		int64_t alines_in_image,
 		int64_t alines_per_bline,
 		int64_t alines_per_buffer,
-		int number_of_buffers,
+		int frames_to_buffer,
 		int n_aline_repeat,
 		int n_bline_repeat,
 		RepeatProcessingType a_rpt_proc_flag,
@@ -914,7 +916,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		msg.alines_in_image = alines_in_image;
 		msg.alines_per_bline = alines_per_bline;
 		msg.alines_per_buffer = alines_per_buffer;
-		msg.number_of_buffers = number_of_buffers;
+		msg.frames_to_buffer = frames_to_buffer;
 		msg.n_aline_repeat = n_aline_repeat;
 		msg.n_bline_repeat = n_bline_repeat;
 		msg.a_rpt_proc_flag = a_rpt_proc_flag;
@@ -956,6 +958,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_stop_scan()
 	{
+		scan_interrupt_.store(true);
 		StateMsg msg;
 		msg.flag = MSG_STOP_SCAN;
 		msg_queue.enqueue(msg);
@@ -1011,17 +1014,15 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		auto current_state = state.load();
 		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRING)
 		{
-			fftwf_complex* f = NULL;
-			if (image_display_queue.dequeue(f))
+			if (image_display_buffer_refresh.load())
 			{
-				// Note you can access processed_frame_size here because we just checked state, but really this is undefined
-				memcpy(dst, f, processed_frame_size * sizeof(fftwf_complex));
-				fftwf_free(f);
-				return 0;
+				return -1;  // No new frame ready
 			}
 			else
 			{
-				return -1;
+				memcpy(dst, image_display_buffer.get(), processed_frame_size * sizeof(fftwf_complex));
+				image_display_buffer_refresh.store(true);
+				return 0;
 			}
 		}
 		else
@@ -1035,17 +1036,15 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		auto current_state = state.load();
 		if (current_state == STATE_SCANNING || current_state == STATE_ACQUIRING)
 		{
-			float* s = NULL;
-			if (spectrum_display_queue.dequeue(s))
+			if (spectrum_display_buffer_refresh.load())
 			{
-				// Note you can PROBABLY access state data here because we just checked state, but really this is undefined
-				memcpy(dst, s, aline_size * sizeof(float));
-				delete[] s;
-				return 0;
+				return -1;
 			}
 			else
 			{
-				return -1;
+				memcpy(dst, spectrum_display_buffer.get(), aline_size * sizeof(float));
+				spectrum_display_buffer_refresh.store(true);
+				return 0;
 			}
 		}
 		else

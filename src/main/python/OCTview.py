@@ -15,7 +15,7 @@ from widgets import MainWindow
 CALLBACK_DEBOUNCE_MS = 400
 MAX_DISPLAY_UPDATE_RATE = 20
 MAX_2D_IMAGE_SIZE = 128 * 128
-MAX_ALINES_IN_SINGLE_BUFFER = 128 * 128
+MAX_ALINES_IN_SINGLE_BUFFER = 64 * 64
 
 class _AppContext(ApplicationContext):
 
@@ -190,7 +190,7 @@ class _AppContext(ApplicationContext):
                 alines_in_image=pat.points_in_image,
                 alines_per_bline=pat.dimensions[0] * pat.aline_repeat * pat.bline_repeat,
                 alines_per_buffer=self.window.alines_per_buffer(),
-                number_of_buffers=self.window.number_of_image_buffers(),
+                frames_to_buffer=self.window.frames_to_buffer(),
                 x_scan_signal=scan_x,
                 y_scan_signal=scan_y,
                 line_trigger_scan_signal=scan_line_trig,
@@ -255,7 +255,6 @@ class _AppContext(ApplicationContext):
         )
 
     def _stop(self):
-        self.controller.stop_acquisition()
         self.controller.stop_scan()
         self._display_update_timer.stop()
 
