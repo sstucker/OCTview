@@ -2,5 +2,5 @@
     "app_name": "OCTview",
     "author": "sstucker@bu.edu",
     "main_module": "src/main/python/main.py",
-    "version": "0.9.0"
+    "version": "0.9.1"
 }
