@@ -34,6 +34,7 @@ jobs:
     - name: Build
       run: |
         python -m fbs freeze
+        fbs freeze --debug
         python -m fbs installer
     - name: Create Release
       id: create_release
