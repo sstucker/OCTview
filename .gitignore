@@ -8,8 +8,6 @@ tasks.xml
 .vs
 *.tlog
 *.obj
-*.lib
-*.dll
 *.exp
 *.ilk
 *.pdb
