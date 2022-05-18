@@ -64,7 +64,7 @@ class _AppContext(ApplicationContext):
 
     def run(self):
         self.window = MainWindow()
-        self.window.loadConfiguration(cfg_file=os.path.join(self.config_resource_location, '.last'))
+        self.window.loadConfiguration(cfg_file=os.path.join(self.config_resource_location, '.last.ini'))
         self.window.launch.connect(self._launch)
         self.window.setWindowTitle(self.name + ' v' + self.version)
         self.app.setFont(QFont("Microsoft Sans Serif", 8))
@@ -105,7 +105,7 @@ class _AppContext(ApplicationContext):
             self._configure_processing(self.window.unprocessed_frame_size(), self.window.processed_frame_size())
             self._update_timer.start(100)  # 10 Hz
         else:
-            print('Failed to open controller. Try configuring the application.')
+            self.window.print('Failed to open controller. Try configuring the application.')
 
     def _update(self):
         if self.controller is not None:

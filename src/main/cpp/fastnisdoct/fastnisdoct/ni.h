@@ -34,15 +34,12 @@ uint16_t** buffers = NULL;  // Ring buffer elements allocated manually
 
 // NI-DAQ
 
+std::vector<float64> concatenated_scansig;  // Pointer to buffer of scansignals appended end to end
+
 int dac_rate = -1;  // The output rate of the DAC used to drive the scan pattern
 int line_rate = -1;  // The rate of the line trigger. A multiple of the DAC rate.
-std::vector<float64> concatenated_scansig;  // Pointer to buffer of scansignals appended end to end
 int32 scansig_n = 0; // Number of samples in each of the 4 scan signals
 int32 samples_written = 0;  // Returned by NI DAQ after samples are written
-
-PULSE_ID sample_clk;
-PULSE_ID line_clk;
-PULSE_ID pattern_clk;
 
 
 class ScanPattern
@@ -103,41 +100,6 @@ inline void print_daqmx_error_msg(int error_code)
 
 inline int configure_scan_timing(ScanPattern* pattern)
 {
-	/*
-	uInt32 timebase = 0;
-
-	uInt32 samp_clk_low = 0;
-	uInt32 samp_clk_high = 0;
-	double t_sample = 1.0 / pattern->sample_rate;
-	err = imgPulseRate(t_sample / 2.0, t_sample / 2.0, &samp_clk_low, &samp_clk_high, &timebase);
-	printf("Sample clock: Converted %f Hz into low %i, high %i on timebase %i\n", (double)pattern->sample_rate, samp_clk_low, samp_clk_high, timebase);
-	err = imgPulseCreate2(timebase, samp_clk_low, samp_clk_high, IMG_SIGNAL_STATUS, IMG_AQ_IN_PROGRESS, IMG_TRIG_POLAR_ACTIVEH, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG2, IMG_TRIG_POLAR_ACTIVEH, PULSE_MODE_TRAIN, &sample_clk);
-
-	//err = imgSessionTriggerRoute2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG1, IMG_SIGNAL_RTSI, IMG_EXT_RTSI2);
-
-	int t_clk = samp_clk_low + samp_clk_high;
-
-	int clk_per_line = pattern->sample_rate / pattern->line_rate;
-
-	printf("Line clock: %i sample clocks per line for line rate of %i\n", clk_per_line, pattern->line_rate);
-	err = imgPulseCreate2(timebase, samp_clk_low * clk_per_line, samp_clk_high * clk_per_line, IMG_SIGNAL_STATUS, IMG_AQ_IN_PROGRESS, IMG_TRIG_POLAR_ACTIVEH, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG0, IMG_TRIG_POLAR_ACTIVEH, PULSE_MODE_TRAIN, &line_clk);
-
-	printf("Pattern clock: %i sample clocks per pattern, pattern rate %f\n", pattern->n, (float)pattern->sample_rate / (float)pattern->n);
-	err = imgPulseCreate2(timebase, samp_clk_low * pattern->n, samp_clk_high * pattern->n, IMG_SIGNAL_STATUS, IMG_AQ_IN_PROGRESS, IMG_TRIG_POLAR_ACTIVEH, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG3, IMG_TRIG_POLAR_ACTIVEH, PULSE_MODE_TRAIN, &pattern_clk);
-
-	// printf("Routed triggers.\n");
-	print_daqmx_error_msg(err);
-
-	err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
-	err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
-
-	err = DAQmxCfgSampClkTiming(scan_task, "/Dev1/PFI1", (double)pattern->sample_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, pattern->n);
-
-	char buf[512];
-	DAQmxGetSampClkTerm(scan_task, buf, 512);
-	printf("Configured sample clock timing with source src %s.\n", buf);
-	print_daqmx_error_msg(err);
-	*/
 	err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
 	err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
 	err = DAQmxCfgSampClkTiming(scan_task, NULL, (double)pattern->sample_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, pattern->n);
@@ -176,15 +138,7 @@ namespace ni
 		{
 			return err;
 		}
-		// Configure the frame acquisition to be triggered by the TTL1 line
-		// err = imgSetAttribute2(session_id, IMG_ATTR_EXT_TRIG_LINE_FILTER, true);
-		// Frame trigger TTL1
-		// err = imgSessionTriggerConfigure2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG1, IMG_TRIG_POLAR_ACTIVEH, 1000, IMG_TRIG_ACTION_BUFFER);
-		// Frame trigger output TTL2
-		//err = imgSessionTriggerDrive2(session_id, IMG_SIGNAL_EXTERNAL, IMG_EXT_TRIG2, IMG_TRIG_POLAR_ACTIVEH, IMG_TRIG_DRIVE_FRAME_DONE);
-
 		strcpy_s(cameraName, camera_name); // Save the camera name in case it needs to be reused. If this isn't a copy, arguments from Python will become undefined in async environment
-
 		return err;
 	}
 
@@ -239,6 +193,7 @@ namespace ni
 		for (int i = 0; i < number_of_buffers; i++)
 		{
 			buffers[i] = new uint16_t[aline_size * number_of_alines];
+			memset(buffers[i], 0, aline_size * number_of_alines * sizeof(uint16_t));
 		}
 		if (number_of_buffers > 0)
 		{
@@ -254,22 +209,16 @@ namespace ni
 		const char* aoLineTrigger
 	)
 	{
+		
+		dac_rate = -1;
+		line_rate = -1;
+		scansig_n = 0;
+		samples_written = 0;
+		
 		err = DAQmxCreateTask("scan", &scan_task);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanX, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanY, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoLineTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
-		if (err != 0)
-		{
-			return err;
-		}
-		else
-		{
-			// Task will be configured first time scan is set
-
-			// err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
-			// err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
-			// err = DAQmxCfgSampClkTiming(scan_task, "/Dev1/RTSI2", 76000, DAQmx_Val_Rising, DAQmx_Val_ContSamps, NULL);
-		}
 		return err;
 	}
 
@@ -284,11 +233,6 @@ namespace ni
 
 	int start_scan()
 	{
-		/*
-		err = imgPulseStart(sample_clk, session_id);
-		err = imgPulseStart(line_clk, session_id);
-		err = imgPulseStart(pattern_clk, session_id);
-		*/
 		err = imgSessionStartAcquisition(session_id);
 		if (err == 0)
 		{
@@ -308,11 +252,6 @@ namespace ni
 	{
 		err = imgSessionStopAcquisition(session_id);
 		err = DAQmxStopTask(scan_task);
-		/*
-		err = imgPulseStop(pattern_clk);
-		err = imgPulseStart(line_clk, session_id);
-		err = imgPulseStop(sample_clk);
-		*/
 		if (err == 0)
 		{
 			return 0;

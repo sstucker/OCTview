@@ -95,36 +95,34 @@ struct StateMsg {
 spsc_bounded_queue_t<StateMsg> msg_queue(32);
 std::unique_ptr<AlineProcessingPool> aline_proc_pool;  // Thread pool manager class. Responsible for background subtraction, apodization, interpolation, FFT
 
-bool image_configured = false;  // Image buffers are allocated
-bool processing_configured = false;  // Plans for interpolation and FFT are ready
-bool scan_defined = false;  // DAC is primed for output
+bool image_configured;  // Image buffers are allocated
+bool processing_configured;  // Plans for interpolation and FFT are ready
+bool scan_defined;  // DAC is primed for output
 
-std::atomic_bool scan_interrupt_ = false;  // Event that is armed by STOP_SCAN which forces the scanner out of a long acquisition cycle
+std::atomic_bool scan_interrupt_;  // Event that is armed by STOP_SCAN which forces the scanner out of a long acquisition cycle
 
-std::atomic_int state = STATE_UNOPENED;
+std::atomic_int state;
 
-int32_t alines_in_scan = 0;  // Number of A-lines in the scan of a single frame prior to the discarding of non image-forming A-lines.
-int32_t alines_in_image = 0;  // Number of A-lines included in the image. alines_in_scan - alines_in_image A-lines are discarded.
+int32_t alines_in_scan;  // Number of A-lines in the scan of a single frame prior to the discarding of non image-forming A-lines.
+int32_t alines_in_image;  // Number of A-lines included in the image. alines_in_scan - alines_in_image A-lines are discarded.
 
-int64_t preprocessed_alines_size = 0;  // Total number of voxels in the entire frame of raw spectra
-int64_t processed_alines_size = 0;  // Number of complex-valued voxels in the frame after A-line processing has been carried out. Includes repeated A-lines, B-lines and frames.
-int64_t processed_frame_size = 0;  // Number of complex-valued voxels in the frame after inter A-line processing has been carried out: No repeats.
+int64_t preprocessed_alines_size;  // Total number of voxels in the entire frame of raw spectra
+int64_t processed_alines_size;  // Number of complex-valued voxels in the frame after A-line processing has been carried out. Includes repeated A-lines, B-lines and frames.
+int64_t processed_frame_size;  // Number of complex-valued voxels in the frame after inter A-line processing has been carried out: No repeats.
 
-int32_t alines_per_buffer = 0;  // Number of A-lines in each IMAQ buffer. If less than the total number of A-lines per frame, buffers will be concatenated to form a frame
-int32_t buffers_per_frame = 0;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
-int32_t alines_per_bline = 0; // Number of A-lines which make up a B-line of the image. Used to divide processing labor.
+int32_t alines_per_buffer;  // Number of A-lines in each IMAQ buffer. If less than the total number of A-lines per frame, buffers will be concatenated to form a frame
+int32_t buffers_per_frame;  // If > 0, IMAQ buffers will be copied into the processed A-lines buffer
+int32_t alines_per_bline; // Number of A-lines which make up a B-line of the image. Used to divide processing labor.
 
 std::unique_ptr<CircAcqBuffer<uint16_t>> spectral_image_buffer;  // Spectral frames are copied to this buffer for export.
 std::unique_ptr<CircAcqBuffer<fftwf_complex>> processed_image_buffer;  // Spatial frames are written into this buffer for export.
-int frames_to_buffer = 0;  // Amount of buffer memory to allocate per the size of a frame
+int frames_to_buffer;  // Amount of buffer memory to allocate per the size of a frame
 
-// TODO replace with CircAcqBuffers or otherwise preallocate display buffers
-
-// Main loop should only spend time copying to the display buffers if the GUI is ready 
-std::atomic_bool image_display_buffer_refresh = true;  // If True, grab returns -1 but main loop copies new frame in and flips the bit
+// Main loop should only spend time copying to the display buffers if the client is ready 
+std::atomic_bool image_display_buffer_refresh;  // If True, grab returns -1 but main loop copies new frame in and flips the bit
 std::unique_ptr<fftwf_complex[]> image_display_buffer;
 
-std::atomic_bool spectrum_display_buffer_refresh = true;
+std::atomic_bool spectrum_display_buffer_refresh;
 std::unique_ptr<float[]> spectrum_display_buffer;
 
 // I do not trust std containers for the large arrays
@@ -141,28 +139,74 @@ std::vector<float> apodization_window;  // Multiplied by each spectrum.
 
 std::vector<uint16_t> aline_stamp_buffer; // A-line stamps are copied here. For debugging and latency monitoring
 
-int32_t cumulative_buffer_number = 0;  // Number of buffers acquired by IMAQ
-int32_t cumulative_frame_number = 0;  // Number of frames acquired by main
+int32_t cumulative_buffer_number;  // Number of buffers acquired by IMAQ
+int32_t cumulative_frame_number;  // Number of frames acquired by main
 
-int aline_size = 0;  // The number of voxels in each spectral A-line; the number of spectrometer bins
-int roi_offset = 0;  // The offset from the top of the spatial A-line, in voxels, from which to begin the cropped image
-int roi_size = 0;  // The number of voxels of the spatial A-line to include in the cropped image
+int aline_size;  // The number of voxels in each spectral A-line; the number of spectrometer bins
+int roi_offset;  // The offset from the top of the spatial A-line, in voxels, from which to begin the cropped image
+int roi_size;  // The number of voxels of the spatial A-line to include in the cropped image
 
-int n_aline_repeat = 1;  // The number of A-lines which are repeated in the image.
-int n_bline_repeat = 1;  // The number of B-lines which are repeated in the image.
-int n_frame_avg = 1;  // The number of frames which are to be averaged in the image.
+int n_aline_repeat;  // The number of A-lines which are repeated in the image.
+int n_bline_repeat;  // The number of B-lines which are repeated in the image.
+int n_frame_avg;  // The number of frames which are to be averaged in the image.
 
-RepeatProcessingType a_rpt_proc_flag = REPEAT_PROCESSING_NONE;  // Processing to apply to repeated A-lines
-RepeatProcessingType b_rpt_proc_flag = REPEAT_PROCESSING_NONE;  // Processing to apply to repeated B-lines
-bool subtract_background = false;  // If true, the average spectrum of the previous frame is subtracted from the subsequent frame.
-bool interp = false;  // If true, first order linear interpolation is used to approximate a linear-in-wavelength spectrum.
-double interpdk = 0.0;  // Coefficient of first order linear-in-wavelength approximation.
+RepeatProcessingType a_rpt_proc_flag;  // Processing to apply to repeated A-lines
+RepeatProcessingType b_rpt_proc_flag;  // Processing to apply to repeated B-lines
+bool subtract_background;  // If true, the average spectrum of the previous frame is subtracted from the subsequent frame.
+bool interp;  // If true, first order linear interpolation is used to approximate a linear-in-wavelength spectrum.
+double interpdk;  // Coefficient of first order linear-in-wavelength approximation.
 
-float frame_processing_period = 0.0;  // Time taken to process latest frame
+float frame_processing_period;  // Time taken to process latest frame
 
 bool saving_processed;
 FileStreamWorker<uint16_t> spectral_frame_streamer;
 FileStreamWorker<fftwf_complex> processed_frame_streamer;
+
+// Set all module data to initial values
+inline void init_fastnisdoct()
+{
+	image_configured = false;
+	processing_configured = false;
+	scan_defined = false;
+
+	std::atomic_init(&scan_interrupt_, false);
+	std::atomic_init(&state, STATE_UNOPENED);
+
+	std::atomic_init(&image_display_buffer_refresh, true);
+	std::atomic_init(&spectrum_display_buffer_refresh, true);
+
+	alines_in_scan = 0;
+	alines_in_image = 0;
+
+	preprocessed_alines_size = 0;
+	processed_alines_size = 0;
+	processed_frame_size = 0;
+
+	alines_per_buffer = 0;
+	buffers_per_frame = 0;
+	alines_per_bline = 0;
+
+	frames_to_buffer = 0;
+
+	cumulative_buffer_number = 0;
+	cumulative_frame_number = 0;
+
+	aline_size = 0;
+	roi_offset = 0;
+	roi_size = 0;
+
+	n_aline_repeat = 1;
+	n_bline_repeat = 1;
+	n_frame_avg = 1;
+
+	a_rpt_proc_flag = REPEAT_PROCESSING_NONE;
+	b_rpt_proc_flag = REPEAT_PROCESSING_NONE;
+	subtract_background = false;
+	interp = false;
+	interpdk = 0.0;
+
+	frame_processing_period = 0.0;
+}
 
 
 inline void stop_acquisition()
@@ -171,6 +215,7 @@ inline void stop_acquisition()
 	spectral_frame_streamer.stop();
 	state.store(STATE_SCANNING);
 }
+
 
 inline void start_scanning()
 {
@@ -188,6 +233,7 @@ inline void start_scanning()
 	}
 }
 
+
 inline void stop_scanning()
 {
 	if (ni::stop_scan() == 0)
@@ -202,6 +248,7 @@ inline void stop_scanning()
 		ni::print_error_msg();
 	}
 }
+
 
 // Avoid setting up the processing workers if it is unecessary
 inline void set_up_processing_pool()
@@ -224,6 +271,7 @@ inline void set_up_processing_pool()
 	}
 	printf("fastnisdoct: Processing pool does not need to be recreated.\n");
 }
+
 
 // Iterate over image_mask and reduce it to a vector containing copy offsets and sizes per each acquisition buffer.
 inline void plan_acq_copy(bool* image_mask)
@@ -268,10 +316,12 @@ inline void plan_acq_copy(bool* image_mask)
 	}
 }
 
+
 inline bool ready_to_scan()
 {
 	return (image_configured && processing_configured && scan_defined);
 }
+
 
 inline void recv_msg()
 {
@@ -307,7 +357,6 @@ inline void recv_msg()
 					// Allocate processing buffers
 					background_spectrum.reserve(msg.aline_size);
 					background_spectrum_new.reserve(msg.aline_size);
-					std::fill(background_spectrum_new.begin(), background_spectrum_new.end(), 0.0);
 					std::fill(background_spectrum_new.begin(), background_spectrum_new.end(), 0.0);
 				}
 				else
@@ -347,7 +396,7 @@ inline void recv_msg()
 					alines_per_buffer = msg.alines_per_buffer;
 
 					spectrum_display_buffer = std::make_unique<float[]>(aline_size);
-
+					memset(spectrum_display_buffer.get(), 0.0, aline_size * sizeof(float));
 				}
 				else
 				{
@@ -361,6 +410,8 @@ inline void recv_msg()
 					preprocessed_alines_size = msg.aline_size * msg.alines_in_image;
 					raw_frame_roi = std::make_unique<uint16_t[]>(preprocessed_alines_size);
 					raw_frame_roi_new = std::make_unique<uint16_t[]>(preprocessed_alines_size);
+					memset(raw_frame_roi.get(), 0, preprocessed_alines_size * sizeof(uint16_t));
+					memset(raw_frame_roi_new.get(), 0, preprocessed_alines_size * sizeof(uint16_t));
 					spectral_image_buffer = std::make_unique<CircAcqBuffer<uint16_t>>(frames_to_buffer, preprocessed_alines_size);
 				}
 				
@@ -450,6 +501,7 @@ inline void recv_msg()
 
 				// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
 				apodization_window.reserve(msg.aline_size);
+				std::fill(apodization_window.begin(), apodization_window.end(), 1.0);
 				apodization_window.insert(apodization_window.end(), msg.apod_window, msg.apod_window + msg.aline_size);
 				delete[] msg.apod_window;
 				
@@ -551,7 +603,7 @@ void _main()
 	state.store(STATE_OPEN);
 	while (main_running)
 	{
-		if (state.load() == STATE_ACQUIRING && processed_frame_streamer.is_streaming() == false)  // If acquisition has finished, stop
+		if (state.load() == STATE_ACQUIRING && processed_frame_streamer.is_streaming() == false && spectral_frame_streamer.is_streaming() == false)  // If acquisition has finished, stop
 		{
 			state = STATE_SCANNING;
 			stop_scanning();
@@ -663,7 +715,8 @@ void _main()
 				spectral_image_buffer->release_head();
 			}
 
-			if (scanning_successfully)
+			// Only process a frame if we need it for export or if it is time to display one
+			if (scanning_successfully) 
 			{
 				// Sum for average background spectrum (to be used with next scan)
 				if (subtract_background)
@@ -836,6 +889,11 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		const char* ao_lt_ch
 	)
 	{
+		if (main_running.load())
+		{
+			printf("fastnisdoct: Can't open controller, already open\n");
+			return;
+		}
 		printf("fastnisdoct: Opening NI hardware interface:\n");
 		printf("fastnisdoct: Camera ID: %s\n", cam_name);
 		printf("fastnisdoct: X channel ID: %s\n", ao_x_ch);
@@ -850,6 +908,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 			if (ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch) == 0)
 			{
 				printf("fastnisdoct: NI DAQmx interface opened.\n");
+				init_fastnisdoct();
 				main_running = true;
 				main_t = std::thread(&_main);
 				return;
@@ -865,17 +924,27 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 
 	__declspec(dllexport) void nisdoct_close()
 	{
-		main_running = false;
-		main_t.join();
-		printf("Joined main thread.\n");
-		if (ni::daq_close() == 0 && ni::imaq_close() == 0)
+		if (main_running.load())
 		{
-			printf("NI IMAQ and NI DAQmx interfaces closed.\n");
+			main_running = false;
+			main_t.join();
+			printf("Joined main thread.\n");
+			StateMsg msg;
+			while (msg_queue.dequeue(msg)) {}  // Empty the message queue
+			printf("Emptied the message queue.\n");
+			if (ni::daq_close() == 0 && ni::imaq_close() == 0)
+			{
+				printf("NI IMAQ and NI DAQmx interfaces closed.\n");
+			}
+			else
+			{
+				printf("Failed to close NI IMAQ and NI DAQmx interfaces.\n");
+				ni::print_error_msg();
+			}
 		}
 		else
 		{
-			printf("Failed to close NI IMAQ and NI DAQmx interfaces.\n");
-			ni::print_error_msg();
+			printf("Can't close: fastnisdoct not running!\n");
 		}
 	}
 
