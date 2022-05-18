@@ -1,6 +1,6 @@
 # Build and release executable produced by fbs
 
-name: Python application
+name: fbs build
 
 on:
   push:
