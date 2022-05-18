@@ -172,14 +172,6 @@ class _AppContext(ApplicationContext):
             scan_x = pat.x * self.window.scan_scale_factors()[0]
             scan_y = pat.y * self.window.scan_scale_factors()[1]
             scan_line_trig = pat.line_trigger * self.window.trigger_gain()
-            import matplotlib.pyplot as plt
-            # plt.subplot(2, 1, 1)
-            # plt.plot(scan_x)
-            # plt.plot(scan_y)
-            # plt.plot(scan_line_trig)
-            # plt.subplot(2, 1, 2)
-            # plt.stem(pat.image_mask)
-            # plt.show()
             all_samples = np.concatenate([scan_y, scan_x])
             print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:',
                   self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
