@@ -26,7 +26,8 @@ jobs:
       run: |
         iwr get.scoop.sh -outfile 'install.ps1'
         .\install.ps1 -RunAsAdmin
-        # scoop bucket add extras
+        scoop bucket add main
+        scoop bucket add extras
         scoop install nsis
         makensis -VERSION
     - name: Build
