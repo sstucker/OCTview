@@ -1,6 +1,6 @@
 # Build and release executable produced by fbs
 
-name: Python application
+name: fbs build
 
 on:
   push:
@@ -18,11 +18,17 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: "3.6.8"
-    - name: Install dependencies
+    - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-    - name: fbs freeze
+    - name: Install NSIS
+      run: |
+        Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://get.scoop.sh')
+        scoop bucket add extras
+        scoop install nsis
+        makensis -VERSION
+    - name: Build
       run: |
         python -m fbs freeze
         python -m fbs installer
