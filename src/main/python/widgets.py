@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QWidget, QLayout, QGridLayout, QGroupBox, QMainWindo
     QRadioButton, \
     QFileDialog, QMessageBox, QLineEdit, QTextEdit, QComboBox, QDialog, QFrame, QApplication
 from pyqtgraph.graphicsItems.InfiniteLine import InfiniteLine as pyqtgraphSlider
-from PyScanPatterns.scanpatterns import LineScanPattern, RasterScanPattern
+from scanpatterns import LineScanPattern, RasterScanPattern
 from threading import Thread, Lock
 from queue import Queue
 import copy
