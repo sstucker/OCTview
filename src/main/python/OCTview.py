@@ -26,7 +26,6 @@ class _AppContext(ApplicationContext):
 
         self.ui_resource_location = str(self.get_resource('ui'))
         self.config_resource_location = str(self.get_resource('configurations'))
-        self.lib_resource_location = str(self.get_resource('lib'))
 
         self.app.setAttribute(Qt.AA_EnableHighDpiScaling)
 
@@ -148,7 +147,7 @@ class _AppContext(ApplicationContext):
                     print('Failed to load library', os.path.join(path, f))
                 for f in os.listdir(path):
                     pass
-        self.controller = NIOCTController(os.path.join(self.lib_resource_location, 'fastnisdoct/fastnisdoct.dll'))
+        self.controller = NIOCTController(os.path.join(self.get_resource('fastnisdoct.dll')))
         self.controller.open(
             self.window.camera_device_name(),
             self.window.analog_output_galvo_x_ch_name(),
@@ -256,5 +255,4 @@ AppContext = _AppContext()
 window = AppContext.window
 ui_resource_location = AppContext.ui_resource_location
 config_resource_location = AppContext.config_resource_location
-lib_resource_location = AppContext.lib_resource_location
 run = AppContext.run
