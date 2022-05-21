@@ -39,7 +39,6 @@ protected:
 	CircAcqElement<T>* locked_out_buffer;
 	int ring_size;
 	uint64_t element_size;
-	int head;
 	std::atomic_long count;  // cumulative count
 	std::mutex* locks;  // Locks on each ring pointer
 	std::atomic_int locked;  // index of currently locked buffer
@@ -58,6 +57,8 @@ protected:
 	}
 
 public:
+
+	std::atomic_int head;
 
 	CircAcqBuffer()
 	{

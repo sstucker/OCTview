@@ -252,7 +252,7 @@ class RasterScanWidget(ScanWidget, UiWidget):
                 'alines': self.spinACount.value(),
                 'blines': self.spinBCount.value(),
                 'max_trigger_rate': self.parentWidget().parentWidget().parentWidget().max_line_rate(),  # MainWindow
-                # Pattern gen in millimeters
+                # Pattern gen in millimeters!
                 'fov': [self.spinROIWidth.value() * 0.001, self.spinROIHeight.value() * 0.001],
                 'flyback_duty': self.spinFlybackDuty.value() / 100,
                 'exposure_fraction': self.spinExposureFraction.value() / 100,
@@ -458,6 +458,16 @@ class ScanGroupBox(QGroupBox, UiWidget):
     def b_repeats(self):
         return self.ScanWidget.b_repeats()
 
+    def rotation_degrees(self) -> float:
+        return self.spinRotation.value()
+
+    def x_offset(self) -> float:
+        """Scan offset in mm"""
+        return self.spinXOffset.value() * 0.001
+
+    def y_offset(self) -> float:
+        """Scan offset in mm"""
+        return self.spinYOffset.value() * 0.001
 
 class ControlGroupBox(QGroupBox, UiWidget):
     scan = pyqtSignal()
@@ -557,6 +567,8 @@ class ScanDisplayWindow(QFrame):
 
         exp = np.zeros(len(pattern.x)).astype(np.int32)
         exp[pattern.line_trigger.astype(bool)] = 1
+        scan_x = pattern.x + self.scan_offset_mm_x()
+        scan_y = pattern.y + self.scan_offset_mm_y()
         x_pts = pattern.positions[:, 0]
         y_pts = pattern.positions[:, 1]
         self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=1, color='#FEFEFE'),
@@ -693,7 +705,7 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
     yrange = property()
     wavelengths = property()
 
-    def __init__(self, wavelengths, yrange=[0, 4096]):
+    def __init__(self, wavelengths=np.arange(0, 2048), yrange=[0, 4096]):
         super().__init__()
 
         # self.resize(200, 100)
@@ -712,9 +724,11 @@ class SpectrumPlotWidget(pyqtgraph.GraphicsWindow):
         self._current_data = 0
         self.plot(np.zeros(self._n))
 
-    def plot(self, data):
+    def plot(self, data, wavelengths=None):
+        if wavelengths is None:
+            wavelengths = self._wavelengths
         self._current_data = data
-        self._spectrum.setData(self._wavelengths, self._current_data)
+        self._spectrum.setData(wavelengths, self._current_data)
 
     @yrange.setter
     def yrange(self, yrange):
@@ -973,11 +987,11 @@ class SpectrumWidget(QWidget, UiWidget):
 
     def __init__(self):
         super().__init__()
-        replaceWidget(self.SpectrumPlotWidget, SpectrumPlotWidget(np.arange(0, 2048)))
+        replaceWidget(self.SpectrumPlotWidget, SpectrumPlotWidget())
         self.setMaximumHeight(200)
 
-    def plot(self, spectrum: np.ndarray):
-        self.SpectrumPlotWidget.plot(spectrum)
+    def plot(self, wavelengths: np.ndarray, spectrum: np.ndarray):
+        self.SpectrumPlotWidget.plot(spectrum, wavelengths=wavelengths)
 
 
 class CancelDiscardsChangesDialog(QDialog, UiWidget):
@@ -1220,6 +1234,17 @@ class MainWindow(QMainWindow, UiWidget):
     def roi_offset(self) -> int:
         return self.zroi()[0]
 
+    def rotation_degrees(self) -> float:
+        return self.ScanGroupBox.rotation_degrees()
+
+    def scan_offset_mm_x(self) -> float:
+        """Scan offset in mm"""
+        return self.ScanGroupBox.x_offset()
+
+    def scan_offset_mm_y(self) -> float:
+        """Scan offset in mm"""
+        return self.ScanGroupBox.y_offset()
+
     def aline_size(self) -> int:
         return self._settings_dialog.spinAlineSize.value()
 
@@ -1272,13 +1297,14 @@ class MainWindow(QMainWindow, UiWidget):
         self.DisplayWidget.display_frame(frame, fov=fov)
 
     def display_spectrum(self, spectrum: np.ndarray):
-        self.SpectrumWidget.plot(spectrum)
+        self.SpectrumWidget.plot(np.linspace(*self.spectrometer_range(), self.aline_size()), spectrum)
 
     def trigger_gain(self) -> float:
         return self._settings_dialog.spinTriggerGain.value()
         return self._settings_dialog.spinTriggerGain.value()
 
     def scan_scale_factors(self) -> (float, float):
+        """V/mm scale factors"""
         return (self._settings_dialog.spinXScaleFactor.value(),
                 self._settings_dialog.spinYScaleFactor.value())
 
@@ -1300,5 +1326,14 @@ class MainWindow(QMainWindow, UiWidget):
         else:
             return self._settings_dialog.radioTriggerBlines.isChecked()
 
-    def dll_search_paths(self):
+    def dll_search_paths(self) -> list:
         return list(filter(lambda p: len(p) < 1, self._settings_dialog.textEditDLLPaths.toPlainText().split(r'\n')))
+
+    def spectrometer_range(self) -> (int, int):
+        return (self._settings_dialog.spinSpectrometerLow.value(), self._settings_dialog.spinSpectrometerHigh.value())
+
+    def should_create_metadata_file(self) -> bool:
+        return self.FileGroupBox.checkMetadata.isChecked()
+
+    def axial_pixel_size_mm(self) -> float:
+        return self._settings_dialog.spinAxialPixelSize.value() * 0.001

@@ -206,7 +206,8 @@ namespace ni
 	int daq_open(
 		const char* aoScanX,
 		const char* aoScanY,
-		const char* aoLineTrigger
+		const char* aoLineTrigger,
+		const char* aoStartTrigger
 	)
 	{
 		
@@ -219,6 +220,7 @@ namespace ni
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanX, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanY, "", -10, 10, DAQmx_Val_Volts, NULL);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoLineTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
+		err = DAQmxCreateAOVoltageChan(scan_task, aoStartTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
 		return err;
 	}
 
@@ -291,17 +293,38 @@ namespace ni
 		return imgSessionReleaseBuffer(session_id);
 	}
 
+	int drive_start_trigger_high()
+	{
+		for (int i = 0; i < scansig_n; i++)
+		{
+			concatenated_scansig[3 * scansig_n + i] = 5.0;
+		}
+		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
+		return err;
+	}
+
+	int drive_start_trigger_low()
+	{
+		for (int i = 0; i < scansig_n; i++)
+		{
+			concatenated_scansig[3 * scansig_n + i] = 0.0;
+		}
+		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
+		return err;
+	}
+
 	int set_scan_pattern(ScanPattern* pattern)
 	{
 		// Assign buffers for scan pattern
 		if (pattern->n != scansig_n)  // If buffer size needs to change
 		{
-			concatenated_scansig.reserve(3 * pattern->n);
+			concatenated_scansig.reserve(4 * pattern->n);
 		}
 
 		memcpy(&concatenated_scansig[0] + 0, pattern->x, sizeof(float64) * pattern->n);
 		memcpy(&concatenated_scansig[0] + pattern->n, pattern->y, sizeof(float64) * pattern->n);
 		memcpy(&concatenated_scansig[0] + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
+		memset(&concatenated_scansig[0] + 3 * pattern->n, 0.0, sizeof(float64) * pattern->n);
 
 		bool32 is_it = false;
 		DAQmxIsTaskDone(scan_task, &is_it);

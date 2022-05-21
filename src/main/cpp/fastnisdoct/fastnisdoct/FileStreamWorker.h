@@ -122,6 +122,7 @@ class FileStreamWorker
 		std::atomic_bool _running = ATOMIC_VAR_INIT(false);
 		std::atomic_bool _finished = ATOMIC_VAR_INIT(true);
 		CircAcqBuffer<T>* _buffer;
+		int _init_buffer_index;
 
 		char _file_name[512];
 		int _max_frames_per_file;
@@ -152,8 +153,16 @@ class FileStreamWorker
 			int file_name_inc = 0;
 			int n_streamed = 0;
 
+			int latest_frame_n;
 			// Get ahead of buffer to let galvos settle
-			int latest_frame_n = _buffer->get_count() + 5;
+			if (_init_buffer_index == -1)
+			{
+				latest_frame_n = _buffer->get_count() + 5;
+			}
+			else
+			{
+				latest_frame_n = _init_buffer_index;
+			}
 
 			// Stream continuously to various files or until _n_to_stream is reached
 			while (_running.load() && ((_n_to_stream > n_streamed) || (_n_to_stream == -1)))
@@ -227,6 +236,7 @@ class FileStreamWorker
 			float max_gb,
 			FileStreamType ftype,
 			CircAcqBuffer<T>* buffer,
+			int buffer_head,
 			long frame_size,
 			int n_to_stream
 		)
@@ -245,6 +255,7 @@ class FileStreamWorker
 			_file_max_gb = max_gb;
 			_file_type = ftype;
 			_buffer = buffer;
+			_init_buffer_index = buffer_head;
 			_frame_size_bytes = frame_size * sizeof(T);
 			_n_to_stream = n_to_stream;
 			printf("Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
@@ -267,7 +278,7 @@ class FileStreamWorker
 			long frame_size
 		)
 		{
-			return _start(fname, max_gb, ftype, buffer, frame_size, -1);
+			return _start(fname, max_gb, ftype, buffer, -1, frame_size, -1);
 		}
 
 		int start
@@ -280,7 +291,21 @@ class FileStreamWorker
 			int n_to_stream
 		)
 		{
-			return _start(fname, max_gb, ftype, buffer, frame_size, n_to_stream);
+			return _start(fname, max_gb, ftype, buffer, -1, frame_size, n_to_stream);
+		}
+
+		int start
+		(
+			const char* fname,
+			float max_gb,
+			FileStreamType ftype,
+			CircAcqBuffer<T>* buffer,
+			int buf_head,
+			long frame_size,
+			int n_to_stream
+		)
+		{
+			return _start(fname, max_gb, ftype, buffer, buf_head, frame_size, n_to_stream);
 		}
 
 		void stop()

@@ -59,6 +59,9 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="toolTip">
+         <string>Specify how repeated B-lines are processed. If None is selected, the repeated B-lines will appear next to one another as a larger B-line</string>
+        </property>
         <property name="text">
          <string>None</string>
         </property>
@@ -78,6 +81,9 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="toolTip">
+         <string>Specify how repeated B-lines are processed. If None is selected, the repeated B-lines will appear next to one another as a larger B-line</string>
+        </property>
         <property name="text">
          <string>Difference</string>
         </property>
@@ -93,6 +99,9 @@
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Specify how repeated B-lines are processed. If None is selected, the repeated B-lines will appear next to one another as a larger B-line</string>
         </property>
         <property name="text">
          <string>Average</string>
@@ -140,6 +149,12 @@
    </item>
    <item row="1" column="1" colspan="2">
     <widget class="QCheckBox" name="checkMeanSpectrumSubtraction">
+     <property name="acceptDrops">
+      <bool>false</bool>
+     </property>
+     <property name="toolTip">
+      <string>If checked, the mean of all spectra in a frame will be subtracted from each</string>
+     </property>
      <property name="text">
       <string>Mean spectrum subtraction</string>
      </property>
@@ -187,6 +202,9 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="toolTip">
+         <string>Specify how repeated A-lines are processed. If None, the A-lines will be included in the B-line</string>
+        </property>
         <property name="text">
          <string>None</string>
         </property>
@@ -205,6 +223,9 @@
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Specify how repeated A-lines are processed. If None, the A-lines will be included in the B-line</string>
         </property>
         <property name="text">
          <string>Average</string>
@@ -230,7 +251,7 @@
    <item row="3" column="1">
     <widget class="QCheckBox" name="checkApodization">
      <property name="toolTip">
-      <string>If checked, spectra will be DC-subtracted and then multiplied by a window function</string>
+      <string>If checked, spectra will be multiplied by a window function prior to FFT</string>
      </property>
      <property name="text">
       <string>Apodization</string>
@@ -269,6 +290,9 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="toolTip">
+         <string>Average consecutive frames together</string>
+        </property>
         <property name="text">
          <string>None</string>
         </property>
@@ -285,6 +309,9 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="toolTip">
+         <string>Average consecutive frames together</string>
+        </property>
         <property name="text">
          <string>Average</string>
         </property>
@@ -300,6 +327,9 @@
           <horstretch>0</horstretch>
           <verstretch>0</verstretch>
          </sizepolicy>
+        </property>
+        <property name="toolTip">
+         <string>Average consecutive frames together</string>
         </property>
         <property name="suffix">
          <string> frames</string>

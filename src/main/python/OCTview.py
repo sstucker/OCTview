@@ -1,10 +1,9 @@
 import ctypes
 import os
-import sys
-import time
+import datetime
+import json
 import numpy as np
 import qdarkstyle
-from PyQt5.QtWidgets import QSplashScreen
 from PyQt5.QtCore import QTimer, Qt
 from PyQt5.QtGui import QFont
 from fbs_runtime.application_context.PyQt5 import ApplicationContext
@@ -133,6 +132,58 @@ class _AppContext(ApplicationContext):
         # else:
         #     print("Failed to grab frame. Maybe one wasnt available yet")
 
+    def _create_metadata_json(self):
+        pat = self.window.scan_pattern()
+        if self.window.frames_to_acquire() > -1:
+            acq_n = str(self.window.frames_to_acquire())
+        else:
+            acq_n = 'Indefinite'
+        if self.window.save_processed_data():
+            processed = 'True'
+            datatype = 'COMPLEX64'
+            frame_size = self.window.processed_frame_size()
+            zroi_start = self.window.roi_offset()
+            zroi_size = self.window.roi_size()
+            processing_params = {
+                'Background-subtraction': str(self.window.background_subtraction_enabled()),
+                'Wavenumber-linearization': str(self.window.interpolation_enabled()),
+                'Apodization': str(np.max(self.window.apodization_window()) > 1),
+                'A-line-repeat-processing': str(self.window.aline_repeat_processing()),
+                'B-line-repeat-processing': str(self.window.bline_repeat_processing()),
+                'FFT': 'True'
+            }
+        else:
+            processed = 'False'
+            datatype = 'UINT16'
+            frame_size = self.window.unprocessed_frame_size()
+            zroi_start = 0
+            zroi_size = self.window.aline_size()
+            processing_params = {}
+        metadata = {
+            'Created': datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            'Data-type': datatype,
+            'Processed': processed,
+            'Processing-params': processing_params,
+            'Number-of-frames': acq_n,
+            'Frame-size-voxels': frame_size,
+            'Spectrometer-bins': self.window.aline_size(),
+            'Spectrometer-bandwidth-nm': self.window.spectrometer_range(),
+            'Axial-voxel-size-mm': self.window.axial_pixel_size_mm(),
+            'Axial-crop-offset': zroi_start,
+            'Axial-crop-size': zroi_size,
+            'A-lines': pat.dimensions[0],
+            'A-line-repeat': pat.aline_repeat,
+            'B-lines': pat.dimensions[1],
+            'B-line-repeat': pat.bline_repeat,
+            'Scan-pattern-type': str(pat.__class__.__name__),
+            'XY-ROI-mm': tuple(pat.fov),
+            'XY-Shift-mm': (self.window.scan_offset_mm_x(), self.window.scan_offset_mm_x()),
+            'V/mm-scan-factors': self.window.scan_scale_factors(),
+            'Pattern-rate-hz': pat.pattern_rate,
+            'Line-camera-trigger-rate-hz': self.window.max_line_rate()
+        }
+        with open(self.window.filename() + '.json', 'w') as f:
+            json.dump(metadata, f)
     # -- Backend interface ------------------------------------------------
 
     def _open_controller(self):
@@ -152,7 +203,8 @@ class _AppContext(ApplicationContext):
             self.window.camera_device_name(),
             self.window.analog_output_galvo_x_ch_name(),
             self.window.analog_output_galvo_y_ch_name(),
-            self.window.analog_output_line_trig_ch_name()
+            self.window.analog_output_line_trig_ch_name(),
+            self.window.analog_output_start_trig_ch_name()
         )
         return True
 
@@ -168,8 +220,8 @@ class _AppContext(ApplicationContext):
         self._ctr_configure_image -= 1
         if not self._ctr_configure_image > 0:
             pat = self.window.scan_pattern()
-            scan_x = pat.x * self.window.scan_scale_factors()[0]
-            scan_y = pat.y * self.window.scan_scale_factors()[1]
+            scan_x = (pat.x + self.window.scan_offset_mm_x()) * self.window.scan_scale_factors()[0]
+            scan_y = (pat.y + self.window.scan_offset_mm_y()) * self.window.scan_scale_factors()[1]
             scan_line_trig = pat.line_trigger * self.window.trigger_gain()
             all_samples = np.concatenate([scan_y, scan_x])
             print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:',
@@ -235,15 +287,18 @@ class _AppContext(ApplicationContext):
             self._display_update_timer.start(t)
 
     def _start_acquisition(self):
-        if self.controller.state != 'scanning' and self.controller.state == 'ready':
-            self.controller.start_scan()
-            self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate * 1000))
-        self.controller.start_acquisition(
-            self.window.filename(),
-            self.window.file_max_gb(),
-            self.window.frames_to_acquire(),
-            self.window.save_processed_data()
-        )
+        if self.controller.state == 'ready' or self.controller.state == 'scanning':
+            if self.controller.state == 'ready':
+                self.controller.start_scan()
+                self._display_update_timer.start(int(1 / self.window.scan_pattern().pattern_rate * 1000))
+            if self.window.should_create_metadata_file():
+                self._create_metadata_json()
+            self.controller.start_acquisition(
+                self.window.filename(),
+                self.window.file_max_gb(),
+                self.window.frames_to_acquire(),
+                self.window.save_processed_data()
+            )
 
     def _stop(self):
         self.controller.stop_scan()

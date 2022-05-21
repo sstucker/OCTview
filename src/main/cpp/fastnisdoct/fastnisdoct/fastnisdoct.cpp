@@ -211,8 +211,10 @@ inline void init_fastnisdoct()
 
 inline void stop_acquisition()
 {
+	printf("fastnisdoct: stopping acquisition.\n");
 	processed_frame_streamer.stop();
 	spectral_frame_streamer.stop();
+	ni::drive_start_trigger_low();
 	state.store(STATE_SCANNING);
 }
 
@@ -357,6 +359,7 @@ inline void recv_msg()
 					// Allocate processing buffers
 					background_spectrum.reserve(msg.aline_size);
 					background_spectrum_new.reserve(msg.aline_size);
+					std::fill(background_spectrum.begin(), background_spectrum.end(), 0.0);
 					std::fill(background_spectrum_new.begin(), background_spectrum_new.end(), 0.0);
 				}
 				else
@@ -495,6 +498,7 @@ inline void recv_msg()
 				processing_configured = false;
 
 				subtract_background = msg.subtract_background;
+				printf("fastnisdoct: Background subtraction %i\n", subtract_background);
 				interp = msg.interp;
 				interpdk = msg.interpdk;
 				n_frame_avg = msg.n_frame_avg;
@@ -568,6 +572,7 @@ inline void recv_msg()
 						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer.get(), preprocessed_alines_size);
 					}
 				}
+				ni::drive_start_trigger_high();
 				state.store(STATE_ACQUIRING);
 				delete[] msg.file_name;
 			}
@@ -728,10 +733,6 @@ void _main()
 							background_spectrum_new[j] += raw_frame_roi_new.get()[aline_size * i + j];
 						}
 					}
-				}
-
-				if (subtract_background)
-				{
 					// Normalize the background spectrum
 					float norm = 1.0 / alines_in_image;
 					for (int j = 0; j < aline_size; j++)
@@ -755,7 +756,7 @@ void _main()
 				{
 					for (int i = 0; i < aline_size; i++)
 					{
-						spectrum_display_buffer[i] = raw_frame_roi.get()[i] - background_spectrum[i];  // Always grab from beginning of the buffer 
+						spectrum_display_buffer[i] = raw_frame_roi.get()[i] - background_spectrum[i] * (int)(subtract_background);  // Always grab from beginning of the buffer 
 					}
 					spectrum_display_buffer_refresh.store(false);
 				}
@@ -801,42 +802,48 @@ void _main()
 						// If A-line repeats are left in the frame for B-line processing
 						alines_per_bline_now = alines_per_bline;
 					}
-					// printf("A-lines in B-line now: %i\n", alines_per_bline_now);
 
-					if (b_rpt_proc_flag == REPEAT_PROCESSING_MEAN && n_bline_repeat > 1)  // B-line averaging
+					if (b_rpt_proc_flag > REPEAT_PROCESSING_NONE && n_bline_repeat > 1)
 					{
-						for (int b = 0; b < alines_in_image / alines_per_bline / n_bline_repeat; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
+						// printf("For each b in %i\n", alines_in_image / alines_per_bline / n_bline_repeat);
+						// printf("For each A-line per bline %i\n", alines_per_bline_now);
+						for (int b = 0; b < alines_in_image / alines_per_bline; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
 						{
-							for (int x = 0; x < alines_per_bline_now; x++)  // For each element of each B-line
+							for (int x = 0; x < alines_per_bline_now / n_bline_repeat; x++)  // For each element of each B-line (minus repeats)
 							{
-								for (int z = 0; z < roi_size; z++)
+
+								if (b_rpt_proc_flag == REPEAT_PROCESSING_DIFF && n_bline_repeat == 2)
 								{
-									r[0] = 0;
-									r[1] = 0;
+									//printf("B-line differencing: setting [%i] equal to [%i] - [%i]\n", (b * alines_per_bline_now / 2 + x), (b * alines_per_bline_now + x), (b * alines_per_bline_now + x + alines_per_bline_now / 2));
+									for (int z = 0; z < roi_size; z++)
+									{
+										processed_alines_addr[(b * alines_per_bline_now / 2 + x) * roi_size + z][0] = std::abs(processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] - processed_alines_addr[(b * alines_per_bline_now + x + alines_per_bline_now / 2) * roi_size + z][0]);
+										processed_alines_addr[(b * alines_per_bline_now / 2 + x) * roi_size + z][1] = std::abs(processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] - processed_alines_addr[(b * alines_per_bline_now + x + alines_per_bline_now / 2) * roi_size + z][1]);
+									}
+								}
+								else  // REPEAT_PROCESSING_AVERAGING
+								{
+									float norm = 1.0 / n_bline_repeat;
+
+									/*
 									for (int k = 0; k < n_bline_repeat; k++)
 									{
-										// printf("B-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline_now * n_bline_repeat + x + k * alines_per_bline_now, z);
-										r[0] += processed_alines_addr[(b * alines_per_bline_now * n_bline_repeat + x + k * alines_per_bline_now) * roi_size + z][0];
-										r[1] += processed_alines_addr[(b * alines_per_bline_now * n_bline_repeat + x + k * alines_per_bline_now) * roi_size + z][1];
+										printf("Summing from %i\n", (b * alines_per_bline_now + x + (alines_per_bline_now / n_bline_repeat) * k));
 									}
-									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_bline_repeat;
-									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_bline_repeat;
-									// printf("--->\nB-line averaging: assigning sum to image[%i, %i]\n\n", b * alines_per_bline_now + x, z);
-								}
-							}
-						}
-					}
-					else if (b_rpt_proc_flag == REPEAT_PROCESSING_DIFF && n_bline_repeat == 2)
-					{
-						for (int b = 0; b < alines_in_image / alines_per_bline / n_bline_repeat; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
-						{
-							for (int x = 0; x < alines_per_bline_now; x++)  // For each element of each B-line
-							{
-								// printf("B-line differencing: setting [%i] equal to [%i] - [%i]\n", (b * alines_per_bline_now + x), (b * alines_per_bline_now * 2 + x), (b * alines_per_bline_now * 2 + x + alines_per_bline_now));
-								for (int z = 0; z < roi_size; z++)
-								{
-									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = processed_alines_addr[(b * alines_per_bline_now * 2 + x) * roi_size + z][0] - processed_alines_addr[(b * alines_per_bline_now * 2 + x + alines_per_bline_now) * roi_size + z][0];
-									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = processed_alines_addr[(b * alines_per_bline_now * 2 + x) * roi_size + z][1] - processed_alines_addr[(b * alines_per_bline_now * 2 + x + alines_per_bline_now) * roi_size + z][1];
+									printf("Adding to %i\n", (b * (alines_per_bline_now / n_bline_repeat) + x));
+									*/
+									for (int z = 0; z < roi_size; z++)
+									{
+										r[0] = 0.0;
+										r[1] = 0.0;
+										for (int k = 0; k < n_bline_repeat; k++)
+										{
+											r[0] += processed_alines_addr[(b * alines_per_bline_now + x + (alines_per_bline_now / n_bline_repeat) * k) * roi_size + z][0];
+											r[1] += processed_alines_addr[(b * alines_per_bline_now + x + (alines_per_bline_now / n_bline_repeat) * k) * roi_size + z][1];
+										}
+										processed_alines_addr[(b * (alines_per_bline_now / n_bline_repeat) + x) * roi_size + z][0] = r[0] * norm;
+										processed_alines_addr[(b * (alines_per_bline_now / n_bline_repeat) + x) * roi_size + z][1] = r[1] * norm;
+									}
 								}
 							}
 						}
@@ -886,7 +893,8 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		const char* cam_name,
 		const char* ao_x_ch,
 		const char* ao_y_ch,
-		const char* ao_lt_ch
+		const char* ao_lt_ch,
+		const char* ao_st_ch
 	)
 	{
 		if (main_running.load())
@@ -899,13 +907,14 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		printf("fastnisdoct: X channel ID: %s\n", ao_x_ch);
 		printf("fastnisdoct: Y channel ID: %s\n", ao_y_ch);
 		printf("fastnisdoct: Line trig channel ID: %s\n", ao_lt_ch);
+		printf("fastnisdoct: Start trigger channel ID: %s\n", ao_st_ch);
 
-		// If you don't use these strings here, dynamically put them somewhere until you do--their values are undefined once Python scope changes
+		// If you don't use these strings here, dynamically put them somewhere until you do--their values are undefined once Python scope changes or if enqueued
 
 		if (ni::imaq_open(cam_name) == 0)
 		{
 			printf("fastnisdoct: NI IMAQ interface opened.\n");
-			if (ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch) == 0)
+			if (ni::daq_open(ao_x_ch, ao_y_ch, ao_lt_ch, ao_st_ch) == 0)
 			{
 				printf("fastnisdoct: NI DAQmx interface opened.\n");
 				init_fastnisdoct();

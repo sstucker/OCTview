@@ -27,7 +27,7 @@ class NIOCTController:
         """
         print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
-        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
+        self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
         self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_long, c.c_int,
                                                       c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c.c_int, c_double_p,
                                                       c_double_p, c_double_p, c.c_long, c.c_int]
@@ -46,6 +46,7 @@ class NIOCTController:
              ao_ch_x_name,
              ao_ch_y_name,
              ao_ch_lt_name,
+             ao_ch_st_name,
              ):
         """Open the interface. To change these values, the interface must be closed and then opened again.
 
@@ -54,12 +55,14 @@ class NIOCTController:
             ao_ch_x_name (str): NI-DAQ analog out channel identifier to be used for X galvo output
             ao_ch_y_name (str): NI-DAQ analog out channel identifier to be used for Y galvo output
             ao_ch_lt_name (str): NI-DAQ analog out channel identifier to be used for camera triggering
+            ao_ch_st_name (str): NI-DAQ analog out channel driven high for duration of acquisition
         """
         self._lib.nisdoct_open(
             bytes(camera_name, encoding='utf8'),
             bytes(ao_ch_x_name, encoding='utf8'),
             bytes(ao_ch_y_name, encoding='utf8'),
             bytes(ao_ch_lt_name, encoding='utf8'),
+            bytes(ao_ch_st_name, encoding='utf8')
         )
 
     def close(self):
