@@ -189,25 +189,26 @@ class _AppContext(ApplicationContext):
 
     def _open_controller(self):
         # Could switch between various backends here if you wanted
-        ctypes.windll.kernel32.SetDllDirectoryW(None)
-        for path in self.window.dll_search_paths():
-            if os.path.exists(path):
-                try:
-                    if f.endswith('.dll'):
-                        print('OCTview: Loading', os.path.join(path, f))
-                        ctypes.cdll.LoadLibrary(os.path.join(path, f))
-                except (OSError, FileNotFoundError):
-                    print('OCTview: Failed to load library', os.path.join(path, f))
-                for f in os.listdir(path):
-                    pass
-        self.controller = NIOCTController(self.get_resource('fastnisdoct.dll'))
-        self.controller.open(
-            self.window.camera_device_name(),
-            self.window.analog_output_galvo_x_ch_name(),
-            self.window.analog_output_galvo_y_ch_name(),
-            self.window.analog_output_line_trig_ch_name(),
-            self.window.analog_output_start_trig_ch_name()
-        )
+        try:
+            ctypes.windll.kernel32.SetDllDirectoryW(None)
+            for path in self.window.dll_search_paths():
+                if os.path.exists(path):
+                        if f.endswith('.dll'):
+                            print('OCTview: Loading', os.path.join(path, f))
+                            ctypes.cdll.LoadLibrary(os.path.join(path, f))
+                    for f in os.listdir(path):
+                        pass
+            self.controller = NIOCTController(self.get_resource('fastnisdoct.dll'))
+            self.controller.open(
+                self.window.camera_device_name(),
+                self.window.analog_output_galvo_x_ch_name(),
+                self.window.analog_output_galvo_y_ch_name(),
+                self.window.analog_output_line_trig_ch_name(),
+                self.window.analog_output_start_trig_ch_name()
+            )
+        except (OSError, FileNotFoundError, Exception):
+            print('OCTview: Failed to load backend nisdoct.')
+            return False
         return True
 
     def _close_controller(self):
