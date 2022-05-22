@@ -189,6 +189,7 @@ class _AppContext(ApplicationContext):
 
     def _open_controller(self):
         # Could switch between various backends here if you wanted
+        ctypes.windll.kernel32.SetDllDirectoryW(None)
         for path in self.window.dll_search_paths():
             if os.path.exists(path):
                 try:
@@ -199,7 +200,7 @@ class _AppContext(ApplicationContext):
                     print('OCTview: Failed to load library', os.path.join(path, f))
                 for f in os.listdir(path):
                     pass
-        self.controller = NIOCTController(os.path.join(self.get_resource('fastnisdoct.dll')))
+        self.controller = NIOCTController(self.get_resource('fastnisdoct.dll'))
         self.controller.open(
             self.window.camera_device_name(),
             self.window.analog_output_galvo_x_ch_name(),
