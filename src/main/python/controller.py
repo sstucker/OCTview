@@ -25,7 +25,6 @@ class NIOCTController:
         Args:
             library (str): Path to the NIOCTController .dll
         """
-        print('Loading backend .dll from', library)
         self._lib = c.CDLL(library)
         self._lib.nisdoct_open.argtypes = [c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p, c.c_char_p]
         self._lib.nisdoct_configure_image.argtypes = [c.c_int, c.c_long, c_bool_p, c.c_long, c.c_long, c.c_long, c.c_int,

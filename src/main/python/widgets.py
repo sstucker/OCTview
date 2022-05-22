@@ -842,7 +842,6 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
             self._sf = [1.0, 1.0]
         else:
             self._sf = [sfx, sfy]
-        # print('Scaling image with shape', self._data_shape, 'by', self._sf)
         if self._vslider is not None:
             self._vslider.setBounds([0, self._sf[0] * self._data_shape[0]])
         if self._hslider is not None:
@@ -855,7 +854,7 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
             self.setAspect(fov[0], fov[1])
 
         if np.isnan(np.sum(image)):
-            print('NaN encountered in image enqueued for display')
+            print('OCTview: NaN encountered in image enqueued for display')
             return
 
         if image.size > 64 * 64:
@@ -933,8 +932,6 @@ class DisplayWidget(QWidget, UiWidget):
             frame (np.ndarray): 3D or 2D complex frame
             fov: Dimensions in meters of the frame volume or area.
         """
-        # print('Enface', self._enface.hslice, self._enface.vslice)
-        # print('B-Scan', self._bscan.hslice, self._bscan.vslice)
         if frame.ndim < 3:
             raise IndexError("Only 3D frames can be displayed by DisplayWidget")
         if self.tabDisplay.currentIndex() == 0:  # If in 2D slicing mode
@@ -1263,7 +1260,7 @@ class MainWindow(QMainWindow, UiWidget):
                 b = 32
         else:
             b = int(self._settings_dialog.spinNumberOfBuffers.value())
-        print('A-lines per frame', fsize, '-- buffers', b)
+        print('OCTview: Automatic buffer count calculator creating', b, 'buffers.')
         return b
 
     def analog_output_galvo_x_ch_name(self) -> str:

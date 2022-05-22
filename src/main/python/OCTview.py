@@ -103,7 +103,7 @@ class _AppContext(ApplicationContext):
             self._configure_processing(self.window.unprocessed_frame_size(), self.window.processed_frame_size())
             self._update_timer.start(100)  # 10 Hz
         else:
-            self.window.print('Failed to open controller. Try configuring the application.')
+            self.window.print('OCTview: Failed to open controller. Try reconfiguring the application.')
 
     def _update(self):
         if self.controller is not None:
@@ -161,6 +161,7 @@ class _AppContext(ApplicationContext):
             processing_params = {}
         metadata = {
             'Created': datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+            'OCTview version': self.version,
             'Data-type': datatype,
             'Processed': processed,
             'Processing-params': processing_params,
@@ -192,10 +193,10 @@ class _AppContext(ApplicationContext):
             if os.path.exists(path):
                 try:
                     if f.endswith('.dll'):
-                        print('Loading', os.path.join(path, f))
+                        print('OCTview: Loading', os.path.join(path, f))
                         ctypes.cdll.LoadLibrary(os.path.join(path, f))
                 except (OSError, FileNotFoundError):
-                    print('Failed to load library', os.path.join(path, f))
+                    print('OCTview: Failed to load library', os.path.join(path, f))
                 for f in os.listdir(path):
                     pass
         self.controller = NIOCTController(os.path.join(self.get_resource('fastnisdoct.dll')))
@@ -224,8 +225,6 @@ class _AppContext(ApplicationContext):
             scan_y = (pat.y + self.window.scan_offset_mm_y()) * self.window.scan_scale_factors()[1]
             scan_line_trig = pat.line_trigger * self.window.trigger_gain()
             all_samples = np.concatenate([scan_y, scan_x])
-            print("Updating pattern generation signals. Range:", np.min(all_samples), np.max(all_samples), 'Rate:',
-                  self.window.scan_pattern().sample_rate, 'Length:', len(scan_x))
             self.controller.configure_image(
                 aline_size=self.window.aline_size(),
                 alines_in_scan=pat.points_in_scan,
@@ -258,11 +257,7 @@ class _AppContext(ApplicationContext):
     def _configure_processing(self, unprocessed_frame_size: int, processed_frame_size: int):
         # Because some changes to processing are really changes to the IMAGE at the controller level, do this check
         if self._unprocessed_frame_size != unprocessed_frame_size or self._processed_frame_size != processed_frame_size or self._bline_proc_mode != self.window.bline_repeat_processing():
-            print('Frame sizes changed! {} -> {}, {} -> {}'.format(self._unprocessed_frame_size, unprocessed_frame_size,
-                                                                   self._processed_frame_size, processed_frame_size))
             self._configure_image()
-        else:
-            print('Updating processing with image of the same size.')
         self._ctr_configure_processing += 1
         self._timer_configure_processing.singleShot(CALLBACK_DEBOUNCE_MS, self._configure_processing_cb)
 
@@ -283,7 +278,7 @@ class _AppContext(ApplicationContext):
         else:
             self.controller.start_scan()
             t = max(int(1 / self.window.scan_pattern().pattern_rate * 1000), int(1 / MAX_DISPLAY_UPDATE_RATE * 1000))
-            print('Polling display buffer every', t, 'ms,', 1 / (t / 1000), 'Hz')
+            print('OCTview: Polling display buffer every', t, 'ms,', 1 / (t / 1000), 'Hz')
             self._display_update_timer.start(t)
 
     def _start_acquisition(self):
@@ -307,6 +302,11 @@ class _AppContext(ApplicationContext):
 
 # Module interface
 AppContext = _AppContext()
+__version__ = AppContext.version
+version = AppContext.version
+print("===============================")
+print("OCTview v" + version)
+print("===============================")
 window = AppContext.window
 ui_resource_location = AppContext.ui_resource_location
 config_resource_location = AppContext.config_resource_location
