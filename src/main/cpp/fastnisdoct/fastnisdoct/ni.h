@@ -227,7 +227,6 @@ namespace ni
 	int daq_close()
 	{
 		err = DAQmxClearTask(scan_task);
-		printf("NI DAQ interface closed.\n");
 		return err;
 	}
 
@@ -243,7 +242,6 @@ namespace ni
 			err = DAQmxStartTask(scan_task);
 			if (err == 0)
 			{
-				printf("Started scan!\n");
 				return 0;
 			}
 		}
@@ -339,10 +337,6 @@ namespace ni
 				
 				err = DAQmxStartTask(scan_task);
 			}
-			else
-			{
-				printf("DAC rate is unchanged: %i\n", dac_rate);
-			}
 			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
 			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
 		}
@@ -352,14 +346,7 @@ namespace ni
 			{
 				err = configure_scan_timing(pattern);
 			}
-			else
-			{
-				printf("DAC rate is unchanged: %i\n", dac_rate);
-			}
 		}
-		printf("Changed DAC output rate from %i to %i\n", dac_rate, pattern->sample_rate);
-		printf("Changed line trigger rate from %i to %i\n", line_rate, pattern->line_rate);
-		printf("Changed pattern length from %i to %i\n", scansig_n, pattern->n);
 		scansig_n = pattern->n;  // Set property to new n
 		dac_rate = pattern->sample_rate;
 		line_rate = pattern->line_rate;

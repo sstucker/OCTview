@@ -117,17 +117,13 @@ void aline_processing_worker(
 				fft_buffer,
 				interp_buffer
 			);
-			// printf("Worker %i finished writing to %p, about to increment barrier which is currently %i\n", std::this_thread::get_id(), msg.dst_frame, msg.barrier->load());
 			msg.barrier->fetch_add(1);
 		}
 		else
 		{
 			Sleep(IDLE_SLEEP_MS);
-			// printf("Worker %i polled an empty queue.\n", std::this_thread::get_id());
 		}
 	}
-
-	printf("Worker %i terminated.\n", std::this_thread::get_id());
 }
 
 
@@ -175,7 +171,7 @@ public:
 		bool fft_enabled  // Whether or not to perform an FFT. If false, axial ROI cropping does not take place.
 	)
 	{
-		printf("AlineProcessingPool initialized with A-line size: %i, number of A-lines: %i\n", aline_size, number_of_alines);
+		printf("fastnisdoct: AlineProcessingPool initialized with A-line size: %i, number of A-lines: %i\n", aline_size, number_of_alines);
 
 		// Need these for second constructor phase
 		this->aline_size = aline_size;
@@ -227,7 +223,7 @@ public:
 		int64_t fft_buffer_size = (aline_size * alines_per_worker + 8 * alines_per_worker) * number_of_workers;
 		fft_buffer = fftwf_alloc_real(fft_buffer_size);
 		// The trasform will be in place, so the buffer will contain first real data and then complex
-		printf("Allocated FFTW transform buffer.\n");
+		printf("fastnisdoct: Allocated FFTW transform buffer.\n");
 		interp_buffer = std::make_unique<float[]>(aline_size * number_of_workers);  // Single A-line sized buffer
 
 		fftwf_import_wisdom_from_filename(".fftwf_wisdom");
@@ -235,11 +231,11 @@ public:
 		fft_plan = fftwf_plan_many_dft_r2c(1, n, alines_per_worker, (float*)fft_buffer, inembed, istride, idist, (fftwf_complex*)fft_buffer, onembed, ostride, odist, FFTW_PATIENT);
 		if (fft_plan == NULL)
 		{
-			printf("Failed to generate FFTWF plan!\n");
+			printf("fastnisdoct: Failed to generate FFTWF plan!\n");
 		}
 		else
 		{
-			printf("Generated FFTWF plan.\n");
+			printf("fastnisdoct: Generated FFTWF plan.\n");
 			fftwf_export_wisdom_to_filename(".fftwf_wisdom");
 		}
 	}
@@ -276,10 +272,10 @@ public:
 				}
 				else
 				{
-					printf("Planning lambda->k interpolation... ");
+					printf("fastnisdoct/AlineProcessingPool: Planning lambda->k interpolation... ");
 					this->interpdk_plan = WavenumberInterpolationPlan(this->aline_size, interpdk);
 					interpdk_plan_p = &this->interpdk_plan;
-					printf(" Finished.\n");
+					printf("Finished.\n");
 					fflush(stdout);
 				}
 			}
@@ -287,7 +283,7 @@ public:
 			{
 				for (int i = 0; i < queues.size(); i++)
 				{
-					// printf("Enqueuing job in JobQueue at %p\n", queues[i]);
+					// printf("fastnisdoct/AlineProcessingPool: Enqueuing job in JobQueue at %p\n", queues[i]);
 					aline_processing_job_msg job;
 					job.dst_frame = dst_frame + i * this->roi_size * this->alines_per_worker;
 					job.src_frame = src_frame + i * this->aline_size * this->alines_per_worker;
@@ -308,7 +304,7 @@ public:
 		}
 		else
 		{
-			printf("Failed to submit job... pool not finished with previous!\n");
+			printf("fastnisdoct/AlineProcessingPool: Failed to submit job... pool not finished with previous!\n");
 			return -1;
 		}
 	}
@@ -337,7 +333,7 @@ public:
 		_running.store(true);
 		if (number_of_workers > 1)
 		{
-			printf("Spawning %i threads on %i cores, each processing %i of %i A-lines\n", number_of_workers, std::thread::hardware_concurrency(), alines_per_worker, total_alines);
+			printf("fastnisdoct/AlineProcessingPool: Spawning %i threads on %i cores, each processing %i of %i A-lines\n", number_of_workers, std::thread::hardware_concurrency(), alines_per_worker, total_alines);
 			for (int i = 0; i < number_of_workers; i++)
 			{
 				queues.emplace_back( new JobQueue(32) );
@@ -346,7 +342,7 @@ public:
 		}
 		else
 		{
-			printf("AlineProcessingPool in synchronous mode: Spawning zero new workers.\n");
+			printf("fastnisdoct/AlineProcessingPool: Synchronous mode: Spawning zero new workers.\n");
 		}
 		// else do work in calling thread
 		_barrier.store(number_of_workers);  // Set barrier to "finished" state.

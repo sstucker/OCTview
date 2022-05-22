@@ -305,7 +305,6 @@ inline void plan_acq_copy(bool* image_mask)
 					}
 					else  // Block has ended
 					{
-						// printf("Found block at %i with size %i\n", offset * aline_size, size * aline_size);
 						blocks_in_buffer.push_back(std::tuple<int, int>{ offset * aline_size, size * aline_size });
 						offset = -1;
 						size = 0;
@@ -337,7 +336,7 @@ inline void recv_msg()
 			auto current_state = state.load();
 			if (current_state == STATE_ACQUIRING)
 			{
-				printf("Cannot configure image during acquisition!\n");
+				printf("fastnisdoct: Cannot configure image during acquisition!\n");
 				return;
 			}
 			else if (current_state == STATE_SCANNING)
@@ -354,7 +353,7 @@ inline void recv_msg()
 
 				if (aline_size != msg.aline_size)  // If A-line size has changed
 				{
-					printf("Allocating A-line-sized processing buffers with size %i\n", msg.aline_size);
+					printf("fastnisdoct: Allocating A-line-sized processing buffers with size %i\n", msg.aline_size);
 
 					// Allocate processing buffers
 					background_spectrum.reserve(msg.aline_size);
@@ -364,7 +363,7 @@ inline void recv_msg()
 				}
 				else
 				{
-					printf("Allocating A-line-sized processing buffers with size %i\n", msg.aline_size);
+					printf("fastnisdoct: A-line size unchanged.\n");
 				}
 
 				if (alines_in_scan != msg.alines_in_scan)
@@ -393,8 +392,8 @@ inline void recv_msg()
 					aline_size = msg.aline_size;
 					alines_in_scan = msg.alines_in_scan;
 					alines_in_image = msg.alines_in_image;
-					printf("A-lines in scan: %i\n", alines_in_scan);
-					printf("A-lines in image: %i\n", alines_in_image);
+					printf("fastnisdoct: A-lines in scan: %i\n", alines_in_scan);
+					printf("fastnisdoct: A-lines in image: %i\n", alines_in_image);
 					alines_per_bline = msg.alines_per_bline;
 					alines_per_buffer = msg.alines_per_buffer;
 
@@ -457,11 +456,11 @@ inline void recv_msg()
 				if (ni::set_scan_pattern(msg.scanpattern) == 0)
 				{
 					scan_defined = true;
-					printf("Buffered new scan pattern!\n");
+					printf("fastnisdoct: Buffered new scan pattern!\n");
 				}
 				else
 				{
-					printf("Error updating scan.\n");
+					printf("fastnisdoct: Error updating scan.\n");
 					ni::print_error_msg();
 				}
 				delete msg.scanpattern;  // Free the pattern memory
@@ -621,7 +620,7 @@ void _main()
 		}
 		else if (current_state == STATE_ERROR)
 		{
-			// printf("fastnisdoct: Error!\n");
+			printf("fastnisdoct: Fatal error. Restart fastnisdoct.\n");
 			return;
 		}
 		else  // if SCANNING or ACQUIRING
@@ -661,7 +660,7 @@ void _main()
 					
 					if (examined != cumulative_buffer_number)
 					{
-						printf("Expected %i, got %i... Dropped frames.\n", cumulative_buffer_number, examined);
+						printf("fastnisdoct: Acquisition loop expected %i, got %i... Dropped frames.\n", cumulative_buffer_number, examined);
 						cumulative_buffer_number = examined;
 					}
 
@@ -678,7 +677,6 @@ void _main()
 						{
 							memcpy(raw_frame_roi.get() + buffer_copy_p, locked_out_addr + std::get<0>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) * sizeof(uint16_t));
  							buffer_copy_p += std::get<1>(roi_cpy_map[i_buf][j]);
-							// printf("Copying %i voxels (%i A-lines) from buffer %i, offset %i to buffer at position %i (%i A-lines) of %i\n", std::get<1>(roi_cpy_map[i_buf][j]), std::get<1>(roi_cpy_map[i_buf][j]) / aline_size, i_buf, std::get<0>(roi_cpy_map[i_buf][j]), buffer_copy_p, buffer_copy_p / aline_size, alines_in_image * aline_size);
 						}
 					}
 					else
@@ -695,7 +693,6 @@ void _main()
 
 					cumulative_buffer_number += 1;
 					i_buf++;
-					// printf("Got frame %i of %i. Total frames: %i\n", i_buf, buffers_per_frame, cumulative_buffer_number);
 					scanning_successfully = true;
 				}
 				else  // If frame not grabbed properly
@@ -786,13 +783,11 @@ void _main()
 									r[1] = 0;
 									for (int k = 0; k < n_aline_repeat; k++)
 									{
-										// printf("A-line averaging: Getting sum from image[%i, %i]\n", b * alines_per_bline + x * n_aline_repeat + k, z);
 										r[0] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][0];
 										r[1] += processed_alines_addr[(b * alines_per_bline + x * n_aline_repeat + k) * roi_size + z][1];
 									}
 									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] = r[0] / n_aline_repeat;
 									processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][1] = r[1] / n_aline_repeat;
-									// printf("A-line averaging: Assigning sum to image[%i, %i]\n", b * alines_per_bline_now + x, z);
 								}
 							}
 						}
@@ -805,8 +800,6 @@ void _main()
 
 					if (b_rpt_proc_flag > REPEAT_PROCESSING_NONE && n_bline_repeat > 1)
 					{
-						// printf("For each b in %i\n", alines_in_image / alines_per_bline / n_bline_repeat);
-						// printf("For each A-line per bline %i\n", alines_per_bline_now);
 						for (int b = 0; b < alines_in_image / alines_per_bline; b++)  // For each B-line in the (potentially A-line averaged) preprocessed frames
 						{
 							for (int x = 0; x < alines_per_bline_now / n_bline_repeat; x++)  // For each element of each B-line (minus repeats)
@@ -814,7 +807,6 @@ void _main()
 
 								if (b_rpt_proc_flag == REPEAT_PROCESSING_DIFF && n_bline_repeat == 2)
 								{
-									//printf("B-line differencing: setting [%i] equal to [%i] - [%i]\n", (b * alines_per_bline_now / 2 + x), (b * alines_per_bline_now + x), (b * alines_per_bline_now + x + alines_per_bline_now / 2));
 									for (int z = 0; z < roi_size; z++)
 									{
 										processed_alines_addr[(b * alines_per_bline_now / 2 + x) * roi_size + z][0] = std::abs(processed_alines_addr[(b * alines_per_bline_now + x) * roi_size + z][0] - processed_alines_addr[(b * alines_per_bline_now + x + alines_per_bline_now / 2) * roi_size + z][0]);
@@ -824,14 +816,6 @@ void _main()
 								else  // REPEAT_PROCESSING_AVERAGING
 								{
 									float norm = 1.0 / n_bline_repeat;
-
-									/*
-									for (int k = 0; k < n_bline_repeat; k++)
-									{
-										printf("Summing from %i\n", (b * alines_per_bline_now + x + (alines_per_bline_now / n_bline_repeat) * k));
-									}
-									printf("Adding to %i\n", (b * (alines_per_bline_now / n_bline_repeat) + x));
-									*/
 									for (int z = 0; z < roi_size; z++)
 									{
 										r[0] = 0.0;
@@ -863,15 +847,14 @@ void _main()
 
 					if (cumulative_frame_number % 256 == 0)
 					{
-						printf("Processed frame %i elapsed %f, %f Hz, \n", cumulative_frame_number - 1, frame_processing_period, 1.0 / frame_processing_period);
+						printf("fastnisdoct: Processed frame %i elapsed %f, %f Hz, \n", cumulative_frame_number - 1, frame_processing_period, 1.0 / frame_processing_period);
+						fflush(stdout);
 					}
 				}
 				cumulative_frame_number++;
 			}
 			processed_image_buffer->release_head();
 		}
-		// printf("fastnisdoct: Main loop running. State %i\n", state.load());
-		// fflush(stdout);
 	}
 	if (state.load() == STATE_ACQUIRING)
 	{
@@ -881,7 +864,7 @@ void _main()
 	{
 		stop_scanning();
 	}
-	printf("Exiting main\n");
+	printf("fastnisdoct: Main thread exiting\n");
 	fflush(stdout);
 }
 
@@ -937,23 +920,21 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 		{
 			main_running = false;
 			main_t.join();
-			printf("Joined main thread.\n");
 			StateMsg msg;
 			while (msg_queue.dequeue(msg)) {}  // Empty the message queue
-			printf("Emptied the message queue.\n");
 			if (ni::daq_close() == 0 && ni::imaq_close() == 0)
 			{
-				printf("NI IMAQ and NI DAQmx interfaces closed.\n");
+				printf("fastnisdoct: NI IMAQ and NI DAQmx interfaces closed.\n");
 			}
 			else
 			{
-				printf("Failed to close NI IMAQ and NI DAQmx interfaces.\n");
+				printf("fastnisdoct: Failed to close NI IMAQ and NI DAQmx interfaces.\n");
 				ni::print_error_msg();
 			}
 		}
 		else
 		{
-			printf("Can't close: fastnisdoct not running!\n");
+			printf("fastnisdoct: Can't close: fastnisdoct not running!\n");
 		}
 	}
 

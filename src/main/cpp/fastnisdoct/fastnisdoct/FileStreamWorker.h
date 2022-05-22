@@ -99,7 +99,7 @@ public:
 		QueryPerformanceCounter(&end);
 		interval = (double)(end.QuadPart - start.QuadPart) / frequency.QuadPart;
 
-		printf("Wrote %li bytes to disk elapsed %f, %f GB/s, \n", frame_size, interval, ((double)frame_size / (double)BYTES_PER_GB) / (double)interval);
+		printf("fastnisdoct/FileStreamWorker: Wrote %li bytes to disk elapsed %f, %f GB/s, \n", frame_size, interval, ((double)frame_size / (double)BYTES_PER_GB) / (double)interval);
 		total_bytes_written += written;  // Increment file object's counter
 	}
 
@@ -199,7 +199,7 @@ class FileStreamWorker
 						else
 						{
 							// Close file, stop streaming
-							printf("Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
+							printf("fastnisdoct/FileStreamWorker: Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
 							writer->close();
 						}
 						if (frames_in_current_file == max_frames_per_file)  // If this file cannot get larger, need to start a new one
@@ -207,7 +207,7 @@ class FileStreamWorker
 							file_name_inc += 1;
 							if (writer->is_open())
 							{
-								printf("Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
+								printf("fastnisdoct/FileStreamWorker: Closing file %s_%i%s after saving %i frames\n", _file_name, file_name_inc, suffix, frames_in_current_file);
 								writer->close();
 							}
 						}
@@ -216,7 +216,7 @@ class FileStreamWorker
 				}
 				else  // Dropped frame, since we have fallen behind, get the latest next time
 				{
-					printf("Writer can't keep up! Not writing to file! Dropped frame %i, got %i instead\n", latest_frame_n, n_got);
+					printf("fastnisdoct/FileStreamWorker: Writer can't keep up with acquisition rate! Dropped frame %i, got %i instead\n", latest_frame_n, n_got);
 					latest_frame_n = _buffer->get_count() + 1;
 				}
 				_buffer->release();
@@ -224,7 +224,7 @@ class FileStreamWorker
 			if (writer->is_open())  // The stream has been stopped
 			{
 				// Close file
-				printf("Stream ended: Closing file %s after saving %i frames\n", _file_name, frames_in_current_file);
+				printf("fastnisdoct/FileStreamWorker: Stream ended. Closing file %s after saving %i frames\n", _file_name, frames_in_current_file);
 				writer->close();
 			}
 			_finished = true;
@@ -258,7 +258,7 @@ class FileStreamWorker
 			_init_buffer_index = buffer_head;
 			_frame_size_bytes = frame_size * sizeof(T);
 			_n_to_stream = n_to_stream;
-			printf("Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
+			printf("fastnisdoct: Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
 			_thread = std::thread(&FileStreamWorker::_fstream, this);  // Start the thread
 		}
 
