@@ -103,7 +103,7 @@ class _AppContext(ApplicationContext):
             self._configure_processing(self.window.unprocessed_frame_size(), self.window.processed_frame_size())
             self._update_timer.start(100)  # 10 Hz
         else:
-            self.window.print('OCTview: Failed to open controller. Try reconfiguring the application.')
+            print('OCTview: Failed to open controller. Try reconfiguring the application.')
 
     def _update(self):
         if self.controller is not None:
@@ -193,11 +193,14 @@ class _AppContext(ApplicationContext):
             ctypes.windll.kernel32.SetDllDirectoryW(None)
             for path in self.window.dll_search_paths():
                 if os.path.exists(path):
-                        if f.endswith('.dll'):
-                            print('OCTview: Loading', os.path.join(path, f))
-                            ctypes.cdll.LoadLibrary(os.path.join(path, f))
+                    if f.endswith('.dll'):
+                        print('OCTview: Loading', os.path.join(path, f))
+                        ctypes.cdll.LoadLibrary(os.path.join(path, f))
                     for f in os.listdir(path):
                         pass
+            print('OCTview: Loading', self.get_resource('libfftw3f-3.dll'))
+            ctypes.cdll.LoadLibrary(self.get_resource('libfftw3f-3.dll'))
+            print('OCTview: Loading', self.get_resource('fastnisdoct.dll'))
             self.controller = NIOCTController(self.get_resource('fastnisdoct.dll'))
             self.controller.open(
                 self.window.camera_device_name(),
@@ -206,8 +209,8 @@ class _AppContext(ApplicationContext):
                 self.window.analog_output_line_trig_ch_name(),
                 self.window.analog_output_start_trig_ch_name()
             )
-        except (OSError, FileNotFoundError, Exception):
-            print('OCTview: Failed to load backend nisdoct.')
+        except (OSError, FileNotFoundError, Exception) as e:
+            print('OCTview: Failed to load backend nisdoct:', e)
             return False
         return True
 

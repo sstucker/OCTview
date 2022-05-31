@@ -1,7 +1,6 @@
 import ctypes as c
 import numpy as np
 from numpy.ctypeslib import ndpointer
-import os
 
 c_bool_p = ndpointer(dtype=np.bool, ndim=1, flags='C_CONTIGUOUS')
 c_int_p = ndpointer(dtype=np.int32, ndim=1, flags='C_CONTIGUOUS')

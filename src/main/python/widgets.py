@@ -1070,9 +1070,6 @@ class MainWindow(QMainWindow, UiWidget):
         self.ProcessingGroupBox.changed.connect(lambda: self.processing_changed.emit(self.unprocessed_frame_size(), self.processed_frame_size()))
         self._showRepeatProcessing()
 
-    def print(self, msgl, msgr=""):
-        self.statusBar.showMessage("{}                {}".format(msgl, msgr), 1000)
-
     def loadConfiguration(self, cfg_file=None):
         if cfg_file is None:
             cfg_file = QFileDialog.getOpenFileName(self, "Load Configuration File", OCTview.config_resource_location,
