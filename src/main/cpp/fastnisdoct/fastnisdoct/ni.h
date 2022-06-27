@@ -34,7 +34,7 @@ uint16_t** buffers = NULL;  // Ring buffer elements allocated manually
 
 // NI-DAQ
 
-std::vector<float64> concatenated_scansig;  // Pointer to buffer of scansignals appended end to end
+std::unique_ptr<float64[]> concat_scansig;  // Pointer to buffer of scansignals appended end to end
 
 int dac_rate = -1;  // The output rate of the DAC used to drive the scan pattern
 int line_rate = -1;  // The rate of the line trigger. A multiple of the DAC rate.
@@ -238,7 +238,7 @@ namespace ni
 		if (err == 0)
 		{
 			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
+			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
 			err = DAQmxStartTask(scan_task);
 			if (err == 0)
 			{
@@ -250,6 +250,7 @@ namespace ni
 
 	int stop_scan()
 	{
+		// memset(concat_scansig.get(), 0.0, sizeof(float64) * 4 * scansig_n);
 		err = imgSessionStopAcquisition(session_id);
 		err = DAQmxStopTask(scan_task);
 		if (err == 0)
@@ -293,21 +294,17 @@ namespace ni
 
 	int drive_start_trigger_high()
 	{
-		for (int i = 0; i < scansig_n; i++)
-		{
-			concatenated_scansig[3 * scansig_n + i] = 5.0;
-		}
-		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
+		printf("fastnisdoct: Driving acq trigger high\n");
+		memset(concat_scansig.get() + 3 * scansig_n, 5.0, sizeof(float64) * scansig_n);
+		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
 		return err;
 	}
 
 	int drive_start_trigger_low()
 	{
-		for (int i = 0; i < scansig_n; i++)
-		{
-			concatenated_scansig[3 * scansig_n + i] = 0.0;
-		}
-		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
+		printf("fastnisdoct: Driving acq trigger low\n");
+		memset(concat_scansig.get() + 3 * scansig_n, 0.0, sizeof(float64) * scansig_n);
+		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
 		return err;
 	}
 
@@ -316,40 +313,31 @@ namespace ni
 		// Assign buffers for scan pattern
 		if (pattern->n != scansig_n)  // If buffer size needs to change
 		{
-			concatenated_scansig.reserve(4 * pattern->n);
+			concat_scansig = std::make_unique<float64[]>(4 * pattern->n);
 		}
 
-		memcpy(&concatenated_scansig[0] + 0, pattern->x, sizeof(float64) * pattern->n);
-		memcpy(&concatenated_scansig[0] + pattern->n, pattern->y, sizeof(float64) * pattern->n);
-		memcpy(&concatenated_scansig[0] + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
-		memset(&concatenated_scansig[0] + 3 * pattern->n, 0.0, sizeof(float64) * pattern->n);
+		memcpy(concat_scansig.get() + 0, pattern->x, sizeof(float64) * pattern->n);
+		memcpy(concat_scansig.get() + pattern->n, pattern->y, sizeof(float64) * pattern->n);
+		memcpy(concat_scansig.get() + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
+		memset(concat_scansig.get() + 3 * pattern->n, 0.0, sizeof(float64) * pattern->n);
+		scansig_n = pattern->n;  // Set property to new n
+
+
+		// If rate or samples in scan has changed, need to reconfigure the timing of the output task
+		if ((pattern->sample_rate != dac_rate) || (pattern->n != scansig_n) || (pattern->line_rate != line_rate))
+		{
+			err = configure_scan_timing(pattern);
+		}
+		dac_rate = pattern->sample_rate;
+		line_rate = pattern->line_rate;
 
 		bool32 is_it = false;
 		DAQmxIsTaskDone(scan_task, &is_it);
 		if (!is_it)  // Only buffer the samples now if the task is running. Otherwise DAQmxCfgOutputBuffer and DAQmxWriteAnalogF64 are called on start_scan.
 		{
-			// If rate or samples in scan has changed, need to reconfigure the timing of the output task
-			if ((pattern->sample_rate != dac_rate) || (pattern->n != scansig_n) || (pattern->line_rate != line_rate))
-			{
-				err = DAQmxStopTask(scan_task);
-
-				err = configure_scan_timing(pattern);
-				
-				err = DAQmxStartTask(scan_task);
-			}
 			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, &concatenated_scansig[0], &samples_written, NULL);
+			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
 		}
-		else
-		{
-			if ((pattern->sample_rate != dac_rate) || (pattern->n != scansig_n) || (pattern->line_rate != line_rate))
-			{
-				err = configure_scan_timing(pattern);
-			}
-		}
-		scansig_n = pattern->n;  // Set property to new n
-		dac_rate = pattern->sample_rate;
-		line_rate = pattern->line_rate;
 		return err;
 	}
 }
