@@ -211,11 +211,24 @@ inline void init_fastnisdoct()
 
 inline void stop_acquisition()
 {
-	printf("fastnisdoct: stopping acquisition.\n");
-	processed_frame_streamer.stop();
-	spectral_frame_streamer.stop();
-	ni::drive_start_trigger_low();
-	state.store(STATE_SCANNING);
+	if (state.load() == STATE_ACQUIRING)
+	{
+		printf("fastnisdoct: Stopping acquisition.\n");
+		if (saving_processed)
+		{
+			processed_frame_streamer.stop();
+		}
+		else
+		{
+			spectral_frame_streamer.stop();
+		}
+		ni::drive_start_trigger_low();
+		state.store(STATE_SCANNING);
+	}
+	else
+	{
+		printf("fastnisdoct: Can't stop acquisition: not acquiring!");
+	}
 }
 
 
@@ -356,8 +369,8 @@ inline void recv_msg()
 					printf("fastnisdoct: Allocating A-line-sized processing buffers with size %i\n", msg.aline_size);
 
 					// Allocate processing buffers
-					background_spectrum.reserve(msg.aline_size);
-					background_spectrum_new.reserve(msg.aline_size);
+					background_spectrum.resize(msg.aline_size);
+					background_spectrum_new.resize(msg.aline_size);
 					std::fill(background_spectrum.begin(), background_spectrum.end(), 0.0);
 					std::fill(background_spectrum_new.begin(), background_spectrum_new.end(), 0.0);
 				}
@@ -368,7 +381,7 @@ inline void recv_msg()
 
 				if (alines_in_scan != msg.alines_in_scan)
 				{
-					aline_stamp_buffer.reserve(msg.alines_in_scan);
+					aline_stamp_buffer.resize(msg.alines_in_scan);
 				}
 
 				// -- Set up NI image buffers --------------------------------------------------------------------------
@@ -503,7 +516,7 @@ inline void recv_msg()
 				n_frame_avg = msg.n_frame_avg;
 
 				// Apod window signal gets copied to module-managed buffer (allocated when image is configured)
-				apodization_window.reserve(msg.aline_size);
+				apodization_window.resize(msg.aline_size);
 				std::fill(apodization_window.begin(), apodization_window.end(), 1.0);
 				apodization_window.insert(apodization_window.end(), msg.apod_window, msg.apod_window + msg.aline_size);
 				delete[] msg.apod_window;
@@ -545,6 +558,7 @@ inline void recv_msg()
 		else if (msg.flag & MSG_START_ACQUISITION)
 		{
 			printf("fastnisdoct: MSG_START_ACQUISITION received\n");
+			processed_image_buffer->clear();
 			if (state.load() == STATE_SCANNING)
 			{
 				if (msg.save_processed)
@@ -552,11 +566,11 @@ inline void recv_msg()
 					saving_processed = true;
 					if (msg.n_frames_to_acquire > -1)
 					{
-						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer.get(), roi_size * alines_in_image, msg.n_frames_to_acquire);
+						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer.get(), 0, roi_size * alines_in_image, msg.n_frames_to_acquire);
 					}
 					else
 					{
-						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer.get(), roi_size * alines_in_image);
+						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer.get(), 0, roi_size * alines_in_image, -1);
 					}
 				}
 				else
@@ -564,11 +578,11 @@ inline void recv_msg()
 					saving_processed = false;
 					if (msg.n_frames_to_acquire > -1)
 					{
-						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer.get(), preprocessed_alines_size, msg.n_frames_to_acquire);
+						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer.get(), 0, preprocessed_alines_size, msg.n_frames_to_acquire);
 					}
 					else
 					{
-						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer.get(), preprocessed_alines_size);
+						spectral_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, spectral_image_buffer.get(), 0, preprocessed_alines_size, -1);
 					}
 				}
 				ni::drive_start_trigger_high();
@@ -853,6 +867,7 @@ void _main()
 				}
 				cumulative_frame_number++;
 			}
+			while (!aline_proc_pool->is_finished()) {}  // Don't release buffer without joining the task'
 			processed_image_buffer->release_head();
 		}
 	}
