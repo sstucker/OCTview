@@ -15,8 +15,6 @@
 // sstucker 2021
 //
 
-#define MAX_SPINLOCK 524288
-
 inline int mod2(int a, int b)
 {
 	int r = a % b;
@@ -83,7 +81,6 @@ public:
 		{
 			ring[i] = new(CircAcqElement<T>);
 			ring[i]->arr = new T[element_size];
-			memset(ring[i]->arr, 0, element_size * sizeof(T));  // Init 0
 			ring[i]->index = i;
 			ring[i]->count = -1;
 		}
@@ -121,39 +118,11 @@ public:
 	long lock_out_wait(int n, T** buffer)
 	{
 		// printf("CircAcqBuffer: Attempting to lock out %i.\n", n);
-		*buffer = NULL;
-		int cnt = 0;
-		while (locked.load() != -1)  // Only one buffer can be locked out at a time
-		{
-			cnt++;
-			if (cnt > MAX_SPINLOCK)
-			{
-				printf("fastnisdoct/CircAcqBuffer: lock_out_wait timed out.\n");
-				return -1;
-			}
-		}
+		while (locked.load() != -1);  // Only one buffer can be locked out at a time
 		int got = -1;
 		int requested = mod2(n, ring_size);
-		cnt = 0;
 		while (n > ring[requested]->count.load() || ring[requested]->count.load() == -1);  // Spinlock if buffer n-th buffer hasn't been pushed yet. You might wait forever!
-		{
-			cnt++;
-			if (cnt > MAX_SPINLOCK)
-			{
-				printf("fastnisdoct/CircAcqBuffer: lock_out_wait timed out.\n");
-				return -1;
-			}
-		}
-		cnt = 0;
 		while (!locks[requested].try_lock());
-		{
-			cnt++;
-			if (cnt > MAX_SPINLOCK)
-			{
-				printf("fastnisdoct/CircAcqBuffer: lock_out_wait timed out.\n");
-				return -1;
-			}
-		}
 		_lock_out(requested);
 		locks[requested].unlock();  // Exit critical section
 		*buffer = locked_out_buffer->arr;  // Return pointer to locked out buffer's array
@@ -209,7 +178,6 @@ public:
 			while (!locks[i].try_lock());
 			ring[i]->index = i;
 			ring[i]->count = -1;
-			memset(ring[i]->arr, 0, element_size * sizeof(T));
 			locks[i].unlock();
 		}
 		count = 0;
