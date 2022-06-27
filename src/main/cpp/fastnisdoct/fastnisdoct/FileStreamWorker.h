@@ -157,17 +157,23 @@ class FileStreamWorker
 			// Get ahead of buffer to let galvos settle
 			if (_init_buffer_index == -1)
 			{
-				latest_frame_n = _buffer->get_count() + 5;
+				latest_frame_n = _buffer->get_count();
 			}
 			else
 			{
 				latest_frame_n = _init_buffer_index;
 			}
+			printf("Attempting to write frames %i through %i to disk.\n", latest_frame_n, _n_to_stream);
 
 			// Stream continuously to various files or until _n_to_stream is reached
-			while (_running.load() && ((_n_to_stream > n_streamed) || (_n_to_stream == -1)))
+			while ( _running.load() && ( (_n_to_stream > n_streamed) || (_n_to_stream == -1) ) )
 			{
+				printf("FSTREAM RUNNING %i\n", _running.load());
 				n_got = _buffer->lock_out_wait(latest_frame_n, &frame);
+				if (n_got == -1)
+				{
+					continue;
+				}
 				if (latest_frame_n == n_got)
 				{
 					latest_frame_n += 1;
@@ -260,6 +266,7 @@ class FileStreamWorker
 			_n_to_stream = n_to_stream;
 			printf("fastnisdoct: Starting FileStreamWorker: writing %i frames to %s, < %f GB/file\n", _n_to_stream, _file_name, _file_max_gb);
 			_thread = std::thread(&FileStreamWorker::_fstream, this);  // Start the thread
+			return 0;
 		}
 
 	public:
@@ -310,7 +317,7 @@ class FileStreamWorker
 
 		void stop()
 		{
-			if (_running)
+			if (_running.load())
 			{
 				_running.store(false);
 				_thread.join();
