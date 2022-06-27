@@ -364,8 +364,8 @@ public:
 			pool.clear();
 			queues.clear();
 		}
+		printf("fastnisdoct/AlineProcessingPool: terminated.\n");
 	}
-
 };
 
 

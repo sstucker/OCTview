@@ -124,8 +124,9 @@ class _AppContext(ApplicationContext):
     def _display_update(self):
         if self._grab_buffer is not None and self._image_buffer is not None:
             if self.controller.grab_frame(self._grab_buffer) > -1:
-                self._image_buffer = np.reshape(self._grab_buffer, self.window.image_dimensions(), order='F')
-                self.window.display_frame(self._image_buffer)
+                if not any(np.isnan(self._grab_buffer)):
+                    self._image_buffer = np.reshape(self._grab_buffer, self.window.image_dimensions(), order='F')
+                    self.window.display_frame(self._image_buffer)
         if self._spectrum_buffer is not None:
             if self.controller.grab_spectrum(self._spectrum_buffer) > -1:
                 self.window.display_spectrum(self._spectrum_buffer)
@@ -309,10 +310,11 @@ class _AppContext(ApplicationContext):
 AppContext = _AppContext()
 __version__ = AppContext.version
 version = AppContext.version
-print("===============================")
-print("OCTview v" + version)
-print("===============================")
 window = AppContext.window
 ui_resource_location = AppContext.ui_resource_location
 config_resource_location = AppContext.config_resource_location
 run = AppContext.run
+
+print("===============================")
+print("OCTview v" + version)
+print("===============================")
