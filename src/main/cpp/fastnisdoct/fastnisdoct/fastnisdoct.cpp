@@ -558,11 +558,11 @@ inline void recv_msg()
 		else if (msg.flag & MSG_START_ACQUISITION)
 		{
 			printf("fastnisdoct: MSG_START_ACQUISITION received\n");
-			processed_image_buffer->clear();
 			if (state.load() == STATE_SCANNING)
 			{
 				if (msg.save_processed)
 				{
+					processed_image_buffer->clear();
 					saving_processed = true;
 					if (msg.n_frames_to_acquire > -1)
 					{
@@ -573,8 +573,9 @@ inline void recv_msg()
 						processed_frame_streamer.start(msg.file_name, msg.max_gb, (FileStreamType)msg.file_type, processed_image_buffer.get(), 0, roi_size * alines_in_image, -1);
 					}
 				}
-				else
+				else  // Save spectral data
 				{
+					spectral_image_buffer->clear();
 					saving_processed = false;
 					if (msg.n_frames_to_acquire > -1)
 					{
@@ -920,6 +921,7 @@ extern "C"  // DLL interface. Functions should enqueue messages or interact with
 				main_t = std::thread(&_main);
 				return;
 			}
+			printf("fastnisdoct: Failed to open DAQmx interface.\n");
 			ni::print_error_msg();
 		}
 		else

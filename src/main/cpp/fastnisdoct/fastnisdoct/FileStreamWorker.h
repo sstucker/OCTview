@@ -168,10 +168,11 @@ class FileStreamWorker
 			// Stream continuously to various files or until _n_to_stream is reached
 			while ( _running.load() && ( (_n_to_stream > n_streamed) || (_n_to_stream == -1) ) )
 			{
-				printf("FSTREAM RUNNING %i\n", _running.load());
-				n_got = _buffer->lock_out_wait(latest_frame_n, &frame);
+				// printf("FSTREAM RUNNING %i\n", _running.load());
+				n_got = _buffer->lock_out(latest_frame_n, &frame, 1000);
 				if (n_got == -1)
 				{
+					Sleep(IDLE_SLEEP_MS);
 					continue;
 				}
 				if (latest_frame_n == n_got)
