@@ -304,7 +304,6 @@ namespace ni
 
 	int drive_start_trigger_high()
 	{
-		printf("fastnisdoct: Driving acq trigger high\n");
 		for (int i = 3 * scansig_n; i < 4 * scansig_n; i++)
 		{
 			concat_scansig.get()[i] = 5.0;
@@ -316,7 +315,6 @@ namespace ni
 
 	int drive_start_trigger_low()
 	{
-		printf("fastnisdoct: Driving acq trigger low\n");
 		memset(concat_scansig.get() + 3 * scansig_n, 0.0, sizeof(float64) * scansig_n);
 		err = stop_scan();
 		err = start_scan();
