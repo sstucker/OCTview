@@ -35,6 +35,7 @@ uint16_t** buffers = NULL;  // Ring buffer elements allocated manually
 // NI-DAQ
 
 std::unique_ptr<float64[]> concat_scansig;  // Pointer to buffer of scansignals appended end to end
+std::unique_ptr<float64[]> zeros;  // Pointer to buffer used to zero the task output
 
 int dac_rate = -1;  // The output rate of the DAC used to drive the scan pattern
 int line_rate = -1;  // The rate of the line trigger. A multiple of the DAC rate.
@@ -98,12 +99,21 @@ inline void print_daqmx_error_msg(int error_code)
 }
 
 
+inline int write_samples()
+{
+	return DAQmxWriteAnalogF64(scan_task, scansig_n, false, -1, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
+}
+
+
+inline int zero_channels()
+{
+	return DAQmxWriteAnalogF64(scan_task, scansig_n, false, -1, DAQmx_Val_GroupByChannel, zeros.get(), &samples_written, NULL);
+}
+
+
 inline int configure_scan_timing(ScanPattern* pattern)
 {
-	err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
-	err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
 	err = DAQmxCfgSampClkTiming(scan_task, NULL, (double)pattern->sample_rate, DAQmx_Val_Rising, DAQmx_Val_ContSamps, pattern->n);
-
 	return err;
 }
 
@@ -215,12 +225,26 @@ namespace ni
 		line_rate = -1;
 		scansig_n = 0;
 		samples_written = 0;
-		
+
 		err = DAQmxCreateTask("scan", &scan_task);
+
+		err = DAQmxSetAOIdleOutputBehavior(scan_task, aoScanX, DAQmx_Val_ZeroVolts);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanX, "", -10, 10, DAQmx_Val_Volts, NULL);
+
+		err = DAQmxSetAOIdleOutputBehavior(scan_task, aoScanY, DAQmx_Val_ZeroVolts);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoScanY, "", -10, 10, DAQmx_Val_Volts, NULL);
+
+		err = DAQmxSetAOIdleOutputBehavior(scan_task, aoLineTrigger, DAQmx_Val_ZeroVolts);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoLineTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
+
+		err = DAQmxSetAOIdleOutputBehavior(scan_task, aoStartTrigger, DAQmx_Val_ZeroVolts);
 		err = DAQmxCreateAOVoltageChan(scan_task, aoStartTrigger, "", -10, 10, DAQmx_Val_Volts, NULL);
+
+		err = DAQmxSetWriteRegenMode(scan_task, DAQmx_Val_AllowRegen);
+		err = DAQmxSetSampTimingType(scan_task, DAQmx_Val_SampleClock);
+		err = DAQmxSetWriteRelativeTo(scan_task, DAQmx_Val_FirstSample);
+		err = DAQmxSetWriteOffset(scan_task, 0);
+
 		return err;
 	}
 
@@ -237,8 +261,7 @@ namespace ni
 		err = imgSessionStartAcquisition(session_id);
 		if (err == 0)
 		{
-			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
+			err = write_samples();
 			err = DAQmxStartTask(scan_task);
 			if (err == 0)
 			{
@@ -250,7 +273,7 @@ namespace ni
 
 	int stop_scan()
 	{
-		// memset(concat_scansig.get(), 0.0, sizeof(float64) * 4 * scansig_n);
+		err = zero_channels();
 		err = imgSessionStopAcquisition(session_id);
 		err = DAQmxStopTask(scan_task);
 		if (err == 0)
@@ -269,19 +292,6 @@ namespace ni
 		if (err == 0)
 		{
 			return examined_number;
-			/*
-			If session is not reopened before a second buffer setup, erroneous pointers will be returned without an error code,
-			resulting in access violations. This code checks for that error case.
-			for (int i = 0; i < numberOfBuffers; i++)
-			{
-				if (buffers[i] == *raw_frame_addr)
-				{
-					return examined_number;
-				}
-			}
-			printf("Grabbed %p which was not in buffer list!\n", *raw_frame_addr);
-			*/
-
 		}
 		*raw_frame_addr = NULL;
 		return err;
@@ -295,8 +305,12 @@ namespace ni
 	int drive_start_trigger_high()
 	{
 		printf("fastnisdoct: Driving acq trigger high\n");
-		memset(concat_scansig.get() + 3 * scansig_n, 5.0, sizeof(float64) * scansig_n);
-		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
+		for (int i = 3 * scansig_n; i < 4 * scansig_n; i++)
+		{
+			concat_scansig.get()[i] = 5.0;
+		}
+		err = stop_scan();
+		err = start_scan();
 		return err;
 	}
 
@@ -304,8 +318,10 @@ namespace ni
 	{
 		printf("fastnisdoct: Driving acq trigger low\n");
 		memset(concat_scansig.get() + 3 * scansig_n, 0.0, sizeof(float64) * scansig_n);
-		err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
+		err = stop_scan();
+		err = start_scan();
 		return err;
+
 	}
 
 	int set_scan_pattern(ScanPattern* pattern)
@@ -314,12 +330,15 @@ namespace ni
 		if (pattern->n != scansig_n)  // If buffer size needs to change
 		{
 			concat_scansig = std::make_unique<float64[]>(4 * pattern->n);
+			zeros = std::make_unique<float64[]>(4 * pattern->n);
+			memset(zeros.get(), 0.0, 4 * pattern->n * sizeof(float64));
 		}
 
-		memcpy(concat_scansig.get() + 0, pattern->x, sizeof(float64) * pattern->n);
-		memcpy(concat_scansig.get() + pattern->n, pattern->y, sizeof(float64) * pattern->n);
-		memcpy(concat_scansig.get() + 2 * pattern->n, pattern->line_trigger, sizeof(float64) * pattern->n);
-		memset(concat_scansig.get() + 3 * pattern->n, 0.0, sizeof(float64) * pattern->n);
+		memcpy(concat_scansig.get() + 0, pattern->x, pattern->n * sizeof(float64));
+		memcpy(concat_scansig.get() + pattern->n, pattern->y, pattern->n * sizeof(float64));
+		memcpy(concat_scansig.get() + 2 * pattern->n, pattern->line_trigger, pattern->n * sizeof(float64));
+		memset(concat_scansig.get() + 3 * pattern->n, 0.0, pattern->n * sizeof(float64));
+		
 		scansig_n = pattern->n;  // Set property to new n
 
 
@@ -333,10 +352,10 @@ namespace ni
 
 		bool32 is_it = false;
 		DAQmxIsTaskDone(scan_task, &is_it);
-		if (!is_it)  // Only buffer the samples now if the task is running. Otherwise DAQmxCfgOutputBuffer and DAQmxWriteAnalogF64 are called on start_scan.
+		if (!is_it)
 		{
-			err = DAQmxCfgOutputBuffer(scan_task, scansig_n);
-			err = DAQmxWriteAnalogF64(scan_task, scansig_n, false, 1000, DAQmx_Val_GroupByChannel, concat_scansig.get(), &samples_written, NULL);
+			err = stop_scan();
+			err = start_scan();
 		}
 		return err;
 	}
