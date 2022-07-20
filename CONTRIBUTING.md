@@ -1,3 +1,14 @@
+## Recommended development environment
+- Qt 5.9.2
+- [Visual Studio 2017 Community Edition](https://visualstudio.microsoft.com/vs/older-downloads/), C++ Build Tools
+   - The following libraries must be available to build the fastnisdoct library:
+      - National Instruments [IMAQ](https://www.ni.com/en-us/support/downloads/drivers/download.vision-acquisition-software.html#409847) and [NI-DAQmx](https://www.ni.com/en-us/support/downloads/drivers/download.ni-daqmx.html#445931)
+      - [FFTW](http://www.fftw.org/install/windows.html)
+- [Python 3.6.8](https://www.python.org/downloads/release/python-368/) (install `requirements.txt`)
+
+## Design principles
+OCTview is generally organized into two parts: a backend dynamically-linked library written in C/C++ which interacts with hardware and performs parallelized image streaming and processing, and a Python-based application for scan-pattern generation and frontend interaction and display with Qt.
+
 ## Building OCTview with fbs
 
 OCTview is a Windows desktop application built with Qt 5. 
