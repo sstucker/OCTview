@@ -10,7 +10,7 @@
 OCTview is generally organized into two parts: a backend dynamically-linked library written in C/C++ which interacts with hardware and performs parallelized image streaming and processing, and a Python-based application for scan-pattern generation and frontend interaction and display with Qt.
 
 ### Front-end
-The `MainWindow` class (widgets.py) exposes the various frontend `Widget`s states and outputs to the `ApplicationContext` (OCTview.py), whose signals and slots dictate the main business of the application. The `ApplicationContext` interacts with the backend via calls to the controller (controller.py) which is Python wrapper around the fastnisdoct DLL. 
+The `MainWindow` class (widgets.py) exposes the various `Widget`s states and outputs to the `ApplicationContext` (OCTview.py), whose signals and slots dictate the main business of the application. The `ApplicationContext` interacts with the backend via calls to the controller (controller.py) which is a Python wrapper around the fastnisdoct DLL. 
 
 ### Back-end
 Functions in the `extern "C"` block at the end of fastnisdoct.cpp are exposed to the Python environment.
@@ -20,7 +20,6 @@ An `AlineProcesingPool` manages asynchronous processing of spectral A-lines into
 A `FileStreamWorker` manages asynchronous streaming of image frames to disk.
 
 `CircAcqBuffer` instances are ring buffers which connect the asynchronous workers. Frames are copied into the head of a ring buffer by the producer (the main thread) and can then be "locked out" by a consumer. (the file stream worker)
-
 
 ## Building OCTview with fbs
 
@@ -34,3 +33,5 @@ python -m fbs installer
 The resulting installer will be in the `targets` directory.
 
 This repository has an action that releases a new executable automatically when new version tags are pushed to the main branch.
+
+This would be possible without the awesome https://build-system.fman.io/!
