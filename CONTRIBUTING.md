@@ -1,5 +1,5 @@
 ## Recommended development environment
-- Qt 5.9.2
+- [Qt 5.9.2](https://download.qt.io/archive/qt/5.9/5.9.2/)
 - [Visual Studio 2017 Community Edition](https://visualstudio.microsoft.com/vs/older-downloads/), C++ Build Tools
    - The following libraries must be available to build the fastnisdoct library:
       - National Instruments [IMAQ](https://www.ni.com/en-us/support/downloads/drivers/download.vision-acquisition-software.html#409847) and [NI-DAQmx](https://www.ni.com/en-us/support/downloads/drivers/download.ni-daqmx.html#445931)
