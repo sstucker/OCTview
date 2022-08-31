@@ -567,8 +567,8 @@ class ScanDisplayWindow(QFrame):
 
         exp = np.zeros(len(pattern.x)).astype(np.int32)
         exp[pattern.line_trigger.astype(bool)] = 1
-        scan_x = pattern.x + self.scan_offset_mm_x()
-        scan_y = pattern.y + self.scan_offset_mm_y()
+        scan_x = pattern.x + self.parentWidget().parentWidget().parentWidget().scan_offset_mm_x()
+        scan_y = pattern.y + self.parentWidget().parentWidget().parentWidget().scan_offset_mm_y()
         x_pts = pattern.positions[:, 0]
         y_pts = pattern.positions[:, 1]
         self._scan_item.setData(x=pattern.x, y=pattern.y, pen=pyqtgraph.mkPen(width=1, color='#FEFEFE'),
@@ -790,6 +790,8 @@ class BScanWidget(pyqtgraph.GraphicsLayoutWidget):
         self._plot.setLabel('bottom', units='m')
         self._image = pyqtgraph.ImageItem()
         self._plot.addItem(self._image)
+        self._hist = pyqtgraph.HistogramLUTItem(image=self._image, levelMode='mono')
+        self.addItem(self._hist)
 
         if hslider:
             self._hslider = pyqtgraphSlider(movable=True, angle=0)
