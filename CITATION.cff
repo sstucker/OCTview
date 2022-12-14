@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+title: OCTview
+message: Cite this software
+type: software
+authors:
+  - given-names: Stephen
+    family-names: Tucker
+    email: sstucker@bu.edu
+    affiliation: Boston University Neurophotonics Center
+doi: 10.5281/zenodo.7038853
+date-released: 2021-6-29
