@@ -12,7 +12,7 @@ Utilizes the IMAQ and DAQmx interfaces; this software is the property of NI (Aus
 
 # Introduction
 
-Spectral domain optical coherence tomography (SD-OCT) imaging systems are invaluable tools for opthamology, angiography, and even functional neuroimaging. Axial reflectance profiles, or A-lines, can be obtained from the Fourier transform of an interferometric measurement of a point on the sample in a process analogous to ultrasound. By scanning this point in two dimensions, a volumetric image can be acquired.
+Spectral domain optical coherence tomography (SD-OCT) imaging systems are invaluable tools for opthamology, angiography, and even neuroimaging. Axial reflectance profiles, or A-lines, can be obtained from the Fourier transform of an interferometric measurement of a point on the sample in a process analogous to ultrasound. By scanning this point in two dimensions, a volumetric image can be acquired.
 
 ## Software
 
